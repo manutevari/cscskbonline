@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CSCSKB Online WordPress Homepage Preview</title>
+  <style>
+    :root{--navy:#06142d;--blue:#0b72e7;--orange:#ff8a00;--green:#78d64b;--text:#f8fbff;--muted:#b7c7df;--card:rgba(255,255,255,.09)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(135deg,#06142d,#082449 48%,#06142d);color:var(--text)}
+    .top{padding:.65rem 1rem;background:#020817;border-bottom:1px solid rgba(255,255,255,.16);display:flex;gap:1rem;justify-content:center;align-items:center;flex-wrap:wrap}
+    .brand{font-size:clamp(1.4rem,3.8vw,3rem);font-weight:900;text-align:center;letter-spacing:.02em}.brand b{color:var(--orange)}.brand span{color:#76d8ff}.brand em{color:var(--green);font-style:normal}
+    .marquee{margin:1rem auto;max-width:1180px;display:flex;gap:1rem;align-items:center;overflow:hidden;padding:.75rem 1rem;border-radius:999px;background:#020817;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .marquee strong{color:var(--orange);white-space:nowrap}.track{display:flex;gap:2rem;white-space:nowrap;animation:scroll 32s linear infinite}.track a{color:white;text-decoration:none}.track span{color:var(--green);margin-left:.35rem}@keyframes scroll{from{transform:translateX(12%)}to{transform:translateX(-100%)}}
+    .hero{max-width:1180px;margin:0 auto;padding:3rem 1rem 2rem;display:grid;grid-template-columns:1.2fr .8fr;gap:1.25rem}.panel{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:1.5rem;backdrop-filter:blur(10px)}
+    h1{font-size:clamp(2rem,5vw,4.5rem);line-height:1;margin:.25rem 0} p{color:var(--muted);font-size:1.05rem}.cta{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem}.btn{padding:.85rem 1rem;border-radius:999px;text-decoration:none;font-weight:800}.primary{background:var(--orange);color:#120800}.secondary{background:#12335f;color:white;border:1px solid rgba(255,255,255,.2)}
+    .grid{max-width:1180px;margin:0 auto;padding:1rem;display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}.card{background:var(--card);border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:1rem}.card h3{margin:.25rem 0;color:#fff}.badge{display:inline-flex;border-radius:999px;background:rgba(120,214,75,.15);color:#9cf56f;padding:.3rem .55rem;font-size:.8rem;font-weight:800}
+    .trust{max-width:1180px;margin:0 auto 3rem;padding:1rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem}.review{border-left:4px solid var(--orange)} iframe{width:100%;height:280px;border:0;border-radius:18px;background:#dbeafe}
+    footer{text-align:center;padding:2rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.12)}@media(max-width:820px){.hero,.trust{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.grid{grid-template-columns:1fr}.marquee{border-radius:18px;align-items:flex-start}.track{animation:none;overflow:auto}}
+  </style>
+</head>
+<body>
+  <header class="top"><div class="brand"><b>CSCSKB ONLINE</b> – <span>AI Powered CSC</span> <em>Knowledge & Service Platform</em></div></header>
+  <nav class="marquee" aria-label="Latest CSC updates"><strong>Latest CSC Updates</strong><div class="track"><a href="https://csc.gov.in/">Official CSC headlines auto-update here <span>CSC Official</span></a><a href="https://digitalseva.csc.gov.in/">Digital Seva service updates <span>Digital Seva</span></a><a href="https://maps.app.goo.gl/WNidZh1cEukiXna88">Visit Ankit Tiwari CSC Center <span>Location</span></a></div></nav>
+  <main>
+    <section class="hero"><div class="panel"><span class="badge">WordPress preview before implementation</span><h1>Fast, trusted CSC help with AI guidance.</h1><p>Keep WordPress as the public website, add official CSC news in the marquee, and route advanced app features through CSCSKB Online.</p><div class="cta"><a class="btn primary" href="#services">Explore Services</a><a class="btn secondary" href="https://maps.app.goo.gl/WNidZh1cEukiXna88">Get Directions</a><a class="btn secondary" href="#ai">Ask AI Assistant</a></div></div><aside class="panel"><h2>Ankit Tiwari CSC Center</h2><p>Digital India • Power To Empower</p><p>Services, schemes, forms, certificates, payments, document guidance, and local support.</p></aside></section>
+    <section class="grid" id="services"><article class="card"><span class="badge">Service</span><h3>Government Forms</h3><p>Eligibility, documents, fees, and processing time explained clearly.</p></article><article class="card"><span class="badge">AI</span><h3>Knowledge Assistant</h3><p>Hindi/English help for CSC services, schemes, FAQs, and documents.</p></article><article class="card"><span class="badge">Trust</span><h3>Reviews</h3><p>Original testimonials and local proof improve confidence and conversions.</p></article><article class="card"><span class="badge">Local</span><h3>Map Location</h3><p>One-tap directions and contact actions for mobile visitors.</p></article></section>
+    <section class="trust"><article class="panel review"><h2>Original Review</h2><p>“Very helpful CSC center for online government services. The guidance was clear, the process was transparent, and my work was completed on time.”</p></article><article class="panel"><h2>Map Location</h2><iframe title="Ankit Tiwari CSC Center location preview" src="https://www.google.com/maps?q=Ankit%20Tiwari%20CSC%20Center&output=embed"></iframe></article></section>
+  </main>
+  <footer>Preview only — approve this layout before applying it to the live WordPress theme.</footer>
+</body>
+</html>
