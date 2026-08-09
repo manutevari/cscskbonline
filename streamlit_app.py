@@ -5,10 +5,11 @@ import html
 import streamlit as st
 import streamlit.components.v1 as components
 
-CSC_LINKS = [
-    ("Official CSC Portal", "https://csc.gov.in/", "CSC Official"),
-    ("Digital Seva service updates", "https://digitalseva.csc.gov.in/", "Digital Seva"),
-    ("Visit Ankit Tiwari CSC Center", "https://maps.app.goo.gl/WNidZh1cEukiXna88", "Location"),
+CSC_LIVE_FEEDS = [
+    ("CSC Official Portal", "https://csc.gov.in/", "Official"),
+    ("Digital Seva live services", "https://digitalseva.csc.gov.in/", "Live"),
+    ("CSC newsletter / Tarang updates", "https://csc.gov.in/new_newsletter", "News"),
+    ("CSC social updates", "https://twitter.com/CSCegov_", "Feed"),
 ]
 
 SERVICES = [
@@ -41,7 +42,7 @@ def inject_css() -> None:
           [data-testid="stHeader"]{background:rgba(2,8,23,.72)}
           .block-container{padding-top:1.2rem;max-width:1180px}.top{padding:.75rem 1rem;background:#020817;border:1px solid rgba(255,255,255,.16);border-radius:18px;display:flex;gap:1rem;justify-content:center;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
           .brand{font-size:clamp(1.4rem,3.8vw,3rem);font-weight:900;text-align:center;letter-spacing:.02em;line-height:1.15}.brand b{color:var(--orange)}.brand span{color:#76d8ff}.brand em{color:var(--green);font-style:normal}
-          .marquee{margin:1rem auto;display:flex;gap:1rem;align-items:center;overflow:hidden;padding:.75rem 1rem;border-radius:999px;background:#020817;box-shadow:0 10px 30px rgba(0,0,0,.25)}.marquee strong{color:var(--orange);white-space:nowrap}.track{display:flex;gap:2rem;white-space:nowrap;animation:scroll 32s linear infinite}.track a{color:white!important;text-decoration:none}.track span{color:var(--green);margin-left:.35rem}@keyframes scroll{from{transform:translateX(12%)}to{transform:translateX(-100%)}}
+          .marquee{margin:1rem auto;display:flex;gap:1rem;align-items:center;overflow:hidden;padding:.85rem 1rem;border-radius:999px;background:#020817;border:2px solid rgba(255,138,0,.55);box-shadow:0 0 30px rgba(255,138,0,.2),0 10px 30px rgba(0,0,0,.25)}.marquee strong{color:var(--orange);white-space:nowrap;text-shadow:0 0 14px rgba(255,138,0,.75)}.track{display:flex;gap:2rem;white-space:nowrap;animation:scroll 34s linear infinite}.track a{color:white!important;text-decoration:none;font-weight:800}.track span{color:#06142d;background:var(--green);border-radius:999px;margin-left:.35rem;padding:.18rem .45rem;font-size:.78rem}@keyframes scroll{from{transform:translateX(8%)}to{transform:translateX(-50%)}}
           .panel{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:1.5rem;backdrop-filter:blur(10px);height:100%;box-shadow:0 18px 50px rgba(0,0,0,.22)}h1{font-size:clamp(2rem,5vw,4.5rem)!important;line-height:1!important;margin:.25rem 0!important;color:white!important} h2,h3{color:white!important} p, li{color:var(--muted);font-size:1.05rem}.cta{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem}.btn{display:inline-block;padding:.85rem 1rem;border-radius:999px;text-decoration:none!important;font-weight:800}.primary{background:var(--orange);color:#120800!important}.secondary{background:#12335f;color:white!important;border:1px solid rgba(255,255,255,.2)}
           .card{background:var(--card);border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:1rem;min-height:210px}.badge{display:inline-flex;border-radius:999px;background:rgba(120,214,75,.15);color:#9cf56f;padding:.3rem .55rem;font-size:.8rem;font-weight:800}.review{border-left:4px solid var(--orange)}.metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1rem}.mini{background:rgba(2,8,23,.62);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:.8rem;text-align:center}.mini b{display:block;color:white;font-size:1.35rem}.footer{text-align:center;padding:2rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.12);margin-top:2rem}
           @media(max-width:700px){.metric-row{grid-template-columns:1fr}.marquee{border-radius:18px;align-items:flex-start}.track{animation:none;overflow:auto}.card{min-height:auto}}
@@ -54,15 +55,15 @@ def inject_css() -> None:
 def render_header() -> None:
     links = "".join(
         f'<a href="{url}" target="_blank">{html.escape(label)} <span>{html.escape(tag)}</span></a>'
-        for label, url, tag in CSC_LINKS
+        for label, url, tag in [*CSC_LIVE_FEEDS, *CSC_LIVE_FEEDS]
     )
     st.markdown(
         f"""
         <header class="top">
           <div class="brand"><b>CSCSKB ONLINE</b> – <span>AI Powered CSC</span> <em>Knowledge & Service Platform</em></div>
         </header>
-        <nav class="marquee" aria-label="Latest CSC updates">
-          <strong>Latest CSC Updates</strong>
+        <nav class="marquee" aria-label="Highlighted live CSC feeds">
+          <strong>🔴 LIVE CSC FEEDS</strong>
           <div class="track">{links}</div>
         </nav>
         """,
@@ -78,7 +79,7 @@ def render_hero() -> None:
             <section class="panel">
               <span class="badge">Streamlit Cloud ready</span>
               <h1>Fast, trusted CSC help with AI guidance.</h1>
-              <p>Deploy this CSCSKB Online landing page directly on Streamlit Cloud with the same high-conversion CSC style: official update links, service shortcuts, local trust proof, and map route actions.</p>
+              <p>Deploy this CSCSKB Online landing page on Streamlit Cloud and Vercel with highlighted CSC live feed links, service shortcuts, local trust proof, and map route actions.</p>
               <div class="cta">
                 <a class="btn primary" href="#services">Explore Services</a>
                 <a class="btn secondary" href="https://maps.app.goo.gl/WNidZh1cEukiXna88" target="_blank">Get Directions</a>
@@ -163,4 +164,4 @@ render_header()
 render_hero()
 render_services()
 render_assistant()
-st.markdown('<div class="footer">Streamlit deployment build — ready for Streamlit Cloud from <code>streamlit_app.py</code>.</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">Streamlit deployment build — ready for Streamlit Cloud from <code>streamlit_app.py</code>; Vercel build is ready from <code>frontend/</code>.</div>', unsafe_allow_html=True)
