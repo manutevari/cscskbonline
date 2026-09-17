@@ -145,8 +145,9 @@ export default function Home() {
         <div className="navbar-links">
           {[
             { icon: "🌐", label: "Official CSC Portal", href: "https://csc.gov.in/" },
-            { icon: "💻", label: "Digital Seva Portal", href: "https://digitalseva.csc.gov.in/" },
             { icon: "🗂️", label: "CSC Services", href: "#services" },
+            { icon: "💧", label: "Tata Water", href: "/tata-water" },
+            { icon: "💧", label: "Tata Water", href: "/tata-water" },
             { icon: "📞", label: "Contact Us", href: "#footer" },
           ].map((link) => (
             <a key={link.label} href={link.href} className="nav-link" target={link.href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer">
@@ -412,7 +413,6 @@ export default function Home() {
               <ul className="footer-links">
                 {[
                   { label: "Official CSC Portal", href: "https://csc.gov.in/" },
-                  { label: "Digital Seva Portal", href: "https://digitalseva.csc.gov.in/" },
                   { label: "PM Kisan Portal", href: "https://pmkisan.gov.in/" },
                   { label: "UIDAI (Aadhaar)", href: "https://uidai.gov.in/" },
                   { label: "Ayushman Bharat", href: "https://pmjay.gov.in/" },
@@ -480,3 +480,9 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
+
+
