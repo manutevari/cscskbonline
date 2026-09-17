@@ -65,12 +65,12 @@ function getServiceAnswer(q: string): string {
     return "### Income Certificate — Required Documents\n\n1. Aadhaar Card\n2. Passport-size photo\n3. Self-declaration form\n4. Previous income proof or Ration card\n\nFee: ₹30–50 + CSC service charge\nTime: 7–15 working days";
   }
   if (lower.includes("kaha") || lower.includes("location") || lower.includes("address") || lower.includes("where")) {
-    return "### CSC — Shikohabad\n\nPurana Bijli Office, Agra Road, near Roadways Bus Stand, Shikohabad, Uttar Pradesh 283135\n\n📞 9720000000\n🕐 Mon–Sun: 9:00 AM – 7:00 PM";
+    return "### CSC — Shikohabad\n\nPurana Bijli Office, Agra Road, near Roadways Bus Stand, Shikohabad, Uttar Pradesh 283135\n\n📞 +91-8937887070\n🕐 Mon–Sun: 9:00 AM – 7:00 PM";
   }
   if (lower.includes("voter") || lower.includes("pehchan")) {
     return "### Voter ID Application\n\nDocuments: Aadhaar, Photo, Age Proof\nProcess: Apply on voters.eci.gov.in or at CSC\nTime: 15–30 days after verification";
   }
-  return "Please visit CSC center with your Aadhaar and relevant documents for exact service requirements. Our staff will guide you step by step. You can also call: 9720000000.";
+  return "Please visit CSC center with your Aadhaar and relevant documents for exact service requirements. Our staff will guide you step by step. You can also call: +91-8937887070.";
 }
 
 export default function Home() {
@@ -431,7 +431,7 @@ export default function Home() {
               </div>
               <div className="footer-contact-item">
                 <span className="contact-icon">📞</span>
-                <span>9720000000</span>
+                <span>+91-8937887070</span>
               </div>
               <div className="footer-contact-item">
                 <span className="contact-icon">✉️</span>
@@ -480,6 +480,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
