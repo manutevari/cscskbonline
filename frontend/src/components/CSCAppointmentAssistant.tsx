@@ -14,19 +14,27 @@ type Appointment = {
 };
 
 const SERVICES = [
-  "Aadhaar Update",
+  "Aadhaar → Mobile Number Update",
+  "Aadhaar → Email ID Update",
+  "Aadhaar → Address / Pincode Update",
   "PAN Card",
   "Ayushman Card",
   "e-Shram Registration",
   "FSSAI Registration / License",
   "PM-KISAN",
-  "Income / Caste / Residence Certificate",
+  "Income Certificate",
+  "Caste Certificate",
+  "Residence / Domicile Certificate",
+  "EWS Certificate",
+  "Jeevan Pramaan Patra (Digital Life Certificate)",
+  "मुख्यमंत्री कन्या सुमंगला योजना",
   "Voter ID",
   "Insurance Policy / Premium Payment",
   "Insurance Renewal",
   "Life Insurance",
   "General Insurance",
   "Health Insurance",
+  "Motor Insurance",
   "GST Registration",
   "Udyam / MSME Registration",
   "Other CSC Service",
@@ -45,13 +53,32 @@ const TIMES = [
   "02:00 PM",
   "02:30 PM",
   "03:00 PM",
-  "03:30 PM",
-  "04:00 PM",
-  "04:30 PM",
-  "05:00 PM",
-  "05:30 PM",
-  "06:00 PM",
 ];
+
+function istNow() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+}
+
+function bookingWindow() {
+  const now = istNow();
+  const open = new Date(now);
+  open.setHours(0, 1, 0, 0);
+  const close = new Date(now);
+  close.setHours(15, 0, 0, 0);
+  return { now, open, close };
+}
+
+function bookingState() {
+  const { now, open, close } = bookingWindow();
+  if (now < open) return "PREOPEN" as const;
+  if (now >= close) return "CLOSED" as const;
+  return "OPEN" as const;
+}
+
+function secondsUntilOpen() {
+  const { now, open } = bookingWindow();
+  return Math.max(0, Math.ceil((open.getTime() - now.getTime()) / 1000));
+}
 
 function todayISO() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -76,14 +103,21 @@ export default function CSCAppointmentAssistant() {
   const [remarks, setRemarks] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [availability, setAvailability] = useState(bookingState());
+  const [countdown, setCountdown] = useState(secondsUntilOpen());
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setAvailability(bookingState());
+      setCountdown(secondsUntilOpen());
+    }, 1000);
     try {
       const saved = localStorage.getItem("cscskb-last-appointment");
       if (saved) setAppointment(JSON.parse(saved));
     } catch {
       // Ignore malformed local storage.
     }
+    return () => window.clearInterval(timer);
   }, []);
 
   const verifyUrl = appointment
@@ -100,6 +134,12 @@ export default function CSCAppointmentAssistant() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (availability !== "OPEN") {
+      setSubmitError(availability === "PREOPEN"
+        ? "Appointments open at 12:01 AM. Please wait for the opening time."
+        : "Today's appointment booking is closed after 3:00 PM.");
+      return;
+    }
     if (!name.trim() || !/^[0-9]{10}$/.test(mobile)) return;
     setSubmitting(true);
     setSubmitError("");
@@ -183,7 +223,9 @@ export default function CSCAppointmentAssistant() {
               <form className="csc-appt-form" onSubmit={submit}>
                 <div className="csc-appt-form-title">
                   <h3>Appointment Details</h3>
-                  <p>No separate appointment page — booking stays on this page.</p>
+                  <p>Same-day appointments only • Booking window: 12:01 AM–3:00 PM (IST).</p>
+                  {availability === "PREOPEN" && <p className="csc-appt-error">⏳ Booking opens in {countdown} seconds.</p>}
+                  {availability === "CLOSED" && <p className="csc-appt-error">🔒 Today's booking window is closed. New appointments open tomorrow at 12:01 AM.</p>}
                 </div>
 
                 <label>
@@ -213,7 +255,7 @@ export default function CSCAppointmentAssistant() {
                 <div className="csc-appt-two-col">
                   <label>
                     Preferred Date *
-                    <input type="date" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} required />
+                    <input type="date" min={todayISO()} max={todayISO()} value={date} readOnly required />
                   </label>
                   <label>
                     Preferred Time *
@@ -232,7 +274,7 @@ export default function CSCAppointmentAssistant() {
 
                 <div className="csc-appt-actions">
                   <button type="button" className="csc-appt-secondary" onClick={() => setMode("menu")}>Back</button>
-                  <button type="submit" className="csc-appt-primary" disabled={submitting}>{submitting ? "Booking…" : "✓ Book Appointment"}</button>
+                  <button type="submit" className="csc-appt-primary" disabled={submitting || availability !== "OPEN"}>{submitting ? "Booking…" : availability === "OPEN" ? "✓ Book Appointment" : availability === "PREOPEN" ? "Opens in " + countdown + "s" : "Booking Closed"}</button>
                 </div>
               </form>
             )}
