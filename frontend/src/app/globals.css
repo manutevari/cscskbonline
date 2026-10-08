@@ -1147,3 +1147,168 @@ footer {
   .container { padding: 1rem; }
   .hero-csc { font-size: 3.5rem; }
 }
+
+/* =========================================
+   GLOBAL CSC APPOINTMENT ASSISTANT
+   ========================================= */
+.csc-appt-float {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.csc-appt-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  background: rgba(2, 8, 23, 0.96);
+  border: 1px solid rgba(255, 138, 0, 0.45);
+  box-shadow: 0 12px 35px rgba(0,0,0,.35);
+  color: #fff;
+  font-size: 12px;
+  animation: cscApptFloatIn .35s ease-out;
+}
+
+.csc-appt-prompt strong { font-size: 12px; }
+.csc-appt-prompt span { color: #b7c7df; }
+
+.csc-appt-fab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 17px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8a00, #ffae00);
+  color: #120800;
+  font: 800 13px var(--font-sans);
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(255,138,0,.35);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.csc-appt-fab span { font-size: 19px; }
+.csc-appt-fab:hover { transform: translateY(-3px); box-shadow: 0 15px 38px rgba(255,138,0,.48); }
+
+.csc-appt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 22px;
+  background: rgba(0,0,0,.34);
+  backdrop-filter: blur(3px);
+}
+
+.csc-appt-modal {
+  width: min(440px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 44px));
+  overflow: auto;
+  border-radius: 22px;
+  background: #07183a;
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 28px 80px rgba(0,0,0,.55);
+  color: #f8fbff;
+  animation: cscApptModalIn .25s ease-out;
+}
+
+.csc-appt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 17px;
+  border-bottom: 1px solid rgba(255,255,255,.09);
+  background: rgba(2,8,23,.72);
+}
+
+.csc-appt-brand { display: flex; align-items: center; gap: 10px; }
+.csc-appt-avatar {
+  width: 38px; height: 38px; border-radius: 11px;
+  display: grid; place-items: center;
+  background: rgba(255,138,0,.15);
+  border: 1px solid rgba(255,138,0,.3);
+  font-size: 19px;
+}
+.csc-appt-brand strong { display: block; font-size: 14px; }
+.csc-appt-brand small { display: block; color: #b7c7df; font-size: 10px; margin-top: 2px; }
+.csc-appt-close {
+  width: 34px; height: 34px; border: 0; border-radius: 9px;
+  background: rgba(255,255,255,.06); color: #fff; font-size: 23px; cursor: pointer;
+}
+
+.csc-appt-menu, .csc-appt-form, .csc-appt-success { padding: 18px; }
+.csc-appt-welcome { display: flex; gap: 12px; margin-bottom: 18px; }
+.csc-appt-check, .csc-appt-success-icon {
+  width: 42px; height: 42px; min-width: 42px; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(120,214,75,.15);
+  border: 1px solid rgba(120,214,75,.3); color: #78d64b; font-weight: 900;
+}
+.csc-appt-menu h3, .csc-appt-success h3 { margin: 0 0 4px; font-size: 18px; }
+.csc-appt-menu p, .csc-appt-success > p { margin: 0; color: #b7c7df; font-size: 12px; line-height: 1.55; }
+
+.csc-appt-primary, .csc-appt-secondary {
+  min-height: 43px; border-radius: 10px; padding: 9px 13px; cursor: pointer;
+  font: 700 13px var(--font-sans); transition: .2s ease;
+}
+.csc-appt-primary { border: 0; background: #0b72e7; color: #fff; box-shadow: 0 6px 18px rgba(11,114,231,.25); }
+.csc-appt-primary:hover { background: #3b9eff; transform: translateY(-1px); }
+.csc-appt-secondary { border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.05); color: #f8fbff; }
+.csc-appt-secondary:hover { background: rgba(255,255,255,.1); }
+
+.csc-appt-menu > button { width: 100%; margin-top: 9px; }
+.csc-appt-form-title { margin-bottom: 14px; }
+.csc-appt-form-title h3 { margin: 0 0 2px; font-size: 17px; }
+.csc-appt-form-title p { margin: 0; color: #7a94b8; font-size: 10px; }
+
+.csc-appt-form label {
+  display: block; margin-bottom: 11px; color: #b7c7df; font-size: 11px; font-weight: 700;
+}
+.csc-appt-form input, .csc-appt-form select, .csc-appt-form textarea {
+  width: 100%; margin-top: 5px; border: 1px solid rgba(255,255,255,.13);
+  border-radius: 9px; padding: 10px 11px; background: rgba(2,8,23,.55);
+  color: #fff; font: 500 12px var(--font-sans); outline: none;
+}
+.csc-appt-form textarea { resize: vertical; min-height: 68px; }
+.csc-appt-form input:focus, .csc-appt-form select:focus, .csc-appt-form textarea:focus {
+  border-color: #0b72e7; box-shadow: 0 0 0 3px rgba(11,114,231,.12);
+}
+.csc-appt-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.csc-appt-actions { display: flex; gap: 9px; margin-top: 13px; }
+.csc-appt-actions > * { flex: 1; }
+
+.csc-appt-success { text-align: center; }
+.csc-appt-success-icon { margin: 2px auto 10px; }
+.csc-appt-ticket {
+  position: relative; margin-top: 15px; padding: 14px; text-align: left;
+  border: 1px dashed rgba(255,255,255,.22); border-radius: 14px;
+  background: rgba(255,255,255,.035);
+}
+.csc-appt-ticket > div:not(.csc-appt-qr) { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.csc-appt-ticket span { color: #7a94b8; font-size: 10px; }
+.csc-appt-ticket strong { color: #fff; font-size: 11px; text-align: right; }
+.csc-appt-status { color: #78d64b !important; }
+.csc-appt-qr { text-align: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
+.csc-appt-qr img { width: 150px; height: 150px; display: block; margin: 0 auto 5px; background: #fff; padding: 6px; border-radius: 8px; }
+.csc-appt-qr small { color: #7a94b8; font-size: 9px; }
+
+@keyframes cscApptFloatIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes cscApptModalIn { from { opacity: 0; transform: translateY(15px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 600px) {
+  .csc-appt-float { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .csc-appt-fab { min-height: 48px; padding: 0 14px; }
+  .csc-appt-fab b { font-size: 12px; }
+  .csc-appt-backdrop { padding: 10px; align-items: flex-end; }
+  .csc-appt-modal { width: 100%; max-height: calc(100vh - 20px); border-radius: 18px; }
+  .csc-appt-two-col { grid-template-columns: 1fr; gap: 0; }
+}
