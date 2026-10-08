@@ -1320,3 +1320,62 @@ footer {
 
 .csc-appt-primary:disabled { opacity: .65; cursor: wait; transform: none; }
 .csc-appt-error { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: rgba(220,38,38,.12); border: 1px solid rgba(248,113,113,.25); color: #fecaca; font-size: 11px; }
+
+/* CSC appointment QR verification page */
+.csc-verify-page {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(circle at top, #12366d 0, #06152f 45%, #020817 100%);
+  color: #f8fbff;
+}
+.csc-verify-card {
+  width: min(520px, 100%); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 24px; background: rgba(7,24,58,.94);
+  box-shadow: 0 28px 80px rgba(0,0,0,.45); overflow: hidden;
+}
+.csc-verify-brand {
+  padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.08);
+  font-size: 12px; font-weight: 900; letter-spacing: .12em; color: #8fc7ff;
+}
+.csc-verify-state { padding: 34px 28px 28px; text-align: center; }
+.csc-verify-icon {
+  width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 31px; font-weight: 900;
+}
+.csc-verify-valid { background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.35); color: #86efac; }
+.csc-verify-invalid { background: rgba(239,68,68,.14); border: 1px solid rgba(239,68,68,.35); color: #fca5a5; }
+.csc-verify-state h1 { margin: 0 0 8px; font-size: 24px; }
+.csc-verify-state > p { margin: 0 auto; max-width: 430px; color: #b7c7df; font-size: 13px; line-height: 1.6; }
+.csc-verify-details {
+  margin-top: 22px; padding: 14px; border: 1px dashed rgba(255,255,255,.2);
+  border-radius: 14px; background: rgba(255,255,255,.035); text-align: left;
+}
+.csc-verify-details > div {
+  display: flex; justify-content: space-between; gap: 14px; padding: 9px 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.csc-verify-details > div:last-child { border-bottom: 0; }
+.csc-verify-details span { color: #7a94b8; font-size: 11px; }
+.csc-verify-details strong { color: #fff; font-size: 12px; text-align: right; }
+.csc-verify-status { color: #86efac !important; }
+.csc-verify-id {
+  display: inline-block; margin-top: 18px; padding: 7px 10px; border-radius: 8px;
+  background: rgba(255,255,255,.06); color: #dbeafe; font: 700 12px monospace;
+}
+.csc-verify-note {
+  margin-top: 18px !important; font-size: 11px !important; color: #8fa5c4 !important;
+}
+.csc-verify-footer {
+  padding: 13px 20px; border-top: 1px solid rgba(255,255,255,.08);
+  text-align: center; color: #6f86a8; font-size: 10px;
+}
+.csc-verify-spinner {
+  width: 40px; height: 40px; margin: 0 auto 18px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.14); border-top-color: #60a5fa;
+  animation: cscVerifySpin .8s linear infinite;
+}
+@keyframes cscVerifySpin { to { transform: rotate(360deg); } }
+@media (max-width: 520px) {
+  .csc-verify-page { padding: 12px; }
+  .csc-verify-state { padding: 28px 18px 22px; }
+  .csc-verify-details > div { align-items: flex-start; }
+}
