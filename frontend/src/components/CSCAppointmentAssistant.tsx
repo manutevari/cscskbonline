@@ -17,11 +17,18 @@ const SERVICES = [
   "Aadhaar Update",
   "PAN Card",
   "Ayushman Card",
+  "e-Shram Registration",
+  "FSSAI Registration / License",
   "PM-KISAN",
   "Income / Caste / Residence Certificate",
   "Voter ID",
-  "Insurance / Banking",
-  "GST / MSME",
+  "Insurance Policy / Premium Payment",
+  "Insurance Renewal",
+  "Life Insurance",
+  "General Insurance",
+  "Health Insurance",
+  "GST Registration",
+  "Udyam / MSME Registration",
   "Other CSC Service",
 ];
 
@@ -47,13 +54,14 @@ const TIMES = [
 ];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function makeAppointmentId() {
-  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const token = Math.random().toString(36).slice(2, 7).toUpperCase();
-  return `CSC-${date}-${token}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 export default function CSCAppointmentAssistant() {
@@ -66,6 +74,8 @@ export default function CSCAppointmentAssistant() {
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("09:00 AM");
   const [remarks, setRemarks] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     try {
@@ -77,7 +87,7 @@ export default function CSCAppointmentAssistant() {
   }, []);
 
   const verifyUrl = appointment
-    ? `https://cscskb.online/appointment/verify/${appointment.id}`
+    ? `https://cscskb.online/api/appointments/${encodeURIComponent(appointment.id)}/verify`
     : "";
 
   const qrUrl = useMemo(
@@ -88,25 +98,28 @@ export default function CSCAppointmentAssistant() {
     [verifyUrl]
   );
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     if (!name.trim() || !/^[0-9]{10}$/.test(mobile)) return;
-
-    const next: Appointment = {
-      id: makeAppointmentId(),
-      name: name.trim(),
-      mobile,
-      service,
-      date,
-      time,
-      remarks: remarks.trim(),
-      status: "BOOKED",
-    };
-
-    setAppointment(next);
-    localStorage.setItem("cscskb-last-appointment", JSON.stringify(next));
-    setMode("success");
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const response = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, mobile, service, date, time, remarks }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Booking failed");
+      const next = payload.appointment as Appointment;
+      setAppointment(next);
+      localStorage.setItem("cscskb-last-appointment", JSON.stringify(next));
+      setMode("success");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to book appointment. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetBooking = () => {
@@ -116,6 +129,7 @@ export default function CSCAppointmentAssistant() {
     setDate(todayISO());
     setTime("09:00 AM");
     setRemarks("");
+    setSubmitError("");
     setMode("book");
   };
 
@@ -214,9 +228,11 @@ export default function CSCAppointmentAssistant() {
                   <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} />
                 </label>
 
+                {submitError && <p className="csc-appt-error" role="alert">{submitError}</p>}
+
                 <div className="csc-appt-actions">
                   <button type="button" className="csc-appt-secondary" onClick={() => setMode("menu")}>Back</button>
-                  <button type="submit" className="csc-appt-primary">✓ Book Appointment</button>
+                  <button type="submit" className="csc-appt-primary" disabled={submitting}>{submitting ? "Booking…" : "✓ Book Appointment"}</button>
                 </div>
               </form>
             )}
@@ -225,7 +241,7 @@ export default function CSCAppointmentAssistant() {
               <div className="csc-appt-success">
                 <div className="csc-appt-success-icon">✓</div>
                 <h3>Appointment Booked</h3>
-                <p>Save this appointment ID. Show the QR at the CSC counter.</p>
+                <p>Your receipt has been generated. WhatsApp delivery is attempted automatically when the CSC WhatsApp API is configured.</p>
 
                 <div className="csc-appt-ticket">
                   <div>
