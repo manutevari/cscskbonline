@@ -9,7 +9,7 @@ const OWNER_WHATSAPP = process.env.CSC_OWNER_WHATSAPP || "918937887070";
 const GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION || "v23.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const SLOT_START = 9 * 60;
-const SLOT_END = 15 * 60;
+const SLOT_END = 18 * 60;
 const SLOT_STEP = 15;
 
 function cleanPhone(value: string) { return value.replace(/\D/g, "").replace(/^0+/, ""); }
