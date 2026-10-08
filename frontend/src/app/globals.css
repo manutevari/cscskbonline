@@ -1379,3 +1379,20 @@ footer {
   .csc-verify-state { padding: 28px 18px 22px; }
   .csc-verify-details > div { align-items: flex-start; }
 }
+
+.csc-appt-calendar{margin:13px 0}
+.csc-appt-section-label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;color:#dbeafe;font-size:11px;font-weight:800}
+.csc-appt-section-label small{color:#7a94b8;font-weight:500}
+.csc-appt-date-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.csc-appt-date{min-height:55px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(255,255,255,.04);color:#b7c7df;cursor:pointer;padding:6px 4px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.csc-appt-date span{font-size:9px}.csc-appt-date strong{font-size:11px;color:#fff}.csc-appt-date.active{border-color:#0b72e7;background:rgba(11,114,231,.2);box-shadow:0 0 0 2px rgba(11,114,231,.1)}
+.csc-appt-slot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:270px;overflow-y:auto;padding-right:2px}
+.csc-appt-slot{min-height:38px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.035);color:#dbeafe;cursor:pointer;font:700 10px var(--font-sans);position:relative}
+.csc-appt-slot:hover:not(:disabled){border-color:#0b72e7;background:rgba(11,114,231,.12)}
+.csc-appt-slot.active{border-color:#78d64b;background:rgba(120,214,75,.12);color:#fff}
+.csc-appt-slot:disabled{cursor:not-allowed;opacity:.42;text-decoration:line-through}
+.csc-appt-slot small{display:block;font-size:8px;color:#fca5a5;text-decoration:none;margin-top:2px}
+.csc-appt-legend{display:flex;gap:10px;margin-top:7px;color:#7a94b8;font-size:8px}
+.csc-appt-legend span:first-child{color:#86efac}.csc-appt-legend span:nth-child(2){color:#fca5a5}
+.csc-appt-qr-placeholder{width:150px;height:150px;margin:0 auto 5px;display:grid;place-items:center;background:#fff;color:#334155;border-radius:8px;font-size:10px}
+@media (max-width:600px){.csc-appt-date-grid{grid-template-columns:repeat(4,1fr)}.csc-appt-date:nth-child(n+5){display:none}.csc-appt-slot-grid{max-height:250px}}
