@@ -14,3 +14,8 @@ create index if not exists appointments_date_time_idx on public.appointments (da
 
 alter table public.appointments enable row level security;
 -- The service role key is used only by the Next.js server route. No public policy is added.
+
+-- Prevent two active appointments from occupying the same 15-minute date/time slot.
+create unique index if not exists appointments_date_time_unique
+  on public.appointments (date, time)
+  where status in ('BOOKED', 'CONFIRMED');
