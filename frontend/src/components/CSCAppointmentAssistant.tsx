@@ -10,7 +10,7 @@ type Appointment = {
   date: string;
   time: string;
   remarks: string;
-  status: "BOOKED";
+  status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 };
 
 const SERVICES = [
@@ -40,55 +40,51 @@ const SERVICES = [
   "Other CSC Service",
 ];
 
-const TIMES = [
-  "09:00 AM",
-  "09:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "12:00 PM",
-  "12:30 PM",
-  "01:00 PM",
-  "02:00 PM",
-  "02:30 PM",
-  "03:00 PM",
-];
-
-function istNow() {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-}
-
-function bookingWindow() {
-  const now = istNow();
-  const open = new Date(now);
-  open.setHours(0, 1, 0, 0);
-  const close = new Date(now);
-  close.setHours(15, 0, 0, 0);
-  return { now, open, close };
-}
-
-function bookingState() {
-  const { now, open, close } = bookingWindow();
-  if (now < open) return "PREOPEN" as const;
-  if (now >= close) return "CLOSED" as const;
-  return "OPEN" as const;
-}
-
-function secondsUntilOpen() {
-  const { now, open } = bookingWindow();
-  return Math.max(0, Math.ceil((open.getTime() - now.getTime()) / 1000));
-}
+const SLOT_START_MINUTES = 9 * 60;
+const SLOT_END_MINUTES = 15 * 60;
+const SLOT_STEP = 15;
 
 function todayISO() {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDaysISO(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDate(iso: string, options: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...options }).format(new Date(`${iso}T00:00:00+05:30`));
+}
+
+function makeSlots() {
+  return Array.from({ length: (SLOT_END_MINUTES - SLOT_START_MINUTES) / SLOT_STEP }, (_, index) => {
+    const start = SLOT_START_MINUTES + index * SLOT_STEP;
+    const end = start + SLOT_STEP;
+    const fmt = (minutes: number) => {
+      const h24 = Math.floor(minutes / 60);
+      const h = h24 % 12 || 12;
+      const m = String(minutes % 60).padStart(2, "0");
+      return `${String(h).padStart(2, "0")}:${m} ${h24 >= 12 ? "PM" : "AM"}`;
+    };
+    return `${fmt(start)} - ${fmt(end)}`;
+  });
+}
+
+const SLOTS = makeSlots();
+
+function currentISTMinutes() {
+  const parts = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+  return hour * 60 + minute;
 }
 
 export default function CSCAppointmentAssistant() {
@@ -99,48 +95,75 @@ export default function CSCAppointmentAssistant() {
   const [mobile, setMobile] = useState("");
   const [service, setService] = useState(SERVICES[0]);
   const [date, setDate] = useState(todayISO());
-  const [time, setTime] = useState("09:00 AM");
+  const [time, setTime] = useState(SLOTS[0]);
   const [remarks, setRemarks] = useState("");
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [availability, setAvailability] = useState(bookingState());
-  const [countdown, setCountdown] = useState(secondsUntilOpen());
+  const [qrSrc, setQrSrc] = useState("");
+
+  const dates = useMemo(() => {
+    const start = todayISO();
+    return Array.from({ length: 7 }, (_, i) => addDaysISO(start, i));
+  }, []);
+
+  const verifyUrl = appointment ? `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}` : "";
+  const primaryQr = verifyUrl
+    ? `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verifyUrl)}`
+    : "";
+  const fallbackQr = verifyUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(verifyUrl)}`
+    : "";
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setAvailability(bookingState());
-      setCountdown(secondsUntilOpen());
-    }, 1000);
     try {
       const saved = localStorage.getItem("cscskb-last-appointment");
       if (saved) setAppointment(JSON.parse(saved));
-    } catch {
-      // Ignore malformed local storage.
-    }
-    return () => window.clearInterval(timer);
+    } catch {}
   }, []);
 
-  const verifyUrl = appointment
-    ? `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}`
-    : "";
+  useEffect(() => {
+    if (!open || mode !== "book") return;
+    let cancelled = false;
+    setLoadingSlots(true);
+    fetch(`/api/appointments/availability?date=${encodeURIComponent(date)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!cancelled) {
+          const booked = Array.isArray(payload.bookedSlots) ? payload.bookedSlots : [];
+          setBookedSlots(booked);
+          const firstAvailable = SLOTS.find((slot) => !booked.includes(slot) && (date !== todayISO() || SLOTS.indexOf(slot) * SLOT_STEP + SLOT_START_MINUTES >= currentISTMinutes()));
+          if (firstAvailable) setTime(firstAvailable);
+        }
+      })
+      .catch(() => { if (!cancelled) setBookedSlots([]); })
+      .finally(() => { if (!cancelled) setLoadingSlots(false); });
+    return () => { cancelled = true; };
+  }, [open, mode, date]);
 
-  const qrUrl = useMemo(
-    () =>
-      verifyUrl
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(verifyUrl)}`
-        : "",
-    [verifyUrl]
-  );
+  useEffect(() => {
+    if (qrSrc === primaryQr) return;
+    if (primaryQr) setQrSrc(primaryQr);
+  }, [primaryQr, qrSrc]);
+
+  const slotDisabled = (slot: string) => {
+    if (bookedSlots.includes(slot)) return true;
+    if (date !== todayISO()) return false;
+    const index = SLOTS.indexOf(slot);
+    return SLOT_START_MINUTES + index * SLOT_STEP <= currentISTMinutes();
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (availability !== "OPEN") {
-      setSubmitError(availability === "PREOPEN"
-        ? "Appointments open at 12:01 AM. Please wait for the opening time."
-        : "Today's appointment booking is closed after 3:00 PM.");
+    if (!name.trim() || !/^[0-9]{10}$/.test(mobile) || !service || !date || !time) {
+      setSubmitError("Please complete all required appointment details.");
       return;
     }
-    if (!name.trim() || !/^[0-9]{10}$/.test(mobile)) return;
+    if (slotDisabled(time)) {
+      setSubmitError("That time slot is no longer available. Please choose another slot.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -154,6 +177,7 @@ export default function CSCAppointmentAssistant() {
       const next = payload.appointment as Appointment;
       setAppointment(next);
       localStorage.setItem("cscskb-last-appointment", JSON.stringify(next));
+      setQrSrc(payload.qrUrl || primaryQr);
       setMode("success");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to book appointment. Please try again.");
@@ -167,8 +191,9 @@ export default function CSCAppointmentAssistant() {
     setMobile("");
     setService(SERVICES[0]);
     setDate(todayISO());
-    setTime("09:00 AM");
+    setTime(SLOTS[0]);
     setRemarks("");
+    setBookedSlots([]);
     setSubmitError("");
     setMode("book");
   };
@@ -179,43 +204,23 @@ export default function CSCAppointmentAssistant() {
     <>
       {open && (
         <div className="csc-appt-backdrop" onClick={close}>
-          <section
-            className="csc-appt-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="CSC Appointment Assistant"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <section className="csc-appt-modal" role="dialog" aria-modal="true" aria-label="CSC Appointment Assistant" onClick={(event) => event.stopPropagation()}>
             <div className="csc-appt-header">
               <div className="csc-appt-brand">
                 <span className="csc-appt-avatar">📅</span>
-                <div>
-                  <strong>CSC Appointment Assistant</strong>
-                  <small>CSC SKB Online • Shikohabad</small>
-                </div>
+                <div><strong>CSC Appointment Assistant</strong><small>CSC SKB Online • Shikohabad</small></div>
               </div>
-              <button className="csc-appt-close" onClick={close} aria-label="Close">
-                ×
-              </button>
+              <button className="csc-appt-close" onClick={close} aria-label="Close">×</button>
             </div>
 
             {mode === "menu" && (
               <div className="csc-appt-menu">
                 <div className="csc-appt-welcome">
                   <span className="csc-appt-check">✓</span>
-                  <div>
-                    <h3>Book your CSC visit</h3>
-                    <p>Choose your service and preferred time. Your appointment ID and QR will be generated instantly.</p>
-                  </div>
+                  <div><h3>Book your CSC visit</h3><p>Choose a date and 15-minute time slot. Your appointment ID and QR will be generated instantly.</p></div>
                 </div>
-                <button className="csc-appt-primary" onClick={() => setMode("book")}>
-                  📅 Book CSC Appointment
-                </button>
-                {appointment && (
-                  <button className="csc-appt-secondary" onClick={() => setMode("success")}>
-                    🎫 View Last Appointment
-                  </button>
-                )}
+                <button className="csc-appt-primary" onClick={() => setMode("book")}>📅 Book CSC Appointment</button>
+                {appointment && <button className="csc-appt-secondary" onClick={() => setMode("success")}>🎫 View Last Appointment</button>}
               </div>
             )}
 
@@ -223,58 +228,41 @@ export default function CSCAppointmentAssistant() {
               <form className="csc-appt-form" onSubmit={submit}>
                 <div className="csc-appt-form-title">
                   <h3>Appointment Details</h3>
-                  <p>Same-day appointments only • Booking window: 12:01 AM–3:00 PM (IST).</p>
-                  {availability === "PREOPEN" && <p className="csc-appt-error">⏳ Booking opens in {countdown} seconds.</p>}
-                  {availability === "CLOSED" && <p className="csc-appt-error">🔒 Today's booking window is closed. New appointments open tomorrow at 12:01 AM.</p>}
+                  <p>Book any available slot within the next 7 days • 15-minute slots • CSC hours 9:00 AM–3:00 PM.</p>
                 </div>
 
-                <label>
-                  Applicant Name *
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" required />
-                </label>
+                <label>Applicant Name *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" required /></label>
+                <label>Mobile Number *<input value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" pattern="[0-9]{10}" required /></label>
+                <label>Service Required *<select value={service} onChange={(e) => setService(e.target.value)}>{SERVICES.map((item) => <option key={item}>{item}</option>)}</select></label>
 
-                <label>
-                  Mobile Number *
-                  <input
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    placeholder="10-digit mobile number"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    required
-                  />
-                </label>
-
-                <label>
-                  Service Required *
-                  <select value={service} onChange={(e) => setService(e.target.value)}>
-                    {SERVICES.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                </label>
-
-                <div className="csc-appt-two-col">
-                  <label>
-                    Preferred Date *
-                    <input type="date" min={todayISO()} max={todayISO()} value={date} readOnly required />
-                  </label>
-                  <label>
-                    Preferred Time *
-                    <select value={time} onChange={(e) => setTime(e.target.value)}>
-                      {TIMES.map((item) => <option key={item}>{item}</option>)}
-                    </select>
-                  </label>
+                <div className="csc-appt-calendar">
+                  <div className="csc-appt-section-label">📅 Choose Date</div>
+                  <div className="csc-appt-date-grid">
+                    {dates.map((item, index) => (
+                      <button type="button" key={item} className={item === date ? "csc-appt-date active" : "csc-appt-date"} onClick={() => { setDate(item); setSubmitError(""); }}>
+                        <span>{index === 0 ? "Today" : index === 1 ? "Tomorrow" : formatDate(item, { weekday: "short" })}</span>
+                        <strong>{formatDate(item, { day: "2-digit", month: "short" })}</strong>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <label>
-                  Remarks
-                  <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} />
-                </label>
+                <div className="csc-appt-calendar">
+                  <div className="csc-appt-section-label">🕘 Choose 15-Minute Time Slot {loadingSlots && <small>Checking availability…</small>}</div>
+                  <div className="csc-appt-slot-grid">
+                    {SLOTS.map((slot) => {
+                      const disabled = slotDisabled(slot);
+                      return <button type="button" key={slot} disabled={disabled} className={slot === time && !disabled ? "csc-appt-slot active" : "csc-appt-slot"} onClick={() => { setTime(slot); setSubmitError(""); }}>{slot}{bookedSlots.includes(slot) && <small>Booked</small>}</button>;
+                    })}
+                  </div>
+                  <div className="csc-appt-legend"><span>● Available</span><span>● Booked</span><span>● Past</span></div>
+                </div>
 
+                <label>Remarks<textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} /></label>
                 {submitError && <p className="csc-appt-error" role="alert">{submitError}</p>}
-
                 <div className="csc-appt-actions">
                   <button type="button" className="csc-appt-secondary" onClick={() => setMode("menu")}>Back</button>
-                  <button type="submit" className="csc-appt-primary" disabled={submitting || availability !== "OPEN"}>{submitting ? "Booking…" : availability === "OPEN" ? "✓ Book Appointment" : availability === "PREOPEN" ? "Opens in " + countdown + "s" : "Booking Closed"}</button>
+                  <button type="submit" className="csc-appt-primary" disabled={submitting || loadingSlots || slotDisabled(time)}>{submitting ? "Booking…" : "✓ Book Appointment"}</button>
                 </div>
               </form>
             )}
@@ -283,38 +271,21 @@ export default function CSCAppointmentAssistant() {
               <div className="csc-appt-success">
                 <div className="csc-appt-success-icon">✓</div>
                 <h3>Appointment Booked</h3>
-                <p>Your receipt has been generated. WhatsApp delivery is attempted automatically when the CSC WhatsApp API is configured.</p>
-
+                <p>Your appointment receipt is ready. The QR below verifies this appointment securely.</p>
                 <div className="csc-appt-ticket">
-                  <div>
-                    <span>Appointment ID</span>
-                    <strong>{appointment.id}</strong>
-                  </div>
-                  <div>
-                    <span>Applicant</span>
-                    <strong>{appointment.name}</strong>
-                  </div>
-                  <div>
-                    <span>Service</span>
-                    <strong>{appointment.service}</strong>
-                  </div>
-                  <div>
-                    <span>Date & Time</span>
-                    <strong>{appointment.date} • {appointment.time}</strong>
-                  </div>
-                  <div>
-                    <span>Status</span>
-                    <strong className="csc-appt-status">BOOKED</strong>
-                  </div>
+                  <div><span>Appointment ID</span><strong>{appointment.id}</strong></div>
+                  <div><span>Applicant</span><strong>{appointment.name}</strong></div>
+                  <div><span>Service</span><strong>{appointment.service}</strong></div>
+                  <div><span>Date & Time</span><strong>{appointment.date} • {appointment.time}</strong></div>
+                  <div><span>Status</span><strong className="csc-appt-status">{appointment.status}</strong></div>
                   <div className="csc-appt-qr">
-                    <img src={qrUrl} alt="Appointment verification QR code" />
-                    <small>Scan to verify</small>
+                    {qrSrc ? <img src={qrSrc} alt="Appointment verification QR code" onError={() => setQrSrc(fallbackQr)} /> : <div className="csc-appt-qr-placeholder">Generating QR…</div>}
+                    <small>Scan to verify • {verifyUrl}</small>
                   </div>
                 </div>
-
                 <div className="csc-appt-actions">
                   <button className="csc-appt-secondary" onClick={resetBooking}>Book Another</button>
-                  <button className="csc-appt-primary" onClick={() => window.print()}>🖨 Print</button>
+                  <button className="csc-appt-primary" onClick={() => window.print()}>🖨 Print Receipt</button>
                 </div>
               </div>
             )}
@@ -323,21 +294,8 @@ export default function CSCAppointmentAssistant() {
       )}
 
       <div className="csc-appt-float">
-        {open === false && (
-          <div className="csc-appt-prompt">
-            <strong>Need a CSC service?</strong>
-            <span>Book an appointment</span>
-          </div>
-        )}
-        <button
-          className="csc-appt-fab"
-          onClick={() => { setOpen(true); setMode("menu"); }}
-          aria-label="Book CSC Appointment"
-          title="Book CSC Appointment"
-        >
-          <span>📅</span>
-          <b>Book Appointment</b>
-        </button>
+        {!open && <div className="csc-appt-prompt"><strong>Need a CSC service?</strong><span>Book an appointment</span></div>}
+        <button className="csc-appt-fab" onClick={() => { setOpen(true); setMode("menu"); }} aria-label="Book CSC Appointment" title="Book CSC Appointment"><span>📅</span><b>Book Appointment</b></button>
       </div>
     </>
   );
