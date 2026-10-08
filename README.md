@@ -1,6 +1,7 @@
 # CSCSKB Online Streamlit + Vercel App
 
 A dual-deploy landing page for CSC Shikohabad / CSCSKB Online. It includes a Streamlit app for Streamlit Community Cloud and a Next.js app for Vercel. Both versions highlight live CSC feed links as a prominent marquee, plus service cards, local trust proof, AI guidance, contact actions, and map directions.
+A dual-deploy landing page for CSCSKB Online. It includes a Streamlit app for Streamlit Community Cloud and a Next.js app for Vercel. Both versions highlight live CSC feed links as a prominent marquee, plus service cards, local trust proof, contact actions, and map directions.
 
 ## Run Streamlit locally
 
@@ -39,4 +40,7 @@ npm run dev
 - `requirements.txt` — Python dependencies for Streamlit Cloud.
 - `.streamlit/config.toml` — production-friendly Streamlit server/theme settings.
 - `frontend/src/app/` — Next.js App Router pages used by Vercel.
+- `requirements.txt` — Python dependencies for Streamlit Cloud.
+- `.streamlit/config.toml` — production-friendly Streamlit server/theme settings.
+- `frontend/` — Next.js app used by Vercel.
 - `vercel.json` — Vercel build configuration.
