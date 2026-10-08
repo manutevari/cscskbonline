@@ -41,7 +41,7 @@ const SERVICES = [
 ];
 
 const SLOT_START_MINUTES = 9 * 60;
-const SLOT_END_MINUTES = 15 * 60;
+const SLOT_END_MINUTES = 18 * 60;
 const SLOT_STEP = 15;
 
 function todayISO() {
