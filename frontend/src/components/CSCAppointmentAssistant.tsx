@@ -17,11 +17,18 @@ const SERVICES = [
   "Aadhaar Update",
   "PAN Card",
   "Ayushman Card",
+  "e-Shram Registration",
+  "FSSAI Registration / License",
   "PM-KISAN",
   "Income / Caste / Residence Certificate",
   "Voter ID",
-  "Insurance / Banking",
-  "GST / MSME",
+  "Insurance Policy / Premium Payment",
+  "Insurance Renewal",
+  "Life Insurance",
+  "General Insurance",
+  "Health Insurance",
+  "GST Registration",
+  "Udyam / MSME Registration",
   "Other CSC Service",
 ];
 
@@ -47,13 +54,14 @@ const TIMES = [
 ];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function makeAppointmentId() {
-  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const token = Math.random().toString(36).slice(2, 7).toUpperCase();
-  return `CSC-${date}-${token}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 export default function CSCAppointmentAssistant() {
@@ -121,6 +129,7 @@ export default function CSCAppointmentAssistant() {
     setDate(todayISO());
     setTime("09:00 AM");
     setRemarks("");
+    setSubmitError("");
     setMode("book");
   };
 
@@ -218,6 +227,8 @@ export default function CSCAppointmentAssistant() {
                   Remarks
                   <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} />
                 </label>
+
+                {submitError && <p className="csc-appt-error" role="alert">{submitError}</p>}
 
                 <div className="csc-appt-actions">
                   <button type="button" className="csc-appt-secondary" onClick={() => setMode("menu")}>Back</button>
