@@ -93,6 +93,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid appointment details" }, { status: 400 });
     }
 
+    const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const todayIST = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const opening = new Date(nowIST);
+    opening.setHours(0, 1, 0, 0);
+    const closing = new Date(nowIST);
+    closing.setHours(15, 0, 0, 0);
+
+    if (nowIST < opening || nowIST >= closing) {
+      return NextResponse.json({ error: "Today's appointment booking is closed. Booking is available from 12:01 AM to 3:00 PM IST." }, { status: 403 });
+    }
+    if (date !== todayIST) {
+      return NextResponse.json({ error: "Appointments can only be booked for today." }, { status: 400 });
+    }
+
     const appointment: Booking = {
       id: makeId(), name, mobile, service, date, time, remarks,
       status: "BOOKED", created_at: new Date().toISOString(),
