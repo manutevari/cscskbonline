@@ -121,7 +121,7 @@ export default function CSCAppointmentAssistant() {
   }, []);
 
   const verifyUrl = appointment
-    ? `https://cscskb.online/api/appointments/${encodeURIComponent(appointment.id)}/verify`
+    ? `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}`
     : "";
 
   const qrUrl = useMemo(
