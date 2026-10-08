@@ -1312,3 +1312,6 @@ footer {
   .csc-appt-modal { width: 100%; max-height: calc(100vh - 20px); border-radius: 18px; }
   .csc-appt-two-col { grid-template-columns: 1fr; gap: 0; }
 }
+
+.csc-appt-primary:disabled { opacity: .65; cursor: wait; transform: none; }
+.csc-appt-error { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: rgba(220,38,38,.12); border: 1px solid rgba(248,113,113,.25); color: #fecaca; font-size: 11px; }
