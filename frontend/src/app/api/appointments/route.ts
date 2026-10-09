@@ -83,6 +83,37 @@ async function sendWhatsApp(to: string, appointment: Booking, role: "customer" |
   return { sent: true };
 }
 
+async function sendSMS(to: string, appointment: Booking) {
+  const authKey = process.env.MSG91_AUTH_KEY;
+  const templateId = process.env.MSG91_SMS_TEMPLATE_ID;
+  if (!authKey || !templateId) return { sent: false, reason: "sms_not_configured" };
+
+  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}`;
+  const response = await fetch("https://control.msg91.com/api/v5/flow", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authkey: authKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      template_id: templateId,
+      recipients: [{
+        mobiles: to.startsWith("91") ? to : `91${to}`,
+        VAR1: appointment.name,
+        VAR2: appointment.id,
+        VAR3: appointment.service,
+        VAR4: appointment.date,
+        VAR5: appointment.time,
+        VAR6: verificationUrl,
+      }],
+    }),
+  });
+
+  if (!response.ok) return { sent: false, reason: await response.text() };
+  return { sent: true };
+}
+
 function slotIsValid(time: string) { return SLOTS.includes(time); }
 
 function slotStartMinutes(time: string) {
@@ -140,16 +171,17 @@ export async function POST(request: NextRequest) {
       throw error;
     }
     const saved = inserted[0] || appointment;
-    const [customer, owner] = await Promise.all([
+    const [customerWhatsApp, ownerWhatsApp, customerSMS] = await Promise.all([
       sendWhatsApp(mobile, saved, "customer"),
       sendWhatsApp(OWNER_WHATSAPP, saved, "owner"),
+      sendSMS(mobile, saved),
     ]);
 
     const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(saved.id)}`;
     const qrUrl = `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verificationUrl)}`;
     return NextResponse.json({
       appointment: saved, qrUrl, verificationUrl,
-      notifications: { customerWhatsApp: customer, ownerWhatsApp: owner },
+      notifications: { customerWhatsApp, ownerWhatsApp, customerSMS },
     });
   } catch (error) {
     console.error("Appointment booking failed:", error);
