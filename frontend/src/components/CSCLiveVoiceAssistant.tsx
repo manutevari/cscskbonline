@@ -94,8 +94,8 @@ export default function CSCLiveVoiceAssistant() {
   return (
     <>
       <style jsx>{`
-        .voice-fab{position:fixed;right:22px;bottom:100px;z-index:9998;border:0;border-radius:999px;padding:13px 18px;background:#123c32;color:white;font-weight:700;box-shadow:0 8px 26px #0003;cursor:pointer}
-        .voice-panel{position:fixed;right:20px;bottom:160px;width:min(390px,calc(100vw - 28px));height:min(580px,calc(100vh - 190px));z-index:9999;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
+        .voice-fab{position:fixed;right:22px;bottom:175px;z-index:2147483000;border:2px solid #fff;border-radius:999px;padding:14px 18px;background:#123c32;color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 28px #0006;cursor:pointer;display:flex;align-items:center;gap:8px;visibility:visible;opacity:1;pointer-events:auto}
+        .voice-panel{position:fixed;right:20px;bottom:230px;width:min(390px,calc(100vw - 28px));height:min(580px,calc(100vh - 260px));z-index:2147483000;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
         .voice-head{padding:15px 16px;background:#123c32;color:white;display:flex;justify-content:space-between;align-items:center;gap:12px}
         .voice-head small{display:block;opacity:.8;margin-top:3px}.voice-close{background:transparent;color:white;border:0;font-size:24px;cursor:pointer}
         .voice-messages{padding:14px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:10px}
@@ -106,7 +106,7 @@ export default function CSCLiveVoiceAssistant() {
         .voice-action{border:0;border-radius:10px;padding:10px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}
         .voice-action:disabled{opacity:.5;cursor:default}.voice-error{margin:0;padding:8px 12px;color:#9c2525;font-size:12px;background:#fff6f6}
         .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:6px 8px;cursor:pointer}
-        @media(max-width:480px){.voice-panel{right:10px;bottom:150px;width:calc(100vw - 20px)}.voice-fab{right:12px;bottom:88px}}
+        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(540px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}}
       `}</style>
       {open && <section className="voice-panel" role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
         <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><button className="voice-close" onClick={() => { setOpen(false); window.speechSynthesis?.cancel(); }} aria-label="Close assistant">×</button></header>
