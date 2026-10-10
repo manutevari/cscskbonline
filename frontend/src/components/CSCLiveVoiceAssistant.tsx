@@ -24,6 +24,13 @@ export default function CSCLiveVoiceAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "नमस्ते! मैं CSCSKB Online सहायक हूँ। CSC सेवाओं या appointment के बारे में पूछिए। आप हिंदी या English में लिख सकते हैं या microphone इस्तेमाल कर सकते हैं।" },
   ]);
+  const suggestions = [
+    "PAN card ke liye documents?",
+    "Ayushman card kaise banega?",
+    "PM-Kisan eligibility kya hai?",
+    "Income certificate ke liye kya chahiye?",
+    "CSC appointment kaise book karein?",
+  ];
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -113,12 +120,15 @@ export default function CSCLiveVoiceAssistant() {
         .voice-messages{padding:12px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:10px;min-height:70px}
         .voice-msg{white-space:pre-wrap;overflow-wrap:anywhere;max-width:90%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45}
         .voice-msg.user{align-self:flex-end;background:#dcefe5}.voice-msg.assistant{align-self:flex-start;background:white;border:1px solid #e4ebe6}
-        .voice-form{padding:12px;border-top:1px solid #e3e9e5;display:flex;gap:7px;align-items:center}
+        .voice-suggestions{display:flex;gap:7px;overflow-x:auto;padding:9px 12px 10px;background:#fff;border-top:1px solid #e3e9e5;scrollbar-width:thin}
+        .voice-suggestion{flex:0 0 auto;max-width:205px;border:1px solid #c7d8ff;border-radius:999px;padding:7px 10px;background:#f2f6ff;color:#254b93;font-size:12px;cursor:pointer;white-space:nowrap}
+        .voice-suggestion:hover{background:#e3ecff}
+        .voice-form{padding:10px 12px 12px;border-top:1px solid #e3e9e5;display:flex;gap:7px;align-items:center}
         .voice-input{min-width:0;flex:1;padding:11px;border:1px solid #cbd8d0;border-radius:10px;color:#17251f;background:#fff}
         .voice-action{border:0;border-radius:10px;padding:10px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}
         .voice-action:disabled{opacity:.5;cursor:default}.voice-error{margin:0;padding:8px 12px;color:#9c2525;font-size:12px;background:#fff6f6}
         .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:6px 8px;cursor:pointer}
-        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(640px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:112px;height:112px}}
+        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(680px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:112px;height:112px}.voice-suggestion{max-width:180px}}
       `}</style>
       {open && <section className="voice-panel" role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
         <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><button className="voice-close" onClick={() => { setOpen(false); window.speechSynthesis?.cancel(); }} aria-label="Close assistant">×</button></header>
@@ -139,6 +149,11 @@ export default function CSCLiveVoiceAssistant() {
           <button onClick={startListening} disabled={listening || busy}>{listening ? "🎙 सुन रहा हूँ…" : "🎙 बोलें"}</button>
           <button onClick={() => setSpeaking((value) => !value)}>{speaking ? "🔊 Voice on" : "🔇 Voice off"}</button>
           <span>Voice fallback: browser speech</span>
+        </div>
+        <div className="voice-suggestions" aria-label="Suggested questions">
+          {suggestions.map((suggestion) => (
+            <button key={suggestion} type="button" className="voice-suggestion" onClick={() => setInput(suggestion)}>{suggestion}</button>
+          ))}
         </div>
         <form className="voice-form" onSubmit={send}>
           <input className="voice-input" value={input} onChange={(e) => setInput(e.target.value)} placeholder="अपना सवाल लिखें…" maxLength={4000} aria-label="Your message" />
