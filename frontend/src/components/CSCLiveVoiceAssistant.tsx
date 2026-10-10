@@ -95,10 +95,22 @@ export default function CSCLiveVoiceAssistant() {
     <>
       <style jsx>{`
         .voice-fab{position:fixed;right:22px;bottom:175px;z-index:2147483000;border:2px solid #fff;border-radius:999px;padding:14px 18px;background:#123c32;color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 28px #0006;cursor:pointer;display:flex;align-items:center;gap:8px;visibility:visible;opacity:1;pointer-events:auto}
-        .voice-panel{position:fixed;right:20px;bottom:230px;width:min(390px,calc(100vw - 28px));height:min(580px,calc(100vh - 260px));z-index:2147483000;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
+        .voice-panel{position:fixed;right:20px;bottom:230px;width:min(390px,calc(100vw - 28px));height:min(680px,calc(100vh - 245px));z-index:2147483000;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
         .voice-head{padding:15px 16px;background:#123c32;color:white;display:flex;justify-content:space-between;align-items:center;gap:12px}
         .voice-head small{display:block;opacity:.8;margin-top:3px}.voice-close{background:transparent;color:white;border:0;font-size:24px;cursor:pointer}
-        .voice-messages{padding:14px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:10px}
+        .voice-stage{position:relative;flex-shrink:0;min-height:205px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;overflow:hidden;background:linear-gradient(145deg,#102d75 0%,#4935d5 55%,#852ee6 100%);color:white;padding:14px 12px 12px}
+        .voice-orb-button{position:relative;width:128px;height:128px;display:grid;place-items:center;border:0;border-radius:50%;cursor:pointer;background:radial-gradient(circle at 35% 28%,#8cf8ff 0%,#46a9ff 26%,#6658ff 58%,#d86cff 82%,#ff9be8 100%);box-shadow:0 0 0 5px #ffffff28,0 0 32px #54d8ff88,inset 0 0 18px #ffffff90;color:white}
+        .voice-orb-button:before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid #8ceaffaa;box-shadow:0 0 18px #66d9ff88;pointer-events:none}
+        .voice-orb-button.listening{animation:orb-pulse 1.4s ease-in-out infinite}
+        .voice-orb-button svg{width:42px;height:52px;filter:drop-shadow(0 2px 4px #2839a966)}
+        .voice-wave{height:22px;width:min(280px,90%);display:flex;align-items:center;justify-content:center;gap:4px}
+        .voice-wave span{width:3px;height:4px;border-radius:4px;background:#fff;opacity:.9}
+        .voice-wave.active span{animation:wave 700ms ease-in-out infinite alternate}
+        .voice-wave.active span:nth-child(3n){animation-delay:180ms}.voice-wave.active span:nth-child(2n){animation-delay:320ms}
+        .voice-stage-label{font-size:12px;opacity:.92;text-align:center}
+        @keyframes wave{from{height:4px;opacity:.55}to{height:20px;opacity:1}}
+        @keyframes orb-pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 5px #ffffff28,0 0 32px #54d8ff88}50%{transform:scale(1.04);box-shadow:0 0 0 10px #ffffff20,0 0 46px #54d8ffbb}}
+        .voice-messages{padding:12px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:10px;min-height:70px}
         .voice-msg{white-space:pre-wrap;overflow-wrap:anywhere;max-width:90%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45}
         .voice-msg.user{align-self:flex-end;background:#dcefe5}.voice-msg.assistant{align-self:flex-start;background:white;border:1px solid #e4ebe6}
         .voice-form{padding:12px;border-top:1px solid #e3e9e5;display:flex;gap:7px;align-items:center}
@@ -106,10 +118,17 @@ export default function CSCLiveVoiceAssistant() {
         .voice-action{border:0;border-radius:10px;padding:10px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}
         .voice-action:disabled{opacity:.5;cursor:default}.voice-error{margin:0;padding:8px 12px;color:#9c2525;font-size:12px;background:#fff6f6}
         .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:6px 8px;cursor:pointer}
-        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(540px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}}
+        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(640px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:112px;height:112px}}
       `}</style>
       {open && <section className="voice-panel" role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
         <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><button className="voice-close" onClick={() => { setOpen(false); window.speechSynthesis?.cancel(); }} aria-label="Close assistant">×</button></header>
+        <div className="voice-stage">
+          <button type="button" className={`voice-orb-button ${listening ? "listening" : ""}`} onClick={startListening} aria-label={listening ? "Listening" : "Start voice input"} title="बोलने के लिए क्लिक करें">
+            <svg viewBox="0 0 48 60" fill="none" aria-hidden="true"><rect x="17" y="4" width="14" height="30" rx="7" stroke="currentColor" strokeWidth="3.5"/><path d="M9 27v3a15 15 0 0 0 30 0v-3M24 45v10M16 55h16" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"/></svg>
+          </button>
+          <div className={`voice-wave ${listening || busy ? "active" : ""}`} aria-hidden="true">{Array.from({length:35},(_,i)=><span key={i}/>)}</div>
+          <div className="voice-stage-label">{listening ? "सुन रहा हूँ… बोलिए" : busy ? "आपका जवाब तैयार हो रहा है…" : "बात करने के लिए माइक्रोफोन दबाएँ"}</div>
+        </div>
         <div className="voice-messages" aria-live="polite">
           {messages.map((message, i) => <div key={i} className={`voice-msg ${message.role}`}>{message.content}</div>)}
           {busy && <div className="voice-msg assistant">जवाब तैयार हो रहा है…</div>}
