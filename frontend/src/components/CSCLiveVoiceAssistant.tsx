@@ -127,6 +127,28 @@ export default function CSCLiveVoiceAssistant() {
     event?.preventDefault();
     const message = (messageOverride ?? input).trim();
     if (!message || busy) return;
+
+    // Booking requests should open the real appointment form instead of letting the
+    // general chat model incorrectly say it cannot help with booking.
+    const bookingIntent =
+      /\\b(book|booking|appointment|schedule)\\b/i.test(message) ||
+      /(अपॉइंटमेंट|appointment|बुक|बुकिंग|समय लेना|तारीख.*बुक|slot.*बुक)/i.test(message);
+    if (bookingIntent) {
+      setMessages((previous) => [
+        ...previous,
+        { role: "user", content: message },
+        { role: "assistant", content: "जी, मैं आपका Appointment Booking Form खोल रहा हूँ। वहाँ नाम, मोबाइल नंबर, सेवा, तारीख़ और उपलब्ध समय चुनकर बुकिंग कन्फर्म करें।" },
+      ]);
+      setInput("");
+      openBooking();
+      if (speaking && "speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance("जी, मैं आपका अपॉइंटमेंट बुकिंग फॉर्म खोल रहा हूँ। कृपया अपनी जानकारी भरकर बुकिंग कन्फर्म करें।");
+        utterance.lang = "hi-IN";
+        window.speechSynthesis.speak(utterance);
+      }
+      return;
+    }
+
     const nextMessages = [...messages, { role: "user" as const, content: message }];
     setMessages(nextMessages);
     setInput("");
