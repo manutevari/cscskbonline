@@ -27,15 +27,26 @@ export default function CSCLiveVoiceAssistant() {
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptRef = useRef("");
+  const sendRef = useRef<(messageOverride?: string) => Promise<void>>(async () => {});
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open, busy]);
-  useEffect(() => () => { recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); }, []);
+  useEffect(() => () => { if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current); recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); }, []);
 
   const openBooking = () => {
     recognitionRef.current?.stop();
     setListening(false);
     window.speechSynthesis?.cancel();
     window.dispatchEvent(new Event("cscskb:open-appointment"));
+  };
+
+  const stopVoice = () => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = null;
+    recognitionRef.current?.stop();
+    setListening(false);
+    window.speechSynthesis?.cancel();
   };
 
   const startListening = () => {
@@ -48,11 +59,24 @@ export default function CSCLiveVoiceAssistant() {
     try {
       const recognition = new Recognition();
       recognition.lang = "hi-IN";
-      recognition.interimResults = false;
-      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      transcriptRef.current = "";
       recognition.onresult = (event) => {
-        const transcript = Array.from(event.results as ArrayLike<any>).map((result: any) => result[0]?.transcript || "").join(" ").trim();
-        if (transcript) setInput((previous) => previous ? previous + " " + transcript : transcript);
+        const parts: string[] = [];
+        for (let i = 0; i < event.results.length; i++) {
+          const part = event.results[i]?.[0]?.transcript || "";
+          if (part) parts.push(part);
+        }
+        transcriptRef.current = parts.join(" ").trim();
+        setInput(transcriptRef.current);
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          const finalTranscript = transcriptRef.current.trim();
+          recognitionRef.current?.stop();
+          setListening(false);
+          if (finalTranscript) void sendRef.current(finalTranscript);
+        }, 5000);
       };
       recognition.onerror = (event) => setError(event?.error === "not-allowed" ? "Microphone permission दें, या प्रश्न लिखें।" : "Voice input अभी उपलब्ध नहीं है। आप प्रश्न लिख सकते हैं।");
       recognition.onend = () => setListening(false);
@@ -74,9 +98,9 @@ export default function CSCLiveVoiceAssistant() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const send = async (event?: FormEvent) => {
+  const send = async (event?: FormEvent, messageOverride?: string) => {
     event?.preventDefault();
-    const message = input.trim();
+    const message = (messageOverride ?? input).trim();
     if (!message || busy) return;
     const nextMessages = [...messages, { role: "user" as const, content: message }];
     setMessages(nextMessages);
@@ -98,6 +122,7 @@ export default function CSCLiveVoiceAssistant() {
       setError(e instanceof Error ? e.message : "Connection failed. Please try again.");
     } finally { setBusy(false); }
   };
+  sendRef.current = async (messageOverride?: string) => send(undefined, messageOverride);
 
   return (
     <>
@@ -129,7 +154,7 @@ export default function CSCLiveVoiceAssistant() {
         @media(max-width:480px){.voice-panel{right:8px;bottom:8px;width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:none}.voice-panel.minimized{height:auto;bottom:8px}.voice-head{padding:12px;min-height:66px}.voice-head strong{font-size:16px}.voice-minimize,.voice-close{width:40px;height:40px;flex-basis:40px}.voice-messages{padding:14px;gap:14px}.voice-msg{max-width:100%;font-size:16px;line-height:1.75;padding:13px 14px}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:100px;height:100px}.voice-stage{min-height:170px}}
       `}</style>
       {open && <section className={`voice-panel ${minimized ? "minimized" : ""}`} role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
-        <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><div className="voice-head-actions"><button type="button" className="voice-minimize" onClick={() => setMinimized((value) => !value)} aria-label={minimized ? "Expand assistant" : "Minimize assistant"} title={minimized ? "Expand" : "Minimize"}>{minimized ? "□" : "−"}</button><button type="button" className="voice-close" onClick={() => { recognitionRef.current?.stop(); setListening(false); window.speechSynthesis?.cancel(); setMinimized(false); setOpen(false); }} aria-label="Close assistant" title="Close assistant">×</button></div></header>
+        <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><div className="voice-head-actions"><button type="button" className="voice-minimize" onClick={() => setMinimized((value) => !value)} aria-label={minimized ? "Expand assistant" : "Minimize assistant"} title={minimized ? "Expand" : "Minimize"}>{minimized ? "□" : "−"}</button><button type="button" className="voice-close" onClick={() => { stopVoice(); setMinimized(false); setOpen(false); }} aria-label="Close assistant" title="Close assistant">×</button></div></header>
         <div className="voice-stage">
           <button type="button" className={`voice-orb-button ${listening ? "listening" : ""}`} onClick={startListening} aria-label={listening ? "Listening" : "Start voice input"} title="बोलने के लिए क्लिक करें">
             <svg viewBox="0 0 48 60" fill="none" aria-hidden="true"><rect x="17" y="4" width="14" height="30" rx="7" stroke="currentColor" strokeWidth="3.5"/><path d="M9 27v3a15 15 0 0 0 30 0v-3M24 45v10M16 55h16" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"/></svg>
@@ -145,6 +170,7 @@ export default function CSCLiveVoiceAssistant() {
         {error && <p className="voice-error" role="alert">{error}</p>}
         <div className="voice-options">
           <button onClick={startListening} disabled={listening || busy}>{listening ? "🎙 सुन रहा हूँ…" : "🎙 बोलें"}</button>
+          <button type="button" onClick={stopVoice} aria-label="Stop voice and remain in assistant">⏹ Stop</button>
           <button className="voice-book-button" type="button" onClick={openBooking}>📅 Book Appointment</button>
           <button onClick={() => setSpeaking((value) => !value)}>{speaking ? "🔊 Voice on" : "🔇 Voice off"}</button>
           <span>Voice fallback: browser speech</span>
