@@ -117,6 +117,12 @@ export default function CSCAppointmentAssistant() {
     : "";
 
   useEffect(() => {
+    const openFromAssistant = () => { setOpen(true); setMode("book"); setSubmitError(""); };
+    window.addEventListener("cscskb:open-appointment", openFromAssistant);
+    return () => window.removeEventListener("cscskb:open-appointment", openFromAssistant);
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("cscskb-last-appointment");
       if (saved) setAppointment(JSON.parse(saved));
