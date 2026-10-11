@@ -16,6 +16,7 @@ declare global {
 
 export default function CSCLiveVoiceAssistant() {
   const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -95,8 +96,8 @@ export default function CSCLiveVoiceAssistant() {
     <>
       <style jsx>{`
         .voice-fab{position:fixed;right:22px;bottom:175px;z-index:2147483000;border:2px solid #fff;border-radius:999px;padding:14px 18px;background:#123c32;color:#fff;font-weight:800;font-size:15px;box-shadow:0 8px 28px #0006;cursor:pointer;display:flex;align-items:center;gap:8px;visibility:visible;opacity:1;pointer-events:auto}
-        .voice-panel{position:fixed;right:20px;bottom:230px;width:min(390px,calc(100vw - 28px));height:min(680px,calc(100vh - 245px));z-index:2147483000;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
-        .voice-head{padding:15px 16px;background:#123c32;color:white;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .voice-panel{position:fixed;right:20px;bottom:20px;width:min(460px,calc(100vw - 28px));height:min(760px,calc(100dvh - 40px));z-index:2147483000;background:#fff;color:#17251f;border:1px solid #d7e4dd;border-radius:18px;box-shadow:0 18px 60px #0003;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}.voice-panel.minimized{height:auto;bottom:20px}.voice-panel.minimized .voice-stage,.voice-panel.minimized .voice-messages,.voice-panel.minimized .voice-form,.voice-panel.minimized .voice-options,.voice-panel.minimized .voice-error{display:none}
+        .voice-head{padding:16px 18px;background:#123c32;color:white;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:72px;flex-shrink:0}.voice-head strong{font-size:17px}.voice-head-actions{display:flex;gap:8px;align-items:center}.voice-minimize,.voice-close{background:#ffffff20;color:white;border:2px solid #ffffffa0;border-radius:10px;width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;font-size:25px;font-weight:800;line-height:1;cursor:pointer}.voice-minimize:hover,.voice-close:hover{background:#ffffff45}.voice-close{border-radius:10px;font-size:29px}
         .voice-head small{display:block;opacity:.8;margin-top:3px}.voice-close{background:#ffffff20;color:white;border:1px solid #ffffff66;border-radius:50%;width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;font-size:25px;line-height:1;cursor:pointer;position:relative;z-index:2}.voice-close:hover{background:#ffffff38}
         .voice-stage{position:relative;flex-shrink:0;min-height:205px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;overflow:hidden;background:linear-gradient(145deg,#102d75 0%,#4935d5 55%,#852ee6 100%);color:white;padding:14px 12px 12px}
         .voice-orb-button{position:relative;width:128px;height:128px;display:grid;place-items:center;border:0;border-radius:50%;cursor:pointer;background:radial-gradient(circle at 35% 28%,#8cf8ff 0%,#46a9ff 26%,#6658ff 58%,#d86cff 82%,#ff9be8 100%);box-shadow:0 0 0 5px #ffffff28,0 0 32px #54d8ff88,inset 0 0 18px #ffffff90;color:white}
@@ -110,18 +111,18 @@ export default function CSCLiveVoiceAssistant() {
         .voice-stage-label{font-size:12px;opacity:.92;text-align:center}
         @keyframes wave{from{height:4px;opacity:.55}to{height:20px;opacity:1}}
         @keyframes orb-pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 5px #ffffff28,0 0 32px #54d8ff88}50%{transform:scale(1.04);box-shadow:0 0 0 10px #ffffff20,0 0 46px #54d8ffbb}}
-        .voice-messages{padding:12px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:10px;min-height:70px}
-        .voice-msg{white-space:pre-wrap;overflow-wrap:anywhere;max-width:90%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45}
+        .voice-messages{padding:18px;overflow:auto;flex:1;background:#f7faf8;display:flex;flex-direction:column;gap:16px;min-height:100px}
+        .voice-msg{white-space:pre-wrap;overflow-wrap:anywhere;max-width:96%;padding:14px 16px;border-radius:14px;font-size:16px;line-height:1.75;letter-spacing:.01em}
         .voice-msg.user{align-self:flex-end;background:#dcefe5}.voice-msg.assistant{align-self:flex-start;background:white;border:1px solid #e4ebe6}
-        .voice-form{padding:12px;border-top:1px solid #e3e9e5;display:flex;gap:7px;align-items:center}
-        .voice-input{min-width:0;flex:1;padding:11px;border:1px solid #cbd8d0;border-radius:10px;color:#17251f;background:#fff}
-        .voice-action{border:0;border-radius:10px;padding:10px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}
+        .voice-form{padding:14px 16px;border-top:1px solid #e3e9e5;display:flex;gap:10px;align-items:center;flex-shrink:0}
+        .voice-input{min-width:0;flex:1;padding:14px 13px;border:1px solid #cbd8d0;border-radius:10px;color:#17251f;background:#fff;font:inherit;font-size:16px}
+        .voice-action{border:0;border-radius:10px;padding:13px 16px;background:#176b4d;color:white;font-weight:700;font-size:15px;cursor:pointer}
         .voice-action:disabled{opacity:.5;cursor:default}.voice-error{margin:0;padding:8px 12px;color:#9c2525;font-size:12px;background:#fff6f6}
         .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:6px 8px;cursor:pointer}
-        @media(max-width:480px){.voice-panel{right:10px;bottom:220px;width:calc(100vw - 20px);height:min(640px,calc(100vh - 245px))}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:112px;height:112px}}
+        @media(max-width:480px){.voice-panel{right:8px;bottom:8px;width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:none}.voice-panel.minimized{height:auto;bottom:8px}.voice-head{padding:12px;min-height:66px}.voice-head strong{font-size:16px}.voice-minimize,.voice-close{width:40px;height:40px;flex-basis:40px}.voice-messages{padding:14px;gap:14px}.voice-msg{max-width:100%;font-size:16px;line-height:1.75;padding:13px 14px}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:100px;height:100px}.voice-stage{min-height:170px}}
       `}</style>
-      {open && <section className="voice-panel" role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
-        <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><button type="button" className="voice-close" onClick={() => { recognitionRef.current?.stop(); setListening(false); window.speechSynthesis?.cancel(); setOpen(false); }} aria-label="Close assistant" title="Close assistant">×</button></header>
+      {open && <section className={`voice-panel ${minimized ? "minimized" : ""}`} role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
+        <header className="voice-head"><div><strong>🎙 CSCSKB AI Assistant</strong><small>Hindi • Hinglish • English</small></div><div className="voice-head-actions"><button type="button" className="voice-minimize" onClick={() => setMinimized((value) => !value)} aria-label={minimized ? "Expand assistant" : "Minimize assistant"} title={minimized ? "Expand" : "Minimize"}>{minimized ? "□" : "−"}</button><button type="button" className="voice-close" onClick={() => { recognitionRef.current?.stop(); setListening(false); window.speechSynthesis?.cancel(); setMinimized(false); setOpen(false); }} aria-label="Close assistant" title="Close assistant">×</button></div></header>
         <div className="voice-stage">
           <button type="button" className={`voice-orb-button ${listening ? "listening" : ""}`} onClick={startListening} aria-label={listening ? "Listening" : "Start voice input"} title="बोलने के लिए क्लिक करें">
             <svg viewBox="0 0 48 60" fill="none" aria-hidden="true"><rect x="17" y="4" width="14" height="30" rx="7" stroke="currentColor" strokeWidth="3.5"/><path d="M9 27v3a15 15 0 0 0 30 0v-3M24 45v10M16 55h16" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"/></svg>
@@ -145,7 +146,8 @@ export default function CSCLiveVoiceAssistant() {
           <button className="voice-action" type="submit" disabled={busy || !input.trim()}>{busy ? "…" : "Send"}</button>
         </form>
       </section>}
-      {!open && <button className="voice-fab" onClick={() => setOpen(true)} aria-label="Open AI voice assistant">🎙 Ask AI</button>}
+      {!open && <button className="voice-fab" onClick={() => { setOpen(true); setMinimized(false); }} aria-label="Open AI voice assistant">🎙 Ask AI</button>}
+      {open && minimized && <button className="voice-fab" style={{ bottom: 20, right: 20 }} onClick={() => setMinimized(false)} aria-label="Expand AI voice assistant">🎙 Open Assistant</button>}
     </>
   );
 }
