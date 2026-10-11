@@ -40,14 +40,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Let OpenRouter route/fallback across models in one request instead of
-  // waiting through several sequential client-side model timeouts.
-  const models = [
-    process.env.OPENROUTER_MODEL || "z-ai/glm-5.3-flash",
-    process.env.OPENROUTER_FALLBACK_MODEL || "deepseek/deepseek-v4.1-flash",
-    process.env.OPENROUTER_SECOND_FALLBACK_MODEL || "openai/gpt-oss-120b",
-  ].filter((model, index, all) => all.indexOf(model) === index);
-
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -58,7 +50,8 @@ export async function POST(request: NextRequest) {
         "X-Title": "CSCSKB Online Assistant",
       },
       body: JSON.stringify({
-        models,
+        // Free Models Router only: never select a paid model or paid fallback.
+        model: "openrouter/free",
         messages: [{ role: "system", content: SYSTEM }, ...history, { role: "user", content: message }],
         temperature: 0.3,
         max_tokens: 450,
@@ -71,15 +64,15 @@ export async function POST(request: NextRequest) {
     const data = await response.json().catch(() => null);
     const answer = getMessageText(data);
     if (!response.ok || !answer) {
-      console.error("OpenRouter voice chat failed", response.status, data?.error?.code || data?.error?.message || "empty response");
+      console.error("OpenRouter free voice chat failed", response.status, data?.error?.code || data?.error?.message || "empty response");
       return NextResponse.json(
-        { error: "AI providers are temporarily unavailable. Please try again or use appointment booking.", fallback: true },
+        { error: "Free AI models are temporarily unavailable. Please try again or use appointment booking.", fallback: true },
         { status: response.status === 401 || response.status === 402 ? 503 : 502 },
       );
     }
 
     return NextResponse.json(
-      { answer, model: data?.model || "openrouter-fallback", fallbackUsed: Boolean(data?.model && !models.includes(data.model)) },
+      { answer, model: data?.model || "openrouter/free" },
       { headers: { "Cache-Control": "no-store, max-age=0" } },
     );
   } catch (error) {
