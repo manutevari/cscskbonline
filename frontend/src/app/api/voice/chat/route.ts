@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SYSTEM = `You are the CSCSKB Online assistant for a CSC service centre in Shikohabad, Uttar Pradesh. Reply naturally in Hindi, Hinglish, or English based on the visitor. Keep answers concise and practical, usually under 120 words. Give guidance about CSC services and appointments. Do not invent fees, eligibility, deadlines, or government rules; state uncertainty and recommend checking official sources. Never ask for Aadhaar numbers, OTPs, PINs, passwords, or bank details. Do not claim an appointment is booked; direct users to the site's booking form.`;
+const SYSTEM = `You are the CSCSKB Online assistant for a CSC service centre in Shikohabad, Uttar Pradesh. Reply naturally in Hindi, Hinglish, or English based on the visitor. Keep answers concise and practical, usually under 120 words. Give guidance about CSC services and appointments. Do not invent fees, eligibility, deadlines, or government rules; state uncertainty and recommend checking official sources. Never ask for Aadhaar numbers, OTPs, PINs, passwords, or bank details. Do not disclose or estimate any price, fee, charge, rate, commission, or cost for any service or product, even if asked; politely say pricing is not shared by this assistant and ask the visitor to contact the CSC centre directly for current details. Do not claim an appointment is booked; direct users to the site's booking form.`;
 
 function getMessageText(data: any): string {
   const content = data?.choices?.[0]?.message?.content;
@@ -30,6 +30,17 @@ export async function POST(request: NextRequest) {
 
   if (!message || message.length > 4000) {
     return NextResponse.json({ error: "Enter a message up to 4,000 characters." }, { status: 400 });
+  }
+
+  // Keep pricing private regardless of model output.
+  const asksPrice =
+    /\\b(price|pricing|cost|fee|fees|charge|charges|rate|rates|commission|how much|what does .* cost)\\b/i.test(message) ||
+    /(कितना पैसा|कितने रुपये|कीमत|मूल्य|दाम|फीस|शुल्क|चार्ज|रेट|कमीशन|कितना लगेगा|कितने का)/i.test(message);
+  if (asksPrice) {
+    return NextResponse.json({
+      answer: "माफ़ कीजिए, यह सहायक कीमत या शुल्क साझा नहीं करता। वर्तमान जानकारी के लिए CSC केंद्र से सीधे संपर्क करें।",
+      model: "pricing-policy",
+    }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   }
 
   const key = process.env.OPENROUTER_API_KEY;
