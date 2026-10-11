@@ -83,6 +83,17 @@ export default function CSCLiveVoiceAssistant() {
     setInput("");
     setBusy(true);
     setError("");
+    // Booking navigation is handled locally so it still works when the free AI provider is unavailable.
+    const bookingIntent = /\b(book|booking|appointment|schedule)\b/i.test(message)
+      || /(अपॉइंटमेंट|appointment|बुक|बुकिंग|समय लेना|तारीख.*बुक|slot.*बुक)/i.test(message);
+    if (bookingIntent) {
+      const answer = "जी, मैं आपको appointment booking form पर ले जा रहा हूँ। कृपया वहाँ अपना नाम, मोबाइल नंबर, सेवा, तारीख और उपलब्ध समय चुनकर Booking confirm करें। फॉर्म submit होने और Appointment ID/QR मिलने पर ही booking पूरी मानी जाएगी।";
+      setMessages((previous) => [...previous, { role: "assistant", content: answer }]);
+      speak(answer);
+      openBooking();
+      setBusy(false);
+      return;
+    }
     try {
       const response = await fetch("/api/voice/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
