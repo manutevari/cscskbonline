@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   // Keep pricing private regardless of model output.
   const asksPrice =
-    /\\b(price|pricing|cost|fee|fees|charge|charges|rate|rates|commission|how much|what does .* cost)\\b/i.test(message) ||
+    /\b(price|pricing|cost|fee|fees|charge|charges|rate|rates|commission|how much|what does .* cost)\b/i.test(message) ||
     /(कितना पैसा|कितने रुपये|कीमत|मूल्य|दाम|फीस|शुल्क|चार्ज|रेट|कमीशन|कितना लगेगा|कितने का)/i.test(message);
   if (asksPrice) {
     return NextResponse.json({
