@@ -29,12 +29,16 @@ export default function CSCLiveVoiceAssistant() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptRef = useRef("");
+  const autoListenRef = useRef(false);
+  const awaitingResponseRef = useRef(false);
   const sendRef = useRef<(messageOverride?: string) => Promise<void>>(async () => {});
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open, busy]);
   useEffect(() => () => { if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current); recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); }, []);
 
   const openBooking = () => {
+    autoListenRef.current = false;
+    awaitingResponseRef.current = false;
     recognitionRef.current?.stop();
     setListening(false);
     window.speechSynthesis?.cancel();
@@ -42,6 +46,8 @@ export default function CSCLiveVoiceAssistant() {
   };
 
   const stopVoice = () => {
+    autoListenRef.current = false;
+    awaitingResponseRef.current = false;
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = null;
     recognitionRef.current?.stop();
@@ -51,6 +57,8 @@ export default function CSCLiveVoiceAssistant() {
 
   const startListening = () => {
     setError("");
+    autoListenRef.current = true;
+    awaitingResponseRef.current = false;
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
       setError("इस browser में speech recognition उपलब्ध नहीं है। कृपया Chrome में खोलें या अपना प्रश्न लिखें।");
@@ -73,13 +81,24 @@ export default function CSCLiveVoiceAssistant() {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = setTimeout(() => {
           const finalTranscript = transcriptRef.current.trim();
+          awaitingResponseRef.current = true;
           recognitionRef.current?.stop();
           setListening(false);
           if (finalTranscript) void sendRef.current(finalTranscript);
-        }, 5000);
+          else { awaitingResponseRef.current = false; if (autoListenRef.current) startListening(); }
+        }, 2500);
       };
-      recognition.onerror = (event) => setError(event?.error === "not-allowed" ? "Microphone permission दें, या प्रश्न लिखें।" : "Voice input अभी उपलब्ध नहीं है। आप प्रश्न लिख सकते हैं।");
-      recognition.onend = () => setListening(false);
+      recognition.onerror = (event) => {
+        setListening(false);
+        if (event?.error === "not-allowed" || event?.error === "service-not-allowed") autoListenRef.current = false;
+        setError(event?.error === "not-allowed" ? "Microphone permission दें, या प्रश्न लिखें।" : "Voice input अभी उपलब्ध नहीं है। आप प्रश्न लिख सकते हैं।");
+      };
+      recognition.onend = () => {
+        setListening(false);
+        if (autoListenRef.current && !awaitingResponseRef.current && !busy) {
+          window.setTimeout(() => { if (autoListenRef.current && !awaitingResponseRef.current) startListening(); }, 350);
+        }
+      };
       recognitionRef.current = recognition;
       setListening(true);
       recognition.start();
@@ -95,6 +114,12 @@ export default function CSCLiveVoiceAssistant() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : "en-IN";
     utterance.rate = 1;
+    utterance.onend = () => {
+      if (autoListenRef.current) {
+        awaitingResponseRef.current = false;
+        window.setTimeout(() => { if (autoListenRef.current && !awaitingResponseRef.current) startListening(); }, 250);
+      }
+    };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -120,7 +145,13 @@ export default function CSCLiveVoiceAssistant() {
       speak(answer);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Connection failed. Please try again.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+      if (autoListenRef.current && (!speaking || !("speechSynthesis" in window))) {
+        awaitingResponseRef.current = false;
+        window.setTimeout(() => { if (autoListenRef.current && !awaitingResponseRef.current) startListening(); }, 250);
+      }
+    }
   };
   sendRef.current = async (messageOverride?: string) => send(undefined, messageOverride);
 
