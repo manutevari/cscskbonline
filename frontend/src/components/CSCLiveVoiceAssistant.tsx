@@ -131,7 +131,7 @@ export default function CSCLiveVoiceAssistant() {
     // Booking requests should open the real appointment form instead of letting the
     // general chat model incorrectly say it cannot help with booking.
     const bookingIntent =
-      /\\b(book|booking|appointment|schedule)\\b/i.test(message) ||
+      /\b(book|booking|appointment|schedule)\b/i.test(message) ||
       /(अपॉइंटमेंट|appointment|बुक|बुकिंग|समय लेना|तारीख.*बुक|slot.*बुक)/i.test(message);
     if (bookingIntent) {
       setMessages((previous) => [
