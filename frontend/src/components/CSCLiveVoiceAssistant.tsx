@@ -108,6 +108,13 @@ export default function CSCLiveVoiceAssistant() {
     }
   };
 
+  const clearChatHistory = () => {
+    stopVoice();
+    setMessages([{ role: "assistant", content: "चैट हिस्ट्री साफ़ कर दी गई है। अब आप नया प्रश्न पूछ सकते हैं।" }]);
+    setInput("");
+    setError("");
+  };
+
   const speak = (text: string) => {
     if (!speaking || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -225,6 +232,8 @@ export default function CSCLiveVoiceAssistant() {
           <button onClick={startListening} disabled={listening || busy}>{listening ? "🎙 सुन रहा हूँ…" : "🎙 बोलें"}</button>
           <button type="button" onClick={stopVoice} aria-label="Stop voice and remain in assistant">⏹ Stop</button>
           <button className="voice-book-button" type="button" onClick={openBooking}>📅 Book Appointment</button>
+          <button type="button" onClick={clearChatHistory}>🗑 चैट मिटाएँ</button>
+          <a href="/privacy/data-deletion" style={{display:"inline-flex",alignItems:"center",border:"1px solid #d0ddd4",background:"#fff",color:"#234735",borderRadius:8,padding:"8px 10px",textDecoration:"none"}}>Personal data deletion</a>
           <button onClick={() => setSpeaking((value) => !value)}>{speaking ? "🔊 Voice on" : "🔇 Voice off"}</button>
           <span>Voice fallback: browser speech</span>
         </div>
