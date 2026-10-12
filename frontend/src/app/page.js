@@ -35,6 +35,7 @@ export default function Home() {
           <p>Your trusted partner for Digital India services, government schemes, documents, payments, and online solutions in Shikohabad.</p>
           <div className="cta">
             <a className="btn primary" href="#services">Explore Services</a>
+            <a className="btn secondary" href="/jobs">Jobs &amp; Exams</a>
             <a className="btn secondary" href="https://maps.app.goo.gl/WNidZh1cEukiXna88" target="_blank" rel="noreferrer">Get Directions</a>
           </div>
           <div className="metricRow"><div><b>4+</b>Service groups</div><div><b>24/7</b>Online guidance</div><div><b>1-tap</b>Map route</div></div>
