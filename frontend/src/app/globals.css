@@ -1396,3 +1396,42 @@ footer {
 .csc-appt-legend span:first-child{color:#86efac}.csc-appt-legend span:nth-child(2){color:#fca5a5}
 .csc-appt-qr-placeholder{width:150px;height:150px;margin:0 auto 5px;display:grid;place-items:center;background:#fff;color:#334155;border-radius:8px;font-size:10px}
 @media (max-width:600px){.csc-appt-date-grid{grid-template-columns:repeat(4,1fr)}.csc-appt-date:nth-child(n+5){display:none}.csc-appt-slot-grid{max-height:250px}}
+
+
+/* Live official notifications, positioned immediately above the chatbot */
+.updates-section {
+  margin: 1.5rem 0 2rem;
+  scroll-margin-top: 90px;
+}
+.updates-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .75rem;
+}
+.updates-heading h2 { font-size: clamp(1.25rem, 2.6vw, 1.8rem); margin: .2rem 0; }
+.updates-heading p { font-size: .85rem; margin: 0; color: var(--muted); }
+.updates-kicker { display: inline-flex; align-items: center; gap: .45rem; color: var(--green-light); font-size: .7rem; font-weight: 900; letter-spacing: .12em; }
+.updates-kicker .updates-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+.updates-source-link { white-space: nowrap; color: var(--blue-light); text-decoration: none; font-size: .8rem; font-weight: 800; }
+.updates-source-link:hover { color: white; }
+.updates-bar-live { border: 1px solid rgba(120,214,75,.3); border-radius: 14px; padding: .9rem 1rem; }
+.updates-bar-live .updates-label { color: var(--green-light); }
+.updates-bar-live .updates-track { animation-duration: 45s; }
+.updates-bar-live .update-dot { background: var(--green); }
+.update-link { text-decoration: none; }
+.update-link:hover { color: var(--green-light); }
+.update-item time { margin-left: .35rem; color: var(--muted-dark); font-size: .72rem; }
+.updates-footnote { display: flex; justify-content: space-between; gap: .75rem; margin-top: .55rem; color: var(--muted-dark); font-size: .7rem; }
+@media (prefers-reduced-motion: reduce) {
+  .updates-track { animation: none; overflow-x: auto; }
+  .updates-dot { animation: none; }
+}
+@media (max-width: 640px) {
+  .updates-heading { align-items: flex-start; }
+  .updates-heading p { font-size: .75rem; }
+  .updates-bar-live { align-items: flex-start; border-radius: 12px; padding: .75rem; }
+  .updates-bar-live .updates-track { animation: none; overflow-x: auto; min-width: 0; }
+  .updates-footnote { flex-direction: column; gap: .2rem; }
+}
