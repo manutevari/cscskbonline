@@ -163,6 +163,7 @@ export default function Home() {
           {[
             { icon: "🌐", label: "Official CSC Portal", href: "https://csc.gov.in/" },
             { icon: "🗂️", label: "CSC Services", href: "#services" },
+            { icon: "💼", label: "Jobs & Exams", href: "/jobs-exams" },
             { icon: "💧", label: "Tata Water", href: "/tata-water" },
             { icon: "💧", label: "Tata Water", href: "/tata-water" },
             { icon: "📞", label: "Contact Us", href: "#footer" },
