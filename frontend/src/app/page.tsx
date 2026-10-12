@@ -77,8 +77,25 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<{ type: "user" | "bot"; text: string }[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [schemeUpdates, setSchemeUpdates] = useState<Array<{ title: string; url?: string; date?: string }>>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/scheme-updates", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Scheme updates request failed");
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.updates)) setSchemeUpdates(data.updates);
+      })
+      .catch(() => {
+        // Keep the existing CSC updates visible if the official feed is unavailable.
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -169,20 +186,27 @@ export default function Home() {
       </nav>
 
       {/* UPDATES BAR */}
-      <div className="updates-bar">
+      <div className="updates-bar updates-bar-live">
         <div className="updates-label">
           <span className="updates-dot" style={{ background: "#ff8a00" }} />
-          Latest CSC Updates:
+          Official Scheme Updates:
         </div>
         <div className="updates-track">
-          {[...UPDATES, ...UPDATES].map((u, i) => (
-            <span key={i} className="update-item">
-              <span className="update-dot" style={{ background: u.color }} />
-              {u.text}
-            </span>
-          ))}
+          {schemeUpdates.length > 0
+            ? [...schemeUpdates, ...schemeUpdates].map((u, i) => (
+                <a key={i} href={u.url || "https://pib.gov.in/"} target="_blank" rel="noopener noreferrer" className="update-item">
+                  <span className="update-dot" style={{ background: "#78d64b" }} />
+                  {u.title}{u.date ? ` · ${new Date(u.date).toLocaleDateString("en-IN")}` : ""}
+                </a>
+              ))
+            : [...UPDATES, ...UPDATES].map((u, i) => (
+                <span key={i} className="update-item">
+                  <span className="update-dot" style={{ background: u.color }} />
+                  {u.text}
+                </span>
+              ))}
         </div>
-        <a href="https://csc.gov.in/" target="_blank" rel="noopener noreferrer" className="btn-view-all">
+        <a href={schemeUpdates.length > 0 ? "https://pib.gov.in/" : "https://csc.gov.in/"} target="_blank" rel="noopener noreferrer" className="btn-view-all">
           View All →
         </a>
       </div>
