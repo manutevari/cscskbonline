@@ -117,6 +117,12 @@ export default function CSCAppointmentAssistant() {
     : "";
 
   useEffect(() => {
+    const openFromAssistant = () => { setOpen(true); setMode("book"); setSubmitError(""); };
+    window.addEventListener("cscskb:open-appointment", openFromAssistant);
+    return () => window.removeEventListener("cscskb:open-appointment", openFromAssistant);
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("cscskb-last-appointment");
       if (saved) setAppointment(JSON.parse(saved));
@@ -228,7 +234,7 @@ export default function CSCAppointmentAssistant() {
               <form className="csc-appt-form" onSubmit={submit}>
                 <div className="csc-appt-form-title">
                   <h3>Appointment Details</h3>
-                  <p>Book any available slot within the next 7 days • 15-minute slots • CSC hours 9:00 AM–3:00 PM.</p>
+                  <p>Book any available slot within the next 7 days • 15-minute slots • CSC hours 9:00 AM–6:00 PM.</p>
                 </div>
 
                 <label>Applicant Name *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" required /></label>
