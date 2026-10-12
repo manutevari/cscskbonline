@@ -77,7 +77,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<{ type: "user" | "bot"; text: string }[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [schemeUpdates, setSchemeUpdates] = useState<Array<{ title: string; link?: string; pubDate?: string }>>([]);
+  const [schemeUpdates, setSchemeUpdates] = useState<Array<{ title: string; url?: string; date?: string }>>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -194,9 +194,9 @@ export default function Home() {
         <div className="updates-track">
           {schemeUpdates.length > 0
             ? [...schemeUpdates, ...schemeUpdates].map((u, i) => (
-                <a key={i} href={u.link || "https://pib.gov.in/"} target="_blank" rel="noopener noreferrer" className="update-item">
+                <a key={i} href={u.url || "https://pib.gov.in/"} target="_blank" rel="noopener noreferrer" className="update-item">
                   <span className="update-dot" style={{ background: "#78d64b" }} />
-                  {u.title}{u.pubDate ? ` · ${new Date(u.pubDate).toLocaleDateString("en-IN")}` : ""}
+                  {u.title}{u.date ? ` · ${new Date(u.date).toLocaleDateString("en-IN")}` : ""}
                 </a>
               ))
             : [...UPDATES, ...UPDATES].map((u, i) => (
