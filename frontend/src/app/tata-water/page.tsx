@@ -7,7 +7,6 @@ export const metadata: Metadata = {
 };
 
 const PHONE = "+918937887070";
-const SECOND_PHONE = "+918979604695";
 const WHATSAPP = "https://wa.me/918937887070?text=Hello%2C%20I%20want%20to%20enquire%20about%20Tata%20Water%20and%20Beverages.";
 const FACEBOOK = "https://www.facebook.com/profile.php?id=61581329466166";
 const MAPS = "https://maps.app.goo.gl/5sjao2KhtvRgioU7A";
@@ -146,7 +145,7 @@ export default function TataWaterPage() {
         <div className="tw-container">
           <div className="tw-contact-grid">
             <ContactCard icon="📍" title="Our Location" text="Near Bus Stand, Agra Gate, Shikohabad, U.P. 283135" href={MAPS} button="View on Google Maps" />
-            <ContactCard icon="📞" title="Contact Us" text="+91-8937887070 • +91-8979604695" href={`tel:${PHONE}`} button="Call Now" />
+            <ContactCard icon="📞" title="Contact Us" text="+91-8937887070" href={`tel:${PHONE}`} button="Call Now" />
             <ContactCard icon="⭐" title="Customer Reviews" text="Share your experience and help local customers." href={REVIEW} button="Give a Review" />
             <ContactCard icon="f" title="Follow Us" text="Stay connected for product updates and offers." href={FACEBOOK} button="Facebook" />
           </div>
