@@ -33,6 +33,41 @@ export default function JobsPage() {
   const [age, setAge] = useState("All");
   const [category, setCategory] = useState("All");
   const [active, setActive] = useState("All");
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentInput, setAgentInput] = useState("");
+  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "नमस्ते! मैं भर्ती के दस्तावेज़ तैयार करने में मदद करूँगा। पहले भर्ती का notification/PDF अपलोड करें या अपनी भर्ती का नाम लिखें।" }]);
+  const [agentFiles, setAgentFiles] = useState([]);
+  const [agentBusy, setAgentBusy] = useState(false);
+
+  function addAgentMessage(role, text) {
+    setAgentMessages((previous) => [...previous, { role, text }]);
+  }
+
+  function handleAgentFiles(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    setAgentFiles((previous) => [...previous, ...files]);
+    files.forEach((file) => addAgentMessage("assistant", "फाइल प्राप्त हुई: " + file.name + " (" + Math.round(file.size / 1024) + " KB)। अभी यह केवल upload receipt है—दस्तावेज़ का प्रकार या भर्ती की शर्तें सत्यापित नहीं हुई हैं।"));
+    event.target.value = "";
+  }
+
+  function sendAgentMessage(event) {
+    event.preventDefault();
+    const message = agentInput.trim();
+    if (!message) return;
+    addAgentMessage("user", message);
+    setAgentInput("");
+    const lower = message.toLowerCase();
+    if (lower.includes("compress") || lower.includes("कंप्रेस") || lower.includes("साइज़")) {
+      addAgentMessage("assistant", "मैं आपकी जरूरत समझ गया। इस चैट में अभी वास्तविक compression चालू नहीं है। फाइलें प्राप्त हुई हैं, लेकिन तैयार डाउनलोड देने से पहले processing सुविधा जोड़कर जाँचनी होगी।");
+    } else if (lower.includes("signature") || lower.includes("हस्ताक्षर") || lower.includes("सिग्नेचर")) {
+      addAgentMessage("assistant", "ठीक है—अब अपना हस्ताक्षर वाली image या PDF पेज अटैच करें। अपलोड होने के बाद मैं प्राप्ति बताऊँगा; सही document type की पुष्टि अभी उम्मीदवार को करनी होगी।");
+    } else if (lower.includes("photo") || lower.includes("फोटो")) {
+      addAgentMessage("assistant", "कृपया भर्ती के notification में बताए गए format और size को ध्यान में रखकर अपनी फोटो अटैच करें। अभी मैं फाइल प्राप्ति बता सकता हूँ, लेकिन automatic validation अभी सक्रिय नहीं है।");
+    } else {
+      addAgentMessage("assistant", "समझ गया। संबंधित भर्ती का notification/PDF अटैच करें। मैं इस प्रारंभिक version में फाइल प्राप्ति और अगले कदम के निर्देश दे सकता हूँ; AI-based पहचान और वास्तविक compression अभी जोड़ी जानी बाकी है।");
+    }
+  }
   const filtered = useMemo(() => jobs.filter((job) => {
     const qMatch = qualification === "All" || job.qualification.toLowerCase().includes(qualification.toLowerCase());
     const aMatch = age === "All" || (age === "18-25" ? job.maxAge >= 18 && job.minAge <= 25 : age === "26-35" ? job.maxAge >= 26 && job.minAge <= 35 : job.maxAge >= 36);
@@ -96,8 +131,51 @@ export default function JobsPage() {
         <h2>फॉर्म भरने या रिजल्ट देखने से पहले</h2>
         <ol><li>आधिकारिक notification में पात्रता, उम्र, शुल्क और अंतिम तारीख जाँचें।</li><li>एडमिट कार्ड पर परीक्षा केंद्र, तारीख और रिपोर्टिंग समय जाँचें।</li><li>फॉर्म submit करने या रिजल्ट डाउनलोड करने के बाद आवेदन संख्या/रसीद सुरक्षित रखें।</li></ol>
       </section>
+
+      <div className="jobs-agent-root">
+        {agentOpen && <section className="jobs-agent-panel" aria-label="Recruitment document assistant">
+          <header className="jobs-agent-header">
+            <div><strong>Recruitment Assistant</strong><small>दस्तावेज़ सहायता · प्रारंभिक संस्करण</small></div>
+            <button type="button" aria-label="चैट बंद करें" onClick={() => setAgentOpen(false)}>×</button>
+          </header>
+          <div className="jobs-agent-messages" aria-live="polite">
+            {agentMessages.map((message, index) => <div key={index} className={"jobs-agent-message " + message.role}>{message.text}</div>)}
+            {agentFiles.length > 0 && <div className="jobs-agent-file-summary">अटैच की गई फाइलें: {agentFiles.length}</div>}
+          </div>
+          <form className="jobs-agent-compose" onSubmit={sendAgentMessage}>
+            <label className="jobs-agent-attach" title="फाइल अटैच करें">＋
+              <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.zip" onChange={handleAgentFiles} />
+            </label>
+            <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
+            <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
+          </form>
+          <p className="jobs-agent-disclaimer">ध्यान दें: अभी फाइल अपलोड चैट में स्थानीय रूप से प्राप्त होती है; AI पहचान, server processing और compression सक्रिय नहीं हैं। संवेदनशील दस्तावेज़ साझा करने से पहले सावधानी रखें।</p>
+        </section>}
+        <button type="button" className="jobs-agent-launcher" onClick={() => setAgentOpen((open) => !open)} aria-expanded={agentOpen}>
+          <span aria-hidden="true">✦</span><span>{agentOpen ? "चैट बंद करें" : "दस्तावेज़ सहायता"}</span>
+        </button>
+      </div>
       <footer className="jobs-footer">CSCSKB Online • यह सूचना-सहायक पोर्टल है; अंतिम पुष्टि संबंधित आधिकारिक भर्ती पोर्टल पर करें।</footer>
       <style jsx>{`
+
+        .jobs-agent-root{position:fixed;right:18px;bottom:18px;z-index:1000;font-family:inherit}
+        .jobs-agent-launcher{display:flex;align-items:center;gap:9px;border:0;border-radius:999px;padding:13px 17px;background:#ff8a00;color:#160c00;font-weight:900;box-shadow:0 8px 28px rgba(0,0,0,.28);cursor:pointer}
+        .jobs-agent-launcher span:first-child{font-size:1.2rem}
+        .jobs-agent-panel{position:absolute;right:0;bottom:62px;width:min(380px,calc(100vw - 28px));height:min(560px,calc(100dvh - 110px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:#071a35;color:#f8fbff;box-shadow:0 18px 55px rgba(0,0,0,.45)}
+        .jobs-agent-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;background:#102748;border-bottom:1px solid rgba(255,255,255,.12)}
+        .jobs-agent-header strong,.jobs-agent-header small{display:block}.jobs-agent-header small{margin-top:3px;color:#b7c7df;font-size:.76rem}
+        .jobs-agent-header button{border:0;background:transparent;color:white;font-size:1.5rem;cursor:pointer}
+        .jobs-agent-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+        .jobs-agent-message{max-width:88%;padding:10px 12px;border-radius:14px;line-height:1.45;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
+        .jobs-agent-message.assistant{align-self:flex-start;background:#102748;color:#edf5ff;border-bottom-left-radius:4px}
+        .jobs-agent-message.user{align-self:flex-end;background:#ff8a00;color:#160c00;border-bottom-right-radius:4px}
+        .jobs-agent-file-summary{font-size:.8rem;color:#9cf56f}
+        .jobs-agent-compose{display:flex;align-items:center;gap:7px;padding:10px;border-top:1px solid rgba(255,255,255,.12)}
+        .jobs-agent-attach{display:grid;place-items:center;width:38px;height:38px;flex:0 0 38px;border:1px solid rgba(255,255,255,.2);border-radius:50%;font-size:1.4rem;cursor:pointer}
+        .jobs-agent-attach input{display:none}
+        .jobs-agent-compose input:not([type=file]){min-width:0;flex:1;padding:10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#0b2043;color:#fff}
+        .jobs-agent-compose button{padding:10px;border:0;border-radius:10px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}
+        .jobs-agent-disclaimer{margin:0;padding:0 12px 12px;color:#a8bbd6;font-size:.68rem;line-height:1.4}
         .jobs-shell{max-width:1180px;margin:0 auto;padding:clamp(12px,3vw,28px);color:#f8fbff;min-height:100vh}
         .jobs-header{padding:clamp(20px,4vw,38px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:linear-gradient(135deg,rgba(11,114,231,.23),rgba(255,138,0,.13))}
         .jobs-home{display:inline-block;color:#b7d9ff;text-decoration:none;margin-bottom:22px;font-weight:700}
