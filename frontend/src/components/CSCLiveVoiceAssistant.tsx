@@ -118,48 +118,72 @@ export default function CSCLiveVoiceAssistant() {
   };
 
   const processRecruitmentImage = async () => {
-    const docFile = docFiles.find((file) => file.type.startsWith("image/")) || null;
     if (!docFiles.length) { setError("पहले कोई फाइल चुनें।"); return; }
-    const unsupported = docFiles.filter((file) => !file.type.startsWith("image/"));
-    if (unsupported.length) {
-      setError(`अपलोड हुई ${docFiles.length} फाइलों में ${unsupported.length} फाइल अभी प्रोसेस नहीं हो सकतीं: ${unsupported.map((file) => file.name).join(", ")}। फिलहाल image processor ही उपलब्ध है; PDF/video/ZIP के लिए अलग processors जोड़ने होंगे।`);
-      if (!docFile) return;
-    }
-    if (!docFile) { setError("चुनी गई फाइलों में कोई image नहीं है। अभी PDF/video/ZIP processing उपलब्ध नहीं है।"); return; }
     if (!docRules.trim()) { setError("भर्ती के official notification से photo/signature का size, dimensions और format भरें।"); return; }
-    if (!docFile.type.startsWith("image/")) { setError("अभी इस सुविधा में JPG/PNG जैसी image फाइल चुनें। PDF notification से नियम पढ़ने की सुविधा अभी उपलब्ध नहीं है।"); return; }
+    const images = docFiles.filter((file) => file.type.startsWith("image/"));
+    const unsupported = docFiles.filter((file) => !file.type.startsWith("image/"));
+    if (!images.length) {
+      setError("चुनी गई फाइलों में कोई image नहीं है। अभी PDF/video/ZIP processing उपलब्ध नहीं है।");
+      return;
+    }
     setDocBusy(true); setError("");
+    const results: string[] = [];
+    const failures: string[] = [];
+    const width = Math.max(1, Math.min(4000, Number(targetWidth) || 200));
+    const height = Math.max(1, Math.min(4000, Number(targetHeight) || 230));
+    const maxBytes = Math.max(1, Number(targetKb) || 50) * 1024;
     try {
-      const image = new Image();
-      const sourceUrl = URL.createObjectURL(docFile);
-      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Image पढ़ी नहीं जा सकी।")); image.src = sourceUrl; });
-      const width = Math.max(1, Math.min(4000, Number(targetWidth) || image.naturalWidth));
-      const height = Math.max(1, Math.min(4000, Number(targetHeight) || image.naturalHeight));
-      const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Image processor उपलब्ध नहीं है।");
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height); ctx.drawImage(image, 0, 0, width, height);
-      URL.revokeObjectURL(sourceUrl);
-      const maxBytes = Math.max(1, Number(targetKb) || 50) * 1024;
-      let quality = 0.92;
-      let blob: Blob | null = null;
-      for (let i = 0; i < 12; i++) {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-        if (blob && blob.size <= maxBytes) break;
-        quality *= 0.82;
+      for (const file of images) {
+        let sourceUrl = "";
+        try {
+          const image = new Image();
+          sourceUrl = URL.createObjectURL(file);
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Image पढ़ी नहीं जा सकी।"));
+            image.src = sourceUrl;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Image processor उपलब्ध नहीं है।");
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          URL.revokeObjectURL(sourceUrl); sourceUrl = "";
+          let quality = 0.92;
+          let blob: Blob | null = null;
+          for (let i = 0; i < 18; i++) {
+            blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+            if (blob && blob.size <= maxBytes) break;
+            quality *= 0.75;
+          }
+          if (!blob) throw new Error("Image export नहीं हो सकी।");
+          if (blob.size > maxBytes) throw new Error(`Compression के बाद भी फाइल ${(blob.size / 1024).toFixed(1)} KB है; अधिकतम ${targetKb} KB की सीमा हासिल नहीं हुई।`);
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const baseName = file.name.replace(/\.[^.]+$/, "") || "recruitment-document";
+          link.download = baseName + "-processed.jpg";
+          document.body.appendChild(link); link.click(); link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+          results.push(`${file.name} → ${width}×${height}px, ${(blob.size / 1024).toFixed(1)} KB`);
+        } catch (e) {
+          failures.push(`${file.name}: ${e instanceof Error ? e.message : "प्रोसेस नहीं हो सकी"}`);
+        } finally {
+          if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        }
       }
-      if (!blob) throw new Error("Image export नहीं हो सकी।");
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a"); link.href = downloadUrl;
-      const baseName = docFile.name.replace(/\.[^.]+$/, "") || "recruitment-document";
-      link.download = baseName + "-processed.jpg"; document.body.appendChild(link); link.click(); link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
-      const result = `फाइल तैयार हुई: ${width}×${height}px, ${(blob.size / 1024).toFixed(1)} KB (लक्ष्य ${targetKb} KB)। भर्ती: ${recruitmentName || "नाम नहीं दिया"}। कृपया डाउनलोड की गई फाइल को official notification के नियमों से मिलाकर जाँचें; target size हासिल न होने पर भी फाइल डाउनलोड हो सकती है।`;
-      setMessages((previous) => [...previous, { role: "assistant", content: result }]);
-      setDocAgentOpen(false);
-      speak(result);
-    } catch (e) { setError(e instanceof Error ? e.message : "फाइल process नहीं हो सकी।"); }
-    finally { setDocBusy(false); }
+      const summary = [
+        results.length ? "तैयार images:\n" + results.join("\n") : "",
+        failures.length ? "प्रोसेसिंग में समस्या:\n" + failures.join("\n") : "",
+        unsupported.length ? "अभी प्रोसेस नहीं हुईं (processor बाकी है): " + unsupported.map((file) => file.name).join(", ") : "",
+        `भर्ती: ${recruitmentName || "नाम नहीं दिया"}। यह केवल size/dimensions का प्रारंभिक check है; official notification की सभी शर्तें अभी अपने-आप verify नहीं होतीं।`
+      ].filter(Boolean).join("\n\n");
+      setMessages((previous) => [...previous, { role: "assistant", content: summary }]);
+      if (!results.length || failures.length || unsupported.length) setError(summary);
+      else setDocAgentOpen(false);
+      speak(summary);
+    } finally { setDocBusy(false); }
   };
 
   const clearChatHistory = () => {
