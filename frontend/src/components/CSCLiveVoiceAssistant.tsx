@@ -25,7 +25,7 @@ export default function CSCLiveVoiceAssistant() {
   const [docAgentOpen, setDocAgentOpen] = useState(false);
   const [recruitmentName, setRecruitmentName] = useState("");
   const [docRules, setDocRules] = useState("");
-  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docFiles, setDocFiles] = useState<File[]>([]);
   const [targetKb, setTargetKb] = useState("50");
   const [targetWidth, setTargetWidth] = useState("200");
   const [targetHeight, setTargetHeight] = useState("230");
@@ -118,7 +118,14 @@ export default function CSCLiveVoiceAssistant() {
   };
 
   const processRecruitmentImage = async () => {
-    if (!docFile) { setError("पहले photo या signature image चुनें।"); return; }
+    const docFile = docFiles.find((file) => file.type.startsWith("image/")) || null;
+    if (!docFiles.length) { setError("पहले कोई फाइल चुनें।"); return; }
+    const unsupported = docFiles.filter((file) => !file.type.startsWith("image/"));
+    if (unsupported.length) {
+      setError(`अपलोड हुई ${docFiles.length} फाइलों में ${unsupported.length} फाइल अभी प्रोसेस नहीं हो सकतीं: ${unsupported.map((file) => file.name).join(", ")}। फिलहाल image processor ही उपलब्ध है; PDF/video/ZIP के लिए अलग processors जोड़ने होंगे।`);
+      if (!docFile) return;
+    }
+    if (!docFile) { setError("चुनी गई फाइलों में कोई image नहीं है। अभी PDF/video/ZIP processing उपलब्ध नहीं है।"); return; }
     if (!docRules.trim()) { setError("भर्ती के official notification से photo/signature का size, dimensions और format भरें।"); return; }
     if (!docFile.type.startsWith("image/")) { setError("अभी इस सुविधा में JPG/PNG जैसी image फाइल चुनें। PDF notification से नियम पढ़ने की सुविधा अभी उपलब्ध नहीं है।"); return; }
     setDocBusy(true); setError("");
@@ -280,7 +287,8 @@ export default function CSCLiveVoiceAssistant() {
           <small>भर्ती का नाम और official notification में दिए गए सटीक नियम भरें। अभी नियम अपने-आप notification से नहीं निकाले जाते।</small>
           <input value={recruitmentName} onChange={e=>setRecruitmentName(e.target.value)} placeholder="भर्ती का नाम (जैसे Police Constable)" aria-label="Recruitment name" style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8}}/>
           <textarea value={docRules} onChange={e=>setDocRules(e.target.value)} placeholder="Official rules: photo/signature dimensions, KB limit, format…" aria-label="Official recruitment document rules" rows={2} style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8,font: "inherit"}}/>
-          <input type="file" accept="image/*" onChange={e=>setDocFile(e.target.files?.[0] || null)} aria-label="Choose applicant photo or signature"/>
+          <input type="file" accept="*/*" multiple onChange={e=>setDocFiles(Array.from(e.target.files || []))} aria-label="Choose recruitment documents"/>
+          <small>{docFiles.length ? `चुनी गई फाइलें (${docFiles.length}): ${docFiles.map(f=>`${f.name} · ${(f.size/1024).toFixed(1)} KB`).join(" | ")}` : "एक या अधिक फाइलें चुनें: फोटो, signature, PDF, video, ZIP या अन्य प्रकार। अभी processing केवल image के लिए उपलब्ध है।"}</small>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
             <label style={{fontSize:12}}>Max KB<input type="number" min="1" max="2048" value={targetKb} onChange={e=>setTargetKb(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
             <label style={{fontSize:12}}>Width px<input type="number" min="1" max="4000" value={targetWidth} onChange={e=>setTargetWidth(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
