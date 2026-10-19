@@ -35,7 +35,7 @@ export default function JobsPage() {
   const [active, setActive] = useState("All");
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
-  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "Namaste 🙏 CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका हार्दिक स्वागत है। कृपया बताइए, मैं आपकी किस प्रकार सहायता कर सकती हूँ?\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अपलोड कर सकते हैं।\n\nमहत्वपूर्ण: अभी लाइव vacancy feed सक्रिय नहीं है, इसलिए मैं किसी भर्ती को नई/चालू बताने का दावा नहीं करूँगा। नवीनतम vacancy आधिकारिक नोटिस से सत्यापित करनी होगी।" }]);
+  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "Namaste 🙏 CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका हार्दिक स्वागत है। कृपया बताइए, मैं आपकी किस प्रकार सहायता कर सकती हूँ?\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अटैच कर सकते हैं; इस prototype में फाइल की सामग्री AI द्वारा पढ़ी नहीं जाती।\n\nलाइव पोर्टल लिंक-जाँच उपलब्ध है, लेकिन यह verified vacancy feed नहीं है। कोई vacancy, अंतिम तारीख या पात्रता केवल आधिकारिक notification से सत्यापित करें।" }]);
   const [agentFiles, setAgentFiles] = useState([]);
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentStep, setAgentStep] = useState("start");
@@ -232,7 +232,7 @@ export default function JobsPage() {
       </header>
 
       <section className="jobs-notice" role="note">
-        <strong>महत्वपूर्ण सूचना:</strong> यह पोर्टल संबंधित आधिकारिक वेबसाइटों के लिंक देता है। अभी स्वतः अपडेट होने वाली live job/result feed सक्रिय नहीं है। अंतिम तारीख, पात्रता, आयु-सीमा और परिणाम हमेशा आधिकारिक नोटिस से सत्यापित करें।
+        <strong>महत्वपूर्ण सूचना:</strong> यह पोर्टल पाँच आधिकारिक भर्ती वेबसाइटों को चेक करके कुछ भर्ती/परीक्षा-संबंधी लिंक पहचानने की कोशिश करता है। यह verified vacancy/result feed या आधिकारिक API नहीं है। लिंक छूट सकते हैं या अप्रासंगिक हो सकते हैं; अंतिम तारीख, पात्रता, आयु-सीमा और परिणाम हमेशा आधिकारिक नोटिस से सत्यापित करें।
       </section>
 
       <section className="section-block live-recruitment" aria-live="polite">
