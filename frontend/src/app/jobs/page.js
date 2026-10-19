@@ -158,10 +158,10 @@ export default function JobsPage() {
       <footer className="jobs-footer">CSCSKB Online • यह सूचना-सहायक पोर्टल है; अंतिम पुष्टि संबंधित आधिकारिक भर्ती पोर्टल पर करें।</footer>
       <style jsx>{`
 
-        .jobs-agent-root{position:fixed;right:18px;bottom:18px;z-index:1000;font-family:inherit}
-        .jobs-agent-launcher{display:flex;align-items:center;gap:9px;border:0;border-radius:999px;padding:13px 17px;background:#ff8a00;color:#160c00;font-weight:900;box-shadow:0 8px 28px rgba(0,0,0,.28);cursor:pointer}
+        .jobs-agent-root{position:fixed;left:16px;bottom:18px;z-index:2147483000;font-family:inherit;pointer-events:none}.jobs-agent-root button,.jobs-agent-panel{pointer-events:auto}
+        .jobs-agent-launcher{display:flex;align-items:center;gap:9px;border:2px solid #fff;border-radius:999px;padding:13px 17px;background:#ff8a00;color:#160c00;font-weight:900;box-shadow:0 8px 28px rgba(0,0,0,.5);cursor:pointer;max-width:calc(100vw - 32px)}
         .jobs-agent-launcher span:first-child{font-size:1.2rem}
-        .jobs-agent-panel{position:absolute;right:0;bottom:62px;width:min(380px,calc(100vw - 28px));height:min(560px,calc(100dvh - 110px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:#071a35;color:#f8fbff;box-shadow:0 18px 55px rgba(0,0,0,.45)}
+        .jobs-agent-panel{position:absolute;left:0;bottom:62px;width:min(380px,calc(100vw - 28px));height:min(560px,calc(100dvh - 110px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:#071a35;color:#f8fbff;box-shadow:0 18px 55px rgba(0,0,0,.45)}
         .jobs-agent-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;background:#102748;border-bottom:1px solid rgba(255,255,255,.12)}
         .jobs-agent-header strong,.jobs-agent-header small{display:block}.jobs-agent-header small{margin-top:3px;color:#b7c7df;font-size:.76rem}
         .jobs-agent-header button{border:0;background:transparent;color:white;font-size:1.5rem;cursor:pointer}
@@ -175,7 +175,7 @@ export default function JobsPage() {
         .jobs-agent-attach input{display:none}
         .jobs-agent-compose input:not([type=file]){min-width:0;flex:1;padding:10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#0b2043;color:#fff}
         .jobs-agent-compose button{padding:10px;border:0;border-radius:10px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}
-        .jobs-agent-disclaimer{margin:0;padding:0 12px 12px;color:#a8bbd6;font-size:.68rem;line-height:1.4}
+        .jobs-agent-disclaimer{margin:0;padding:0 12px 12px;color:#a8bbd6;font-size:.68rem;line-height:1.4}@media(max-width:480px){.jobs-agent-root{left:10px;bottom:12px}.jobs-agent-launcher{padding:12px 14px}.jobs-agent-panel{width:calc(100vw - 20px);height:min(560px,calc(100dvh - 100px))}}
         .jobs-shell{max-width:1180px;margin:0 auto;padding:clamp(12px,3vw,28px);color:#f8fbff;min-height:100vh}
         .jobs-header{padding:clamp(20px,4vw,38px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:linear-gradient(135deg,rgba(11,114,231,.23),rgba(255,138,0,.13))}
         .jobs-home{display:inline-block;color:#b7d9ff;text-decoration:none;margin-bottom:22px;font-weight:700}
