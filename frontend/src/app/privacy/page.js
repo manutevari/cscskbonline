@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <p><Link href="/jobs" style={{ color: "#9fc8ff" }}>← वापस भर्ती पोर्टल पर जाएँ</Link></p>
       <h1>Privacy Notice / गोपनीयता सूचना</h1>
       <p><strong>Effective date:</strong> 19 October 2026</p>
-      <p>यह सूचना CSCSKB Online के Jobs &amp; Recruitment portal, live official-portal checker और conversational assistant के लिए है। यह एक सरल प्रारंभिक सूचना है; वेबसाइट संचालक को अपने सत्यापित संपर्क विवरण, लागू कानूनी दायित्व और सभी hosting/analytics providers की वास्तविक configuration की समीक्षा करके इसे अंतिम रूप देना चाहिए।</p>
+      <p>यह सूचना CSCSKB Online के Jobs &amp; Recruitment portal, live official-portal checker और conversational assistant के लिए है। यह सूचना CSCSKB Online / CSC business द्वारा उपलब्ध कराई गई जानकारी के आधार पर तैयार की गई है। यह कानूनी सलाह या DPDP compliance certification नहीं है; लागू प्रावधानों, डेटा-प्रवाह और सेवा प्रदाताओं की समीक्षा आवश्यक है।</p>
       <h2>1. कौन-सा डेटा प्रोसेस होता है?</h2>
       <ul>
         <li><strong>Live recruitment checker:</strong> यह SSC, UPPSC, UPSSSC, Railway Recruitment और UP Police के सार्वजनिक वेबसाइट पेजों को चेक करता है। यह user का नाम, chat या uploaded files इन वेबसाइटों को नहीं भेजता।</li>
@@ -25,8 +25,10 @@ export default function PrivacyPage() {
       <h2>3. सहमति और नियंत्रण</h2>
       <p>AI assistant को chat message भेजने से पहले स्पष्ट consent checkbox आवश्यक है। आप checkbox अनचेक करके आगे की AI processing रोक सकते हैं। इस फीचर में chat history को application database में स्थायी रूप से सेव करने का इरादा नहीं है; यह पेज खुला रहने तक browser memory में रह सकती है। Provider/hosting logs के बारे में उनकी लागू policies देखें।</p>
       <h2>4. आपके अधिकार और संपर्क</h2>
-      <p>लागू कानून और उसके commencement/enforcement timeline के अधीन, आप अपने personal data के बारे में जानकारी, correction, erasure, consent withdrawal और शिकायत संबंधी अधिकारों का उपयोग कर सकते हैं। संपर्क और शिकायत अनुरोध के लिए वेबसाइट संचालक को अपना सत्यापित privacy/grievance contact प्रकाशित करना चाहिए।</p>
-      <p><strong>Production launch से पहले आवश्यक:</strong> इस पेज पर वेबसाइट संचालक/Data Fiduciary का सही कानूनी नाम और सक्रिय privacy/grievance email या postal/contact channel जोड़ें। अभी कोई संपर्क पता अनुमान से नहीं दिया गया है।</p>
+      <p>लागू कानून और उसके commencement/enforcement timeline के अधीन, आप अपने personal data के बारे में जानकारी, correction, erasure, consent withdrawal और शिकायत संबंधी अधिकारों का उपयोग कर सकते हैं। अनुरोध के लिए नीचे दिए गए संपर्क पर लिखें; अनुरोध की पुष्टि और जवाब लागू कानून तथा सत्यापित प्रक्रिया के अनुसार किया जाएगा।</p>
+      <p><strong>Privacy / grievance contact:</strong> <a href="mailto:tiwarijicscs@gmail.com" style={{ color: "#9fc8ff" }}>tiwarijicscs@gmail.com</a></p>
+      <p><strong>Data Fiduciary identity:</strong> CSCSKB Online / CSC business (जैसा वेबसाइट संचालक ने बताया है)।</p>
+      <p><strong>महत्वपूर्ण legal detail अभी लंबित:</strong> इस नाम से संबंधित व्यक्ति/कानूनी इकाई का पूरा कानूनी नाम, व्यवसाय का पंजीकृत पता, और लागू होने पर proprietorship/कंपनी की पहचान स्वतंत्र रूप से सत्यापित नहीं हुई है। लॉन्च से पहले इन्हें सही रूप में प्रकाशित करें।</p>
       <h2>5. सुरक्षा और तृतीय-पक्ष सेवाएँ</h2>
       <p>API key server-side environment variable में रहनी चाहिए, browser code में नहीं। AI API को केवल consent के बाद call किया जाना चाहिए। OpenRouter तथा hosting provider की वर्तमान terms, data retention, processing location और incident-response obligations को launch से पहले review करें।</p>
       <h2>6. अपडेट</h2>
