@@ -35,7 +35,7 @@ export default function JobsPage() {
   const [active, setActive] = useState("All");
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
-  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "नमस्ते! मैं भर्ती के दस्तावेज़ तैयार करने में मदद करूँगा। पहले भर्ती का notification/PDF अपलोड करें या अपनी भर्ती का नाम लिखें।" }]);
+  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "नमस्ते! CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका स्वागत है। 🙏\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अपलोड कर सकते हैं।\n\nमहत्वपूर्ण: अभी लाइव vacancy feed सक्रिय नहीं है, इसलिए मैं किसी भर्ती को नई/चालू बताने का दावा नहीं करूँगा। नवीनतम vacancy आधिकारिक नोटिस से सत्यापित करनी होगी।" }]);
   const [agentFiles, setAgentFiles] = useState([]);
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentStep, setAgentStep] = useState("start");
@@ -48,9 +48,9 @@ export default function JobsPage() {
   function handleAgentFiles(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const allowed = files.filter((file) => /^(image\\/(jpeg|png|webp))$/.test(file.type) || /\\.pdf$/i.test(file.name));
+    const allowed = files.filter((file) => (file.type.startsWith("image/") && /image\\/(jpeg|png|webp)/i.test(file.type)) || /\\.(pdf|doc|docx)$/i.test(file.name));
     const rejected = files.filter((file) => !allowed.includes(file));
-    if (rejected.length) addAgentMessage("assistant", "इन फाइलों का यह संस्करण समर्थन नहीं करता: " + rejected.map((f) => f.name).join(", ") + "। कृपया JPG, PNG, WebP या PDF चुनें।");
+    if (rejected.length) addAgentMessage("assistant", "इन फाइलों का यह संस्करण समर्थन नहीं करता: " + rejected.map((f) => f.name).join(", ") + "। कृपया रिज्यूमे/दस्तावेज़ के लिए PDF, DOC, DOCX या इमेज के लिए JPG, PNG, WebP चुनें।");
     if (allowed.length) {
       setAgentFiles((previous) => [...previous, ...allowed]);
       allowed.forEach((file) => {
@@ -59,7 +59,7 @@ export default function JobsPage() {
           addAgentMessage("assistant", "फोटो/इमेज मिल गई। मैं इसे ब्राउज़र में resize और compress कर सकता हूँ। पहले बताइए—किस दस्तावेज़ के लिए चाहिए: फोटो, हस्ताक्षर या प्रमाणपत्र?");
           setAgentStep("image-purpose");
         } else {
-          addAgentMessage("assistant", "PDF मिल गई। अभी यह चैट PDF का पूरा टेक्स्ट स्वतः नहीं पढ़ती। आप भर्ती का नाम और notification में दिए गए फोटो/हस्ताक्षर के size व dimensions यहाँ लिखें, फिर मैं आगे मार्गदर्शन करूँगा।");
+          addAgentMessage("assistant", /\\.(doc|docx)$/i.test(file.name) ? "आपकी फाइल मिल गई: " + file.name + "। यह रिज्यूमे/दस्तावेज़ के रूप में अटैच हुई है। इस prototype में मैं फाइल की सामग्री पढ़ या नौकरी के लिए उसका मिलान स्वतः नहीं कर सकता। अब बताइए, किस भर्ती के लिए आवेदन करना है?" : "PDF फाइल मिल गई: " + file.name + "। इस prototype में PDF का पूरा टेक्स्ट स्वतः नहीं पढ़ा जाता। कृपया भर्ती का नाम चुनें और notification में दिए नियम लिखें; मैं अगले कदम बताऊँगा।");
           setAgentStep("requirements");
         }
       });
@@ -122,7 +122,7 @@ export default function JobsPage() {
     setAgentInput("");
     const lower = message.toLowerCase();
     if (/\\b(hi|hello|namaste)\\b/.test(lower) || lower.includes("नमस्ते")) {
-      addAgentMessage("assistant", "नमस्ते! मैं आपको चरण-दर-चरण मदद करूँगा। पहले भर्ती का नाम बताइए या notification/PDF अटैच करें।");
+      addAgentMessage("assistant", "नमस्ते! CSCSKB Online भर्ती सहायक में आपका स्वागत है। आप SSC, UPPSC, UPSSSC, Railway या UP Police में से भर्ती चुन सकते हैं। रिज्यूमे PDF/DOC/DOCX में अपलोड करें। ध्यान दें: live vacancy feed अभी चालू नहीं है, इसलिए वर्तमान भर्ती की पुष्टि official notice से करनी होगी।");
     } else if (lower.includes("photo") || lower.includes("फोटो") || lower.includes("passport")) {
       setAgentTask("photo");
       setAgentStep("image-purpose");
@@ -220,12 +220,12 @@ export default function JobsPage() {
           </div>
           <form className="jobs-agent-compose" onSubmit={sendAgentMessage}>
             <label className="jobs-agent-attach" title="फाइल अटैच करें">＋
-              <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.zip" onChange={handleAgentFiles} />
+              <input type="file" multiple accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx" onChange={handleAgentFiles} />
             </label>
             <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
             <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
           </form>
-          <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या फाइल अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
+          <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => addAgentMessage("assistant", "आप किस भर्ती के लिए आवेदन कर रहे हैं? SSC, UPPSC, UPSSSC, Railway या UP Police लिखें। अभी live vacancy feed सक्रिय नहीं है; वर्तमान पद official notice से verify करें।")}>भर्ती सुझाव</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या रिज्यूमे/दस्तावेज़ अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
         </section>}
         <button type="button" className="jobs-agent-launcher" onClick={() => setAgentOpen((open) => !open)} aria-expanded={agentOpen}>
           <span aria-hidden="true">✦</span><span>{agentOpen ? "चैट बंद करें" : "दस्तावेज़ सहायता"}</span>
