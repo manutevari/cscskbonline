@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const jobs = [
   { id: 1, title: "SSC भर्ती और परीक्षा अपडेट", category: "केंद्र सरकार", qualification: "10वीं / 12वीं / स्नातक", minAge: 18, maxAge: 30, url: "https://ssc.gov.in/" },
@@ -41,6 +41,30 @@ export default function JobsPage() {
   const [agentStep, setAgentStep] = useState("start");
   const [agentTask, setAgentTask] = useState("");
   const [voiceListening, setVoiceListening] = useState(false);
+  const [liveData, setLiveData] = useState(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+
+  async function refreshLiveRecruitment() {
+    setLiveLoading(true);
+    setLiveError("");
+    try {
+      const response = await fetch("/api/recruitment/live", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error("अभी लाइव अपडेट प्राप्त नहीं हो सके।");
+      setLiveData(data);
+    } catch (error) {
+      setLiveError(error.message || "लाइव अपडेट प्राप्त नहीं हो सके। कृपया फिर कोशिश करें।");
+    } finally {
+      setLiveLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshLiveRecruitment();
+    const timer = window.setInterval(refreshLiveRecruitment, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   
 
   function addAgentMessage(role, text) {
@@ -202,6 +226,36 @@ export default function JobsPage() {
         <strong>महत्वपूर्ण सूचना:</strong> यह पोर्टल संबंधित आधिकारिक वेबसाइटों के लिंक देता है। अभी स्वतः अपडेट होने वाली live job/result feed सक्रिय नहीं है। अंतिम तारीख, पात्रता, आयु-सीमा और परिणाम हमेशा आधिकारिक नोटिस से सत्यापित करें।
       </section>
 
+      <section className="section-block live-recruitment" aria-live="polite">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">LIVE OFFICIAL PORTAL CHECK</span>
+            <h2>Live Recruitment &amp; Exam Updates</h2>
+            <p>आधिकारिक भर्ती पोर्टलों को सीधे अभी चेक किया जा रहा है। पेज खुला रहने पर हर 5 मिनट में फिर से जाँच होगी।</p>
+          </div>
+          <button type="button" className="live-refresh" onClick={refreshLiveRecruitment} disabled={liveLoading}>
+            {liveLoading ? "जाँच जारी है…" : "↻ अभी अपडेट जाँचें"}
+          </button>
+        </div>
+        {liveError && <p className="live-error" role="status">{liveError}</p>}
+        {!liveData && liveLoading && <p className="jobs-empty">Namaste 🙏 कृपया प्रतीक्षा करें—आधिकारिक पोर्टल चेक किए जा रहे हैं…</p>}
+        {liveData && <>
+          <p className="live-meta">पिछली जाँच: {new Date(liveData.checkedAt).toLocaleString("hi-IN")} · मिले लिंक: {liveData.totalUpdates}</p>
+          <div className="portal-grid">
+            {liveData.portals.map((portal) => <article className="portal-card" key={portal.name}>
+              <span className="eyebrow">{portal.category}</span>
+              <h3>{portal.name}</h3>
+              <p>{portal.status === "checked" ? "पोर्टल से अभी संपर्क हुआ" : "यह पोर्टल अभी उपलब्ध नहीं है"}</p>
+              {portal.updates.length > 0
+                ? <div className="portal-links">{portal.updates.map((item, index) => <a key={item.url + index} href={item.url} target="_blank" rel="noreferrer">{item.title} ↗</a>)}</div>
+                : <p className="jobs-empty">{portal.status === "checked" ? "मुख्य पेज पर पहचानने योग्य भर्ती/परीक्षा लिंक नहीं मिले। आधिकारिक वेबसाइट खोलकर नवीनतम नोटिस देखें।" : "कृपया नीचे आधिकारिक वेबसाइट खोलकर देखें।"}</p>}
+              <div className="portal-links"><a href={portal.url} target="_blank" rel="noreferrer">आधिकारिक पोर्टल खोलें ↗</a></div>
+            </article>)}
+          </div>
+          <p className="live-disclaimer">ध्यान दें: यह लाइव वेबसाइट-जाँच है, आधिकारिक भर्ती डेटाबेस/API नहीं। यह पेज पर दिखने वाले लिंक पहचानता है; इससे vacancy की स्थिति, अंतिम तारीख या पात्रता की पुष्टि नहीं होती। अंतिम जानकारी आधिकारिक notification से जाँचें।</p>
+        </>}
+      </section>
+
       <section id="latest-jobs" className="section-block">
         <div className="section-heading"><div><span className="eyebrow">FIND YOUR OPPORTUNITY</span><h2>Latest Jobs &amp; Recruitment</h2><p>योग्यता और आयु के आधार पर भर्ती लिंक छाँटें।</p></div></div>
         <section className="jobs-filters" aria-label="भर्ती फ़िल्टर">
@@ -290,6 +344,9 @@ export default function JobsPage() {
         .jobs-agent-compose input:not([type=file]){min-width:0;flex:1;padding:10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#0b2043;color:#fff}
         .jobs-agent-compose button{padding:10px;border:0;border-radius:10px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}
         .jobs-agent-tools{display:flex;gap:8px;padding:0 10px 8px}.jobs-agent-tools button{border:1px solid rgba(255,255,255,.2);border-radius:9px;padding:8px 10px;background:#173a5f;color:#fff;font-weight:800;cursor:pointer;font-size:.78rem}.jobs-agent-tools button:disabled{opacity:.6}.jobs-agent-disclaimer{margin:0;padding:0 12px 10px;color:#a8bbd6;font-size:.68rem;line-height:1.4;max-height:58px;overflow:auto}@media(max-width:480px){.jobs-agent-root{left:10px;bottom:12px}.jobs-agent-launcher{padding:11px 13px}.jobs-agent-panel{width:calc(100vw - 20px);height:min(460px,calc(100dvh - 180px));bottom:58px}.jobs-agent-header{padding:9px 12px}.jobs-agent-compose{padding:7px}.jobs-agent-message{font-size:.84rem}.jobs-agent-disclaimer{max-height:42px;font-size:.62rem}}
+        .live-recruitment{padding:18px;border:1px solid rgba(156,245,111,.25);border-radius:18px;background:rgba(156,245,111,.035)}
+        .live-refresh{padding:10px 14px;border:1px solid rgba(156,245,111,.45);border-radius:10px;background:#163b2a;color:#eaffdf;font-weight:800;cursor:pointer}
+        .live-refresh:disabled{opacity:.65;cursor:wait}.live-meta{color:#9cf56f;font-size:.8rem}.live-error{padding:10px;border-radius:10px;background:rgba(255,70,70,.1);color:#ffd4d4}.live-disclaimer{margin-top:14px;color:#a8bbd6;font-size:.78rem;line-height:1.5}
         .jobs-shell{max-width:1180px;margin:0 auto;padding:clamp(12px,3vw,28px);color:#f8fbff;min-height:100vh}
         .jobs-header{padding:clamp(20px,4vw,38px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:linear-gradient(135deg,rgba(11,114,231,.23),rgba(255,138,0,.13))}
         .jobs-home{display:inline-block;color:#b7d9ff;text-decoration:none;margin-bottom:22px;font-weight:700}
