@@ -40,7 +40,7 @@ export async function POST(request) {
         "X-Title": "CSCSKB Online Recruitment Voice Assistant",
       },
       body: JSON.stringify({
-        model: "openrouter/free",
+        model: "inclusionai/ling-3.0-flash:free",
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...safeMessages],
         temperature: 0.65,
         max_tokens: 450,
