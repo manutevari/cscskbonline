@@ -44,6 +44,7 @@ export default function JobsPage() {
   const [liveData, setLiveData] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState("");
+  const [privacyConsent, setPrivacyConsent] = useState(false);
 
   async function refreshLiveRecruitment() {
     setLiveLoading(true);
@@ -141,16 +142,20 @@ export default function JobsPage() {
   }
 
   async function askConversationAgent(message) {
+    if (!privacyConsent) {
+      addAgentMessage("assistant", "कृपया पहले गोपनीयता सूचना पढ़कर सहमति दें। इसके बिना आपका संदेश AI सेवा को नहीं भेजा जाएगा।");
+      return;
+    }
     setAgentBusy(true);
     try {
       const history = [...agentMessages, { role: "user", text: message }]
-        .filter((item) => item.role === "user" || item.role === "assistant")
+        .filter((item) => (item.role === "user" || item.role === "assistant") && !item.text.startsWith("📎 "))
         .slice(-12)
         .map((item) => ({ role: item.role, content: item.text }));
       const response = await fetch("/api/voice/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, privacyConsent }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "AI service unavailable");
@@ -170,6 +175,10 @@ export default function JobsPage() {
   }
 
   function startVoiceInput() {
+    if (!privacyConsent) {
+      addAgentMessage("assistant", "कृपया पहले गोपनीयता सूचना पढ़कर सहमति दें। इसके बिना voice assistant शुरू नहीं होगा।");
+      return;
+    }
     if (typeof window === "undefined") return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -305,6 +314,12 @@ export default function JobsPage() {
             <div><strong>Recruitment Assistant</strong><small>दस्तावेज़ सहायता · प्रारंभिक संस्करण</small></div>
             <button type="button" aria-label="चैट बंद करें" onClick={() => setAgentOpen(false)}>×</button>
           </header>
+          <div className="jobs-agent-privacy">
+            <strong>गोपनीयता और आपकी सहमति</strong>
+            <p>चैट में आपके लिखे संदेश जवाब बनाने के लिए OpenRouter की AI सेवा को भेजे जाएंगे। इस वेबसाइट के इस फीचर में चैट इतिहास स्थायी रूप से सेव नहीं किया जाता। कृपया Aadhaar, OTP, पासवर्ड, बैंक विवरण या संवेदनशील दस्तावेज़ न भेजें। अटैच की गई फाइलें AI को नहीं भेजी जातीं; इमेज प्रोसेसिंग आपके ब्राउज़र में होती है। Voice input आपके ब्राउज़र की speech-recognition सुविधा का उपयोग करता है, जिसकी प्रोसेसिंग ब्राउज़र प्रदाता की शर्तों पर निर्भर हो सकती है।</p>
+            <label><input type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} /> मैंने <a href="/privacy" target="_blank" rel="noreferrer">गोपनीयता सूचना</a> पढ़ ली है और समझता/समझती हूँ कि चैट संदेश AI सेवा को भेजे जाएंगे।</label>
+            <small>सहमति हटाने के लिए इस बॉक्स को अनचेक करें।</small>
+          </div>
           <div className="jobs-agent-messages" aria-live="polite">
             {agentMessages.map((message, index) => <div key={index} className={"jobs-agent-message " + message.role}>{message.text}</div>)}
             {agentFiles.length > 0 && <div className="jobs-agent-file-summary">अटैच की गई फाइलें: {agentFiles.length}</div>}
@@ -338,6 +353,9 @@ export default function JobsPage() {
         .jobs-agent-message.assistant{align-self:flex-start;background:#102748;color:#edf5ff;border-bottom-left-radius:4px}
         .jobs-agent-message.user{align-self:flex-end;background:#ff8a00;color:#160c00;border-bottom-right-radius:4px}
         .jobs-agent-file-summary{font-size:.8rem;color:#9cf56f}
+        .jobs-agent-privacy{margin:8px 10px;padding:10px;border:1px solid rgba(255,196,87,.35);border-radius:10px;background:rgba(255,196,87,.07);color:#e7eefb;font-size:.72rem;line-height:1.45}
+        .jobs-agent-privacy p{margin:5px 0 8px}.jobs-agent-privacy label{display:flex;align-items:flex-start;gap:7px}.jobs-agent-privacy input{margin-top:3px;flex:0 0 auto}.jobs-agent-privacy a{color:#9fc8ff;text-decoration:underline}.jobs-agent-privacy small{display:block;color:#a8bbd6;margin-top:5px}
+
         .jobs-agent-compose{display:flex;align-items:center;gap:7px;padding:10px;border-top:1px solid rgba(255,255,255,.12)}
         .jobs-agent-attach{display:grid;place-items:center;width:38px;height:38px;flex:0 0 38px;border:1px solid rgba(255,255,255,.2);border-radius:50%;font-size:1.4rem;cursor:pointer}
         .jobs-agent-attach input{display:none}
