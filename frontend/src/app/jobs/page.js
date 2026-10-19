@@ -40,6 +40,8 @@ export default function JobsPage() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentStep, setAgentStep] = useState("start");
   const [agentTask, setAgentTask] = useState("");
+  const [voiceListening, setVoiceListening] = useState(false);
+  
 
   function addAgentMessage(role, text) {
     setAgentMessages((previous) => [...previous, { role, text }]);
@@ -114,35 +116,70 @@ export default function JobsPage() {
     }
   }
 
+  async function askConversationAgent(message) {
+    setAgentBusy(true);
+    try {
+      const history = [...agentMessages, { role: "user", text: message }]
+        .filter((item) => item.role === "user" || item.role === "assistant")
+        .slice(-12)
+        .map((item) => ({ role: item.role, content: item.text }));
+      const response = await fetch("/api/voice/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "AI service unavailable");
+      addAgentMessage("assistant", data.reply);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const spoken = new SpeechSynthesisUtterance(data.reply);
+        spoken.lang = /[\\u0900-\\u097F]/.test(data.reply) ? "hi-IN" : "en-IN";
+        spoken.rate = 1;
+        window.speechSynthesis.speak(spoken);
+      }
+    } catch (error) {
+      addAgentMessage("assistant", error.message || "AI से संपर्क नहीं हो पाया। कृपया OPENROUTER_API_KEY सेट है या नहीं, यह जाँचें।");
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+
+  function startVoiceInput() {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addAgentMessage("assistant", "इस browser में voice recognition उपलब्ध नहीं है। Android पर Chrome में खोलकर microphone permission दें, या संदेश टाइप करें।");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "hi-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onend = () => setVoiceListening(false);
+    recognition.onerror = () => {
+      setVoiceListening(false);
+      addAgentMessage("assistant", "माइक से आवाज़ नहीं मिली। Microphone permission और इंटरनेट जाँचें, फिर दोबारा कोशिश करें।");
+    };
+    recognition.onresult = (event) => {
+      const spokenText = event.results?.[0]?.[0]?.transcript || "";
+      if (spokenText) {
+        setAgentInput(spokenText);
+        askConversationAgent(spokenText);
+        addAgentMessage("user", "🎙️ " + spokenText);
+      }
+    };
+    recognition.start();
+  }
+
   function sendAgentMessage(event) {
     event.preventDefault();
     const message = agentInput.trim();
     if (!message || agentBusy) return;
     addAgentMessage("user", message);
     setAgentInput("");
-    const lower = message.toLowerCase();
-    if (/\\b(hi|hello|namaste)\\b/.test(lower) || lower.includes("नमस्ते")) {
-      addAgentMessage("assistant", "नमस्ते! CSCSKB Online भर्ती सहायक में आपका स्वागत है। आप SSC, UPPSC, UPSSSC, Railway या UP Police में से भर्ती चुन सकते हैं। रिज्यूमे PDF/DOC/DOCX में अपलोड करें। ध्यान दें: live vacancy feed अभी चालू नहीं है, इसलिए वर्तमान भर्ती की पुष्टि official notice से करनी होगी।");
-    } else if (lower.includes("photo") || lower.includes("फोटो") || lower.includes("passport")) {
-      setAgentTask("photo");
-      setAgentStep("image-purpose");
-      addAgentMessage("assistant", "ठीक है, फोटो तैयार करते हैं। JPG/PNG/WebP इमेज अटैच करें। अगर notification में फोटो का KB size और pixel dimensions दिए हैं, तो वे भी लिखें।");
-    } else if (lower.includes("signature") || lower.includes("हस्ताक्षर") || lower.includes("सिग्नेचर")) {
-      setAgentTask("signature");
-      setAgentStep("image-purpose");
-      addAgentMessage("assistant", "हस्ताक्षर की साफ इमेज अटैच करें। मैं सामान्य resize/compress कर सकता हूँ; background और आधिकारिक dimensions की पुष्टि आपको notification से करनी होगी।");
-    } else if (lower.includes("certificate") || lower.includes("marksheet") || lower.includes("प्रमाणपत्र") || lower.includes("मार्कशीट")) {
-      setAgentTask("certificate");
-      setAgentStep("requirements");
-      addAgentMessage("assistant", "प्रमाणपत्र/मार्कशीट के लिए बताइए कि पोर्टल PDF माँगता है या image, और अधिकतम file size कितना है। अभी इस चैट में certificate की सामग्री या authenticity की स्वतः जाँच नहीं होती।");
-    } else if (lower.includes("compress") || lower.includes("कंप्रेस") || lower.includes("size") || lower.includes("साइज़") || lower.includes("resize")) {
-      addAgentMessage("assistant", "मैं अटैच की गई JPG/PNG/WebP इमेज को सामान्य रूप से resize और JPEG में compress कर सकता हूँ। यह भर्ती की specific requirement की पुष्टि नहीं करता। नीचे “इमेज प्रोसेस करें” चुनें।");
-    } else if (lower.includes("ssc") || lower.includes("uppsc") || lower.includes("upsssc") || lower.includes("railway") || lower.includes("police") || lower.includes("भर्ती")) {
-      setAgentStep("requirements");
-      addAgentMessage("assistant", "भर्ती का नाम नोट कर लिया। कृपया official notification/PDF अटैच करें या उसमें बताए गए फोटो, signature और document के format, KB limit तथा dimensions लिखें। मैं बिना notice देखे कोई size rule अनुमान से नहीं बताऊँगा।");
-    } else {
-      addAgentMessage("assistant", "मैं मदद कर सकता हूँ—भर्ती का नाम बताइए, फोटो/हस्ताक्षर अटैच करें, या notification में दिए format और size लिखें। अभी इमेज resize/compress उपलब्ध है; PDF का automatic reading और AI-based requirement extraction अभी उपलब्ध नहीं है।");
-    }
+    askConversationAgent(message);
   }
   const filtered = useMemo(() => jobs.filter((job) => {
     const qMatch = qualification === "All" || job.qualification.toLowerCase().includes(qualification.toLowerCase());
@@ -223,6 +260,7 @@ export default function JobsPage() {
               <input type="file" multiple accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx" onChange={handleAgentFiles} />
             </label>
             <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
+            <button type="button" onClick={startVoiceInput} disabled={agentBusy || voiceListening} aria-label="बोलकर पूछें" title="बोलकर पूछें">{voiceListening ? "सुन रहा हूँ…" : "🎙️"}</button>
             <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
           </form>
           <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => addAgentMessage("assistant", "आप किस भर्ती के लिए आवेदन कर रहे हैं? SSC, UPPSC, UPSSSC, Railway या UP Police लिखें। अभी live vacancy feed सक्रिय नहीं है; वर्तमान पद official notice से verify करें।")}>भर्ती सुझाव</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या रिज्यूमे/दस्तावेज़ अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
