@@ -38,6 +38,8 @@ export default function JobsPage() {
   const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "नमस्ते! मैं भर्ती के दस्तावेज़ तैयार करने में मदद करूँगा। पहले भर्ती का notification/PDF अपलोड करें या अपनी भर्ती का नाम लिखें।" }]);
   const [agentFiles, setAgentFiles] = useState([]);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [agentStep, setAgentStep] = useState("start");
+  const [agentTask, setAgentTask] = useState("");
 
   function addAgentMessage(role, text) {
     setAgentMessages((previous) => [...previous, { role, text }]);
@@ -46,26 +48,100 @@ export default function JobsPage() {
   function handleAgentFiles(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    setAgentFiles((previous) => [...previous, ...files]);
-    files.forEach((file) => addAgentMessage("assistant", "फाइल प्राप्त हुई: " + file.name + " (" + Math.round(file.size / 1024) + " KB)। अभी यह केवल upload receipt है—दस्तावेज़ का प्रकार या भर्ती की शर्तें सत्यापित नहीं हुई हैं।"));
+    const allowed = files.filter((file) => /^(image\\/(jpeg|png|webp))$/.test(file.type) || /\\.pdf$/i.test(file.name));
+    const rejected = files.filter((file) => !allowed.includes(file));
+    if (rejected.length) addAgentMessage("assistant", "इन फाइलों का यह संस्करण समर्थन नहीं करता: " + rejected.map((f) => f.name).join(", ") + "। कृपया JPG, PNG, WebP या PDF चुनें।");
+    if (allowed.length) {
+      setAgentFiles((previous) => [...previous, ...allowed]);
+      allowed.forEach((file) => {
+        addAgentMessage("user", "📎 " + file.name);
+        if (file.type.startsWith("image/")) {
+          addAgentMessage("assistant", "फोटो/इमेज मिल गई। मैं इसे ब्राउज़र में resize और compress कर सकता हूँ। पहले बताइए—किस दस्तावेज़ के लिए चाहिए: फोटो, हस्ताक्षर या प्रमाणपत्र?");
+          setAgentStep("image-purpose");
+        } else {
+          addAgentMessage("assistant", "PDF मिल गई। अभी यह चैट PDF का पूरा टेक्स्ट स्वतः नहीं पढ़ती। आप भर्ती का नाम और notification में दिए गए फोटो/हस्ताक्षर के size व dimensions यहाँ लिखें, फिर मैं आगे मार्गदर्शन करूँगा।");
+          setAgentStep("requirements");
+        }
+      });
+    }
     event.target.value = "";
+  }
+
+  async function compressSelectedImages() {
+    const images = agentFiles.filter((file) => file.type.startsWith("image/"));
+    if (!images.length) {
+      addAgentMessage("assistant", "पहले JPG, PNG या WebP इमेज अटैच करें।");
+      return;
+    }
+    setAgentBusy(true);
+    addAgentMessage("assistant", "इमेज को आपके ब्राउज़र में प्रोसेस कर रहा हूँ…");
+    try {
+      for (const file of images) {
+        const source = URL.createObjectURL(file);
+        try {
+          const img = new Image();
+          await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = source; });
+          const maxDimension = 1600;
+          const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Canvas उपलब्ध नहीं है");
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+          if (!blob) throw new Error("इमेज तैयार नहीं हो सकी");
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = file.name.replace(/\\.[^.]+$/, "") + "-optimized.jpg";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          addAgentMessage("assistant", file.name + " प्रोसेस हो गई: " + canvas.width + "×" + canvas.height + " px; " + Math.round(file.size / 1024) + " KB से " + Math.round(blob.size / 1024) + " KB। डाउनलोड शुरू किया गया।");
+        } finally {
+          URL.revokeObjectURL(source);
+        }
+      }
+      addAgentMessage("assistant", "ध्यान दें: यह सामान्य image optimization है, भर्ती की आधिकारिक size/dimension requirement की पुष्टि नहीं। अपलोड करने से पहले notification से मिलान करें।");
+    } catch (error) {
+      addAgentMessage("assistant", "इमेज प्रोसेस नहीं हो सकी। कृपया JPG/PNG/WebP फाइल दोबारा चुनें।");
+    } finally {
+      setAgentBusy(false);
+    }
   }
 
   function sendAgentMessage(event) {
     event.preventDefault();
     const message = agentInput.trim();
-    if (!message) return;
+    if (!message || agentBusy) return;
     addAgentMessage("user", message);
     setAgentInput("");
     const lower = message.toLowerCase();
-    if (lower.includes("compress") || lower.includes("कंप्रेस") || lower.includes("साइज़")) {
-      addAgentMessage("assistant", "मैं आपकी जरूरत समझ गया। इस चैट में अभी वास्तविक compression चालू नहीं है। फाइलें प्राप्त हुई हैं, लेकिन तैयार डाउनलोड देने से पहले processing सुविधा जोड़कर जाँचनी होगी।");
+    if (/\\b(hi|hello|namaste)\\b/.test(lower) || lower.includes("नमस्ते")) {
+      addAgentMessage("assistant", "नमस्ते! मैं आपको चरण-दर-चरण मदद करूँगा। पहले भर्ती का नाम बताइए या notification/PDF अटैच करें।");
+    } else if (lower.includes("photo") || lower.includes("फोटो") || lower.includes("passport")) {
+      setAgentTask("photo");
+      setAgentStep("image-purpose");
+      addAgentMessage("assistant", "ठीक है, फोटो तैयार करते हैं। JPG/PNG/WebP इमेज अटैच करें। अगर notification में फोटो का KB size और pixel dimensions दिए हैं, तो वे भी लिखें।");
     } else if (lower.includes("signature") || lower.includes("हस्ताक्षर") || lower.includes("सिग्नेचर")) {
-      addAgentMessage("assistant", "ठीक है—अब अपना हस्ताक्षर वाली image या PDF पेज अटैच करें। अपलोड होने के बाद मैं प्राप्ति बताऊँगा; सही document type की पुष्टि अभी उम्मीदवार को करनी होगी।");
-    } else if (lower.includes("photo") || lower.includes("फोटो")) {
-      addAgentMessage("assistant", "कृपया भर्ती के notification में बताए गए format और size को ध्यान में रखकर अपनी फोटो अटैच करें। अभी मैं फाइल प्राप्ति बता सकता हूँ, लेकिन automatic validation अभी सक्रिय नहीं है।");
+      setAgentTask("signature");
+      setAgentStep("image-purpose");
+      addAgentMessage("assistant", "हस्ताक्षर की साफ इमेज अटैच करें। मैं सामान्य resize/compress कर सकता हूँ; background और आधिकारिक dimensions की पुष्टि आपको notification से करनी होगी।");
+    } else if (lower.includes("certificate") || lower.includes("marksheet") || lower.includes("प्रमाणपत्र") || lower.includes("मार्कशीट")) {
+      setAgentTask("certificate");
+      setAgentStep("requirements");
+      addAgentMessage("assistant", "प्रमाणपत्र/मार्कशीट के लिए बताइए कि पोर्टल PDF माँगता है या image, और अधिकतम file size कितना है। अभी इस चैट में certificate की सामग्री या authenticity की स्वतः जाँच नहीं होती।");
+    } else if (lower.includes("compress") || lower.includes("कंप्रेस") || lower.includes("size") || lower.includes("साइज़") || lower.includes("resize")) {
+      addAgentMessage("assistant", "मैं अटैच की गई JPG/PNG/WebP इमेज को सामान्य रूप से resize और JPEG में compress कर सकता हूँ। यह भर्ती की specific requirement की पुष्टि नहीं करता। नीचे “इमेज प्रोसेस करें” चुनें।");
+    } else if (lower.includes("ssc") || lower.includes("uppsc") || lower.includes("upsssc") || lower.includes("railway") || lower.includes("police") || lower.includes("भर्ती")) {
+      setAgentStep("requirements");
+      addAgentMessage("assistant", "भर्ती का नाम नोट कर लिया। कृपया official notification/PDF अटैच करें या उसमें बताए गए फोटो, signature और document के format, KB limit तथा dimensions लिखें। मैं बिना notice देखे कोई size rule अनुमान से नहीं बताऊँगा।");
     } else {
-      addAgentMessage("assistant", "समझ गया। संबंधित भर्ती का notification/PDF अटैच करें। मैं इस प्रारंभिक version में फाइल प्राप्ति और अगले कदम के निर्देश दे सकता हूँ; AI-based पहचान और वास्तविक compression अभी जोड़ी जानी बाकी है।");
+      addAgentMessage("assistant", "मैं मदद कर सकता हूँ—भर्ती का नाम बताइए, फोटो/हस्ताक्षर अटैच करें, या notification में दिए format और size लिखें। अभी इमेज resize/compress उपलब्ध है; PDF का automatic reading और AI-based requirement extraction अभी उपलब्ध नहीं है।");
     }
   }
   const filtered = useMemo(() => jobs.filter((job) => {
@@ -149,7 +225,7 @@ export default function JobsPage() {
             <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
             <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
           </form>
-          <p className="jobs-agent-disclaimer">ध्यान दें: अभी फाइल अपलोड चैट में स्थानीय रूप से प्राप्त होती है; AI पहचान, server processing और compression सक्रिय नहीं हैं। संवेदनशील दस्तावेज़ साझा करने से पहले सावधानी रखें।</p>
+          <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या फाइल अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
         </section>}
         <button type="button" className="jobs-agent-launcher" onClick={() => setAgentOpen((open) => !open)} aria-expanded={agentOpen}>
           <span aria-hidden="true">✦</span><span>{agentOpen ? "चैट बंद करें" : "दस्तावेज़ सहायता"}</span>
@@ -175,7 +251,7 @@ export default function JobsPage() {
         .jobs-agent-attach input{display:none}
         .jobs-agent-compose input:not([type=file]){min-width:0;flex:1;padding:10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#0b2043;color:#fff}
         .jobs-agent-compose button{padding:10px;border:0;border-radius:10px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}
-        .jobs-agent-disclaimer{margin:0;padding:0 12px 10px;color:#a8bbd6;font-size:.68rem;line-height:1.4;max-height:58px;overflow:auto}@media(max-width:480px){.jobs-agent-root{left:10px;bottom:12px}.jobs-agent-launcher{padding:11px 13px}.jobs-agent-panel{width:calc(100vw - 20px);height:min(460px,calc(100dvh - 180px));bottom:58px}.jobs-agent-header{padding:9px 12px}.jobs-agent-compose{padding:7px}.jobs-agent-message{font-size:.84rem}.jobs-agent-disclaimer{max-height:42px;font-size:.62rem}}
+        .jobs-agent-tools{display:flex;gap:8px;padding:0 10px 8px}.jobs-agent-tools button{border:1px solid rgba(255,255,255,.2);border-radius:9px;padding:8px 10px;background:#173a5f;color:#fff;font-weight:800;cursor:pointer;font-size:.78rem}.jobs-agent-tools button:disabled{opacity:.6}.jobs-agent-disclaimer{margin:0;padding:0 12px 10px;color:#a8bbd6;font-size:.68rem;line-height:1.4;max-height:58px;overflow:auto}@media(max-width:480px){.jobs-agent-root{left:10px;bottom:12px}.jobs-agent-launcher{padding:11px 13px}.jobs-agent-panel{width:calc(100vw - 20px);height:min(460px,calc(100dvh - 180px));bottom:58px}.jobs-agent-header{padding:9px 12px}.jobs-agent-compose{padding:7px}.jobs-agent-message{font-size:.84rem}.jobs-agent-disclaimer{max-height:42px;font-size:.62rem}}
         .jobs-shell{max-width:1180px;margin:0 auto;padding:clamp(12px,3vw,28px);color:#f8fbff;min-height:100vh}
         .jobs-header{padding:clamp(20px,4vw,38px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:linear-gradient(135deg,rgba(11,114,231,.23),rgba(255,138,0,.13))}
         .jobs-home{display:inline-block;color:#b7d9ff;text-decoration:none;margin-bottom:22px;font-weight:700}
