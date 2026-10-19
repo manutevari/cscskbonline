@@ -35,7 +35,7 @@ export default function JobsPage() {
   const [active, setActive] = useState("All");
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
-  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "नमस्ते! CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका स्वागत है। 🙏\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अपलोड कर सकते हैं।\n\nमहत्वपूर्ण: अभी लाइव vacancy feed सक्रिय नहीं है, इसलिए मैं किसी भर्ती को नई/चालू बताने का दावा नहीं करूँगा। नवीनतम vacancy आधिकारिक नोटिस से सत्यापित करनी होगी।" }]);
+  const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "Namaste 🙏 CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका हार्दिक स्वागत है। कृपया बताइए, मैं आपकी किस प्रकार सहायता कर सकती हूँ?\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अपलोड कर सकते हैं।\n\nमहत्वपूर्ण: अभी लाइव vacancy feed सक्रिय नहीं है, इसलिए मैं किसी भर्ती को नई/चालू बताने का दावा नहीं करूँगा। नवीनतम vacancy आधिकारिक नोटिस से सत्यापित करनी होगी।" }]);
   const [agentFiles, setAgentFiles] = useState([]);
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentStep, setAgentStep] = useState("start");
