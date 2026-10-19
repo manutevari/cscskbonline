@@ -40,10 +40,14 @@ export async function POST(request) {
         "X-Title": "CSCSKB Online Recruitment Voice Assistant",
       },
       body: JSON.stringify({
+        // Strict single-model routing: never request alternate models/providers.
         model: "inclusionai/ling-3.0-flash:free",
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...safeMessages],
         temperature: 0.65,
         max_tokens: 450,
+        provider: {
+          allow_fallbacks: false,
+        },
       }),
       signal: AbortSignal.timeout(25000),
     });
