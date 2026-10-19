@@ -48,7 +48,7 @@ export default function JobsPage() {
   function handleAgentFiles(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const allowed = files.filter((file) => (file.type.startsWith("image/") && /image\\/(jpeg|png|webp)/i.test(file.type)) || /\\.(pdf|doc|docx)$/i.test(file.name));
+    const allowed = files.filter((file) => ["image/jpeg", "image/png", "image/webp"].includes(file.type) || [".pdf", ".doc", ".docx"].some((ext) => file.name.toLowerCase().endsWith(ext)));
     const rejected = files.filter((file) => !allowed.includes(file));
     if (rejected.length) addAgentMessage("assistant", "इन फाइलों का यह संस्करण समर्थन नहीं करता: " + rejected.map((f) => f.name).join(", ") + "। कृपया रिज्यूमे/दस्तावेज़ के लिए PDF, DOC, DOCX या इमेज के लिए JPG, PNG, WebP चुनें।");
     if (allowed.length) {
