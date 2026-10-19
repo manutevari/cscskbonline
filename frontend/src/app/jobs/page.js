@@ -316,7 +316,7 @@ export default function JobsPage() {
           </header>
           <div className="jobs-agent-privacy">
             <strong>गोपनीयता और आपकी सहमति</strong>
-            <p>चैट में आपके लिखे संदेश जवाब बनाने के लिए OpenRouter की AI सेवा को भेजे जाएंगे। इस वेबसाइट के इस फीचर में चैट इतिहास स्थायी रूप से सेव नहीं किया जाता। कृपया Aadhaar, OTP, पासवर्ड, बैंक विवरण या संवेदनशील दस्तावेज़ न भेजें। अटैच की गई फाइलें AI को नहीं भेजी जातीं; इमेज प्रोसेसिंग आपके ब्राउज़र में होती है। Voice input आपके ब्राउज़र की speech-recognition सुविधा का उपयोग करता है, जिसकी प्रोसेसिंग ब्राउज़र प्रदाता की शर्तों पर निर्भर हो सकती है।</p>
+            <p>चैट में आपके लिखे संदेश जवाब बनाने के लिए OpenRouter की AI सेवा को भेजे जाएंगे। इस वेबसाइट के इस फीचर में चैट इतिहास स्थायी रूप से सेव नहीं किया जाता। कृपया Aadhaar, OTP, पासवर्ड, बैंक विवरण या संवेदनशील दस्तावेज़ न भेजें। अटैच की गई फाइलें AI को नहीं भेजी जातीं; इमेज प्रोसेसिंग आपके ब्राउज़र में होती है। Voice input आपके ब्राउज़र की speech-recognition सुविधा का उपयोग करता है, जिसकी प्रोसेसिंग ब्राउज़र प्रदाता की शर्तों पर निर्भर हो सकती है। Privacy/grievance संपर्क: <a href="mailto:tiwarijicscs@gmail.com">tiwarijicscs@gmail.com</a>.</p>
             <label><input type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} /> मैंने <a href="/privacy" target="_blank" rel="noreferrer">गोपनीयता सूचना</a> पढ़ ली है और समझता/समझती हूँ कि चैट संदेश AI सेवा को भेजे जाएंगे।</label>
             <small>सहमति हटाने के लिए इस बॉक्स को अनचेक करें।</small>
           </div>
