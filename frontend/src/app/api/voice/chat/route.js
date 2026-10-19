@@ -21,6 +21,9 @@ export async function POST(request) {
     }
 
     const body = await request.json();
+    if (body?.privacyConsent !== true) {
+      return NextResponse.json({ error: "कृपया पहले गोपनीयता सूचना पढ़कर सहमति दें।" }, { status: 403 });
+    }
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const safeMessages = messages
       .filter((m) => m && ["user", "assistant"].includes(m.role) && typeof m.content === "string")
