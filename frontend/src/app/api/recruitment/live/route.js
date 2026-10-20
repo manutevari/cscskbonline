@@ -28,6 +28,8 @@ function parseLinks(html, baseUrl) {
     const href = (match[1] || match[2] || match[3] || "").trim();
     const title = stripTags(match[4] || "");
     if (!href || !title || title.length < 4 || title.length > 180 || !NOTICE_WORDS.test(title)) continue;
+    // Ignore framework translation placeholders accidentally present in portal HTML.
+    if (/\{\{|\}\}|\|\s*translate|Examinations_HM|\btranslate\b/i.test(title)) continue;
     try {
       const url = new URL(href, baseUrl);
       if (!["http:", "https:"].includes(url.protocol)) continue;
