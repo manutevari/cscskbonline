@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         <li><a href="mailto:tiwarijicscs@gmail.com?subject=CSCSKB%20Online%20-%20Consent%20Withdrawal" style={{ color: "#9fc8ff" }}>Withdraw AI-chat consent / request deletion</a></li>
         <li><a href="mailto:tiwarijicscs@gmail.com?subject=CSCSKB%20Online%20-%20Privacy%20Grievance" style={{ color: "#9fc8ff" }}>Submit a privacy grievance</a></li>
       </ul>
-      <p>कृपया ईमेल में Aadhaar number, OTP, password, bank details या अनावश्यक संवेदनशील जानकारी न भेजें। अनुरोध सत्यापित करने के लिए केवल आवश्यक जानकारी माँगी जानी चाहिए।
+      <p>कृपया ईमेल में Aadhaar number, OTP, password, bank details या अनावश्यक संवेदनशील जानकारी न भेजें। अनुरोध सत्यापित करने के लिए केवल आवश्यक जानकारी माँगी जानी चाहिए।</p>
       <p><strong>Data Fiduciary identity:</strong> CSCSKB Online / CSC business (जैसा वेबसाइट संचालक ने बताया है)।</p>
       <p><strong>महत्वपूर्ण legal detail अभी लंबित:</strong> इस नाम से संबंधित व्यक्ति/कानूनी इकाई का पूरा कानूनी नाम, व्यवसाय का पंजीकृत पता, और लागू होने पर proprietorship/कंपनी की पहचान स्वतंत्र रूप से सत्यापित नहीं हुई है। लॉन्च से पहले इन्हें सही रूप में प्रकाशित करें।</p>
       <h2>5. बच्चों की जानकारी</h2>
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
       <p>API key server-side environment variable में रहनी चाहिए, browser code में नहीं। AI API को केवल consent के बाद call किया जाना चाहिए। OpenRouter तथा hosting provider की वर्तमान terms, data retention, processing location और incident-response obligations को launch से पहले review करें।</p>
       <h2>7. अपडेट</h2>
       <p>इस सूचना में बदलाव होने पर effective date अपडेट की जाएगी। Live recruitment links केवल सार्वजनिक पेजों से निकाले गए links हो सकते हैं; वे किसी vacancy के अभी खुले होने का प्रमाण नहीं हैं। कृपया आधिकारिक notification देखें।</p>
-      <p><strong>Compliance status:</strong> यह notice transparency के लिए है, compliance certification नहीं। वेबसाइट संचालक की पूरी कानूनी पहचान/पता, provider terms, retention configuration, security controls और request-handling process की पुष्टि अभी आवश्यक है।
+      <p><strong>Compliance status:</strong> यह notice transparency के लिए है, compliance certification नहीं। वेबसाइट संचालक की पूरी कानूनी पहचान/पता, provider terms, retention configuration, security controls और request-handling process की पुष्टि अभी आवश्यक है।</p>
     </main>
   );
 }
