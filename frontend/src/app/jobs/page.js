@@ -167,7 +167,7 @@ export default function JobsPage() {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const spoken = new SpeechSynthesisUtterance(data.reply);
-        spoken.lang = /[\\u0900-\\u097F]/.test(data.reply) ? "hi-IN" : "en-IN";
+        spoken.lang = /[\u0900-\u097F]/.test(data.reply) ? "hi-IN" : "en-IN";
         spoken.rate = 1;
         spoken.onend = () => { if (voiceSessionRef.current) window.setTimeout(() => startVoiceInput(), 350); };
         window.speechSynthesis.speak(spoken);
@@ -216,6 +216,10 @@ export default function JobsPage() {
         if (transcript) { heardSpeech = true; if (event.results[i].isFinal) voiceTranscriptRef.current = (voiceTranscriptRef.current + " " + transcript).trim(); }
       }
       if (heardSpeech) {
+        // If the user manually starts the microphone while TTS is speaking, stop TTS as soon as speech is detected.
+        if ("speechSynthesis" in window && window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
         if (voiceSilenceTimerRef.current) window.clearTimeout(voiceSilenceTimerRef.current);
         voiceSilenceTimerRef.current = window.setTimeout(() => {
           const spokenText = voiceTranscriptRef.current.trim(); voiceSilenceTimerRef.current = null;
