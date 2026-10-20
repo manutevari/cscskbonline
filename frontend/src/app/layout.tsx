@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import CSCAppointmentAssistant from "@/components/CSCAppointmentAssistant";
-import CSCLiveVoiceAssistant from "@/components/CSCLiveVoiceAssistant";
+import GlobalAssistants from "@/components/GlobalAssistants";
 
 const outfit = Outfit({
   variable: "--font-sans",
@@ -37,8 +36,7 @@ export default function RootLayout({
           </>
         ) : null}
         {children}
-        <CSCAppointmentAssistant />
-        <CSCLiveVoiceAssistant />
+        <GlobalAssistants />
       </body>
     </html>
   );
