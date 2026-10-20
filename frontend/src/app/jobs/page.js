@@ -40,6 +40,8 @@ export default function JobsPage() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentStep, setAgentStep] = useState("start");
   const [agentTask, setAgentTask] = useState("");
+  const [selectedRecruitment, setSelectedRecruitment] = useState("");
+  const [documentStage, setDocumentStage] = useState(0);
   const [voiceListening, setVoiceListening] = useState(false);
   const voiceRecognitionRef = useRef(null);
   const voiceSilenceTimerRef = useRef(null);
@@ -83,7 +85,7 @@ export default function JobsPage() {
     const rejected = files.filter((file) => !allowed.includes(file));
     if (rejected.length) addAgentMessage("assistant", "इन फाइलों का यह संस्करण समर्थन नहीं करता: " + rejected.map((f) => f.name).join(", ") + "। कृपया रिज्यूमे/दस्तावेज़ के लिए PDF, DOC, DOCX या इमेज के लिए JPG, PNG, WebP चुनें।");
     if (allowed.length) {
-      setAgentFiles((previous) => [...previous, ...allowed]);
+      setAgentFiles((previous) => [...previous, ...allowed.filter((file) => !previous.some((old) => old.name === file.name && old.size === file.size))]);
       allowed.forEach((file) => {
         addAgentMessage("user", "📎 " + file.name);
         if (file.type.startsWith("image/")) {
@@ -341,27 +343,37 @@ export default function JobsPage() {
             <label><input type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} /> मैंने <a href="/privacy" target="_blank" rel="noreferrer">गोपनीयता सूचना</a> पढ़ ली है और समझता/समझती हूँ कि चैट संदेश AI सेवा को भेजे जाएंगे।</label>
             <small>इस बॉक्स को अनचेक करने से आगे के AI chat requests रुकेंगे। इससे पहले भेजे गए संदेशों या provider/hosting logs के स्वतः मिटने की गारंटी नहीं है। हटाने या अन्य privacy request के लिए <a href="/privacy" target="_blank" rel="noreferrer">privacy notice</a> में दिए संपर्क का उपयोग करें।</small>
           </div>
+          <div className="jobs-agent-flow">
+            <div className="jobs-agent-flow-title">Document Checker Assistant <small>Step {documentStage + 1} of 5</small></div>
+            <div className="jobs-agent-progress"><span style={{width: ((documentStage + 1) / 5 * 100) + "%"}} /></div>
+            {documentStage === 0 && <div className="jobs-agent-step"><strong>1. भर्ती चुनें</strong><select aria-label="भर्ती चुनें" value={selectedRecruitment} onChange={(event) => setSelectedRecruitment(event.target.value)}><option value="">भर्ती चुनें…</option><option>SSC</option><option>UPPSC</option><option>UPSSSC</option><option>UP Police</option><option>Railway Recruitment</option><option>Other recruitment</option></select><button type="button" disabled={!selectedRecruitment} onClick={() => { setDocumentStage(1); addAgentMessage("user", "मेरी भर्ती: " + selectedRecruitment); addAgentMessage("assistant", selectedRecruitment + " के लिए आधिकारिक notification और document rules की पुष्टि आवश्यक है। मैं उपलब्ध आधिकारिक पोर्टल का लिंक दूँगा; किसी rule की पुष्टि न हो तो अनुमान नहीं लगाऊँगा।"); }}>भर्ती चुनें और आगे बढ़ें</button></div>}
+            {documentStage === 1 && <div className="jobs-agent-step"><strong>2. आधिकारिक नियम</strong><p>आधिकारिक notification में photo, signature, format, file size और आवश्यक प्रमाणपत्र देखें। नियम पुष्ट होने पर ही आगे बढ़ें।</p><button type="button" onClick={() => { setDocumentStage(2); addAgentMessage("assistant", "अब notification में बताई गई required documents की सूची मिलान करें। यदि कोई नियम स्पष्ट नहीं है, notification का संबंधित पेज/टेक्स्ट साझा करें।"); }}>नियम देख लिए — दस्तावेज़ सूची</button></div>}
+            {documentStage === 2 && <div className="jobs-agent-step"><strong>3. ज़रूरी दस्तावेज़ अपलोड करें</strong><p>नीचे Paperclip/File Tools से PDF, फोटो, मार्कशीट, हस्ताक्षर या प्रमाणपत्र जोड़ें। हर फ़ाइल के साथ Remove विकल्प उपलब्ध है।</p><button type="button" onClick={() => setDocumentStage(3)}>फ़ाइलें जोड़ दीं — आगे</button></div>}
+            {documentStage === 3 && <div className="jobs-agent-step"><strong>4. Missing documents और फ़ाइल तैयारी</strong><p>अटैच फ़ाइलों की सूची देखें। वर्तमान संस्करण फ़ाइल चयन और सामान्य image optimization देता है; आधिकारिक भर्ती-नियम आधारित PDF/दस्तावेज़ OCR जाँच अभी पूरी तरह सक्रिय नहीं है।</p><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>इमेज Compress / Resize करें</button><button type="button" onClick={() => setDocumentStage(4)}>आगे बढ़ें</button></div>}
+            {documentStage === 4 && <div className="jobs-agent-step"><strong>5. Preview और Download</strong><p>तैयार इमेज डाउनलोड हो सकती है। PDF processing, automatic segregation और official-rule verification अभी लागू किए जाने वाले हिस्से हैं।</p><button type="button" onClick={() => { setDocumentStage(0); setSelectedRecruitment(""); }}>नई भर्ती शुरू करें</button></div>}
+          </div>
           <div className="jobs-agent-messages" aria-live="polite">
             {agentMessages.map((message, index) => <div key={index} className={"jobs-agent-message " + message.role}>{message.text}</div>)}
-            {agentFiles.length > 0 && <div className="jobs-agent-file-summary">अटैच की गई फाइलें: {agentFiles.length}</div>}
+            {agentFiles.length > 0 && <div className="jobs-agent-file-list"><strong>Attached files ({agentFiles.length})</strong>{agentFiles.map((file, index) => <div key={file.name + file.size + index}><span>📎 {file.name} · {Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" aria-label={file.name + " हटाएँ"} onClick={() => setAgentFiles((old) => old.filter((_, i) => i !== index))}>✕ Remove</button></div>)}</div>}
           </div>
           <form className="jobs-agent-compose" onSubmit={sendAgentMessage}>
-            <label className="jobs-agent-attach" title="फाइल अटैच करें">＋
+            <label className="jobs-agent-attach" title="File Tools — फाइल अपलोड करें">📎
               <input type="file" multiple accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx" onChange={handleAgentFiles} />
             </label>
             <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
             <button type="button" onClick={() => voiceSessionRef.current ? stopVoiceSession() : startVoiceInput()} disabled={agentBusy} aria-label={voiceSessionRef.current ? "Voice बंद करें" : "बोलकर पूछें"} title={voiceSessionRef.current ? "Voice बंद करें" : "बोलकर पूछें"}>{voiceSessionRef.current ? "Voice बंद करें" : "🎙️"}</button>
             <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
           </form>
-          <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => addAgentMessage("assistant", "आप किस भर्ती के लिए आवेदन कर रहे हैं? SSC, UPPSC, UPSSSC, Railway या UP Police लिखें। लाइव पोर्टल लिंक-जाँच उपलब्ध है, लेकिन यह verified vacancy feed नहीं है; वर्तमान पद official notice से verify करें।")}>भर्ती सुझाव</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या रिज्यूमे/दस्तावेज़ अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
+          <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => addAgentMessage("assistant", "आप किस भर्ती के लिए आवेदन कर रहे हैं? SSC, UPPSC, UPSSSC, Railway या UP Police लिखें। लाइव पोर्टल लिंक-जाँच उपलब्ध है, लेकिन यह verified vacancy feed नहीं है; वर्तमान पद official notice से verify करें।")}>भर्ती सुझाव</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); setDocumentStage(0); setSelectedRecruitment(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या रिज्यूमे/दस्तावेज़ अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
         </section>}
         <button type="button" className="jobs-agent-launcher" onClick={() => setAgentOpen((open) => !open)} aria-expanded={agentOpen}>
-          <span aria-hidden="true">✦</span><span>{agentOpen ? "चैट बंद करें" : "दस्तावेज़ सहायता"}</span>
+          <span aria-hidden="true" className="jobs-agent-spark">✦</span><span>{agentOpen ? "चैट बंद करें" : "Document Checker Assistant"}</span>
         </button>
       </div>
       <footer className="jobs-footer">CSCSKB Online • यह सूचना-सहायक पोर्टल है; अंतिम पुष्टि संबंधित आधिकारिक भर्ती पोर्टल पर करें।</footer>
       <style jsx>{`
 
+        .jobs-agent-flow{margin:8px 10px;padding:11px;border:1px solid rgba(110,180,255,.32);border-radius:12px;background:#0b2043}.jobs-agent-flow-title{display:flex;justify-content:space-between;gap:8px;font-weight:900;font-size:.86rem}.jobs-agent-flow-title small{color:#9fc8ff;font-size:.7rem}.jobs-agent-progress{height:5px;background:#20395b;border-radius:999px;margin:9px 0;overflow:hidden}.jobs-agent-progress span{display:block;height:100%;background:#ff8a00;transition:width .2s}.jobs-agent-step{display:grid;gap:8px;font-size:.82rem;line-height:1.45}.jobs-agent-step p{margin:0;color:#c8d7ec}.jobs-agent-step select{width:100%;padding:9px;border-radius:8px;background:#071a35;color:white;border:1px solid #47658c}.jobs-agent-step button{padding:9px;border:0;border-radius:8px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}.jobs-agent-step button:disabled{opacity:.5}.jobs-agent-file-list{padding:8px 10px;font-size:.75rem;color:#dceeff}.jobs-agent-file-list>div{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid #294361;overflow-wrap:anywhere}.jobs-agent-file-list button{flex-shrink:0;background:#5b2330;color:white;border:0;border-radius:6px;padding:5px;font-size:.7rem}.jobs-agent-spark{animation:jobsBob 1.7s ease-in-out infinite}@keyframes jobsBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
         .jobs-agent-root{position:fixed;left:12px;bottom:12px;z-index:1000;font-family:inherit;pointer-events:none}.jobs-agent-root button,.jobs-agent-panel{pointer-events:auto}
         .jobs-agent-launcher{display:flex;align-items:center;gap:9px;border:2px solid #fff;border-radius:999px;padding:13px 17px;background:#ff8a00;color:#160c00;font-weight:900;box-shadow:0 8px 28px rgba(0,0,0,.5);cursor:pointer;max-width:calc(100vw - 32px)}
         .jobs-agent-launcher span:first-child{font-size:1.2rem}
