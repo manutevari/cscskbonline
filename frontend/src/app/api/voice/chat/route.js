@@ -93,12 +93,26 @@ export async function POST(request) {
     const recruitmentIntent = /recruit|vacan|job|notification|notice|bharti|भर्ती|नौकरी|वैकेंसी|रिक्ति|नोटिफिकेशन|सरकारी परीक्षा|government exam|what can i apply|किसमें आवेदन/i.test(latestUserText);
     const liveSearch = recruitmentIntent ? await searchOfficialPortals() : null;
 
+    const buildLiveFallbackReply = (search) => {
+      if (!search) return "AI सेवा अभी कॉन्फ़िगर नहीं है। कृपया कुछ देर बाद फिर कोशिश करें।";
+      const checked = search.portals.filter((p) => p.status === "checked");
+      const failed = search.portals.filter((p) => p.status !== "checked");
+      const notices = checked.flatMap((p) => p.notices.map((n) => ({ ...n, agency: p.name }))).slice(0, 10);
+      const lines = [
+        "मैंने अभी उपलब्ध आधिकारिक पोर्टल लिंक चेक किए हैं। यह पूरा vacancy database नहीं है, इसलिए अंतिम जानकारी नोटिफिकेशन में सत्यापित करें।",
+        ...notices.map((n, i) => `${i + 1}. ${n.agency}: ${n.title} — ${n.url}`),
+        ...(notices.length ? [] : ["मुख्य पेजों से स्पष्ट भर्ती नोटिस लिंक नहीं मिल पाए। नीचे संबंधित आधिकारिक पोर्टल हैं।"]),
+        ...checked.filter((p) => !notices.some((n) => n.agency === p.name)).map((p) => `${p.name}: ${p.url}`),
+        ...(failed.length ? [`जिन पोर्टलों की जाँच नहीं हो सकी: ${failed.map((p) => p.name).join(", ")}.`] : []),
+        "आप इनमें से किस भर्ती/एजेंसी को चुनना चाहेंगे? उसके बाद मैं पात्रता के लिए आपकी जानकारी एक-एक करके पूछूँगा।",
+      ];
+      return lines.join("\\n");
+    };
+
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({
-        error: "AI सेवा अभी कॉन्फ़िगर नहीं है। भर्ती खोजने के लिए नीचे दिए आधिकारिक पोर्टल खोलें।",
-        ...(liveSearch ? { liveSearch } : {}),
-      }, { status: 503 });
+      if (liveSearch) return NextResponse.json({ reply: buildLiveFallbackReply(liveSearch), liveSearch });
+      return NextResponse.json({ error: "AI सेवा अभी कॉन्फ़िगर नहीं है। कृपया कुछ देर बाद फिर कोशिश करें।" }, { status: 503 });
     }
 
     const sourceContext = liveSearch
@@ -128,11 +142,11 @@ export async function POST(request) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (liveSearch) return NextResponse.json({ reply: buildLiveFallbackReply(liveSearch), liveSearch });
       return NextResponse.json({
         error: response.status === 402
           ? "OpenRouter की API credits/spending limit जाँचें; यह ChatGPT subscription से अलग है।"
           : "AI सेवा अभी जवाब नहीं दे सकी। थोड़ी देर बाद फिर कोशिश करें।",
-        ...(liveSearch ? { liveSearch } : {}),
       }, { status: response.status === 402 ? 402 : 502 });
     }
     const reply = data?.choices?.[0]?.message?.content;
