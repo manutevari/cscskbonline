@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const jobs = [
   { id: 1, title: "SSC भर्ती और परीक्षा अपडेट", category: "केंद्र सरकार", qualification: "10वीं / 12वीं / स्नातक", minAge: 18, maxAge: 30, url: "https://ssc.gov.in/" },
@@ -41,6 +41,10 @@ export default function JobsPage() {
   const [agentStep, setAgentStep] = useState("start");
   const [agentTask, setAgentTask] = useState("");
   const [voiceListening, setVoiceListening] = useState(false);
+  const voiceRecognitionRef = useRef(null);
+  const voiceSilenceTimerRef = useRef(null);
+  const voiceTranscriptRef = useRef("");
+  const voiceSessionRef = useRef(false);
   const [liveData, setLiveData] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState("");
@@ -174,38 +178,54 @@ export default function JobsPage() {
     }
   }
 
-  function startVoiceInput() {
-    if (!privacyConsent) {
-      addAgentMessage("assistant", "कृपया पहले गोपनीयता सूचना पढ़कर सहमति दें। इसके बिना voice assistant शुरू नहीं होगा।");
-      return;
-    }
-    if (typeof window === "undefined") return;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      addAgentMessage("assistant", "इस browser में voice recognition उपलब्ध नहीं है। Android पर Chrome में खोलकर microphone permission दें, या संदेश टाइप करें।");
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "hi-IN";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => setVoiceListening(true);
-    recognition.onend = () => setVoiceListening(false);
-    recognition.onerror = () => {
-      setVoiceListening(false);
-      addAgentMessage("assistant", "माइक से आवाज़ नहीं मिली। Microphone permission और इंटरनेट जाँचें, फिर दोबारा कोशिश करें।");
-    };
-    recognition.onresult = (event) => {
-      const spokenText = event.results?.[0]?.[0]?.transcript || "";
-      if (spokenText) {
-        setAgentInput(spokenText);
-        askConversationAgent(spokenText);
-        addAgentMessage("user", "🎙️ " + spokenText);
-      }
-    };
-    recognition.start();
+  function stopVoiceSession() {
+    voiceSessionRef.current = false;
+    if (voiceSilenceTimerRef.current) window.clearTimeout(voiceSilenceTimerRef.current);
+    voiceSilenceTimerRef.current = null;
+    if (voiceRecognitionRef.current) { try { voiceRecognitionRef.current.stop(); } catch {} }
+    voiceRecognitionRef.current = null;
+    setVoiceListening(false);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }
 
+  function startVoiceInput() {
+    if (!privacyConsent) { addAgentMessage("assistant", "कृपया पहले गोपनीयता सूचना पढ़कर सहमति दें। इसके बिना voice assistant शुरू नहीं होगा।"); return; }
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { addAgentMessage("assistant", "इस browser में voice recognition उपलब्ध नहीं है। Chrome में microphone permission दें, या संदेश टाइप करें।"); return; }
+    voiceSessionRef.current = true;
+    voiceTranscriptRef.current = "";
+    const recognition = new SpeechRecognition();
+    voiceRecognitionRef.current = recognition;
+    recognition.lang = "hi-IN";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onend = () => { setVoiceListening(false); if (voiceRecognitionRef.current === recognition) voiceRecognitionRef.current = null; };
+    recognition.onerror = (event) => {
+      if (voiceSilenceTimerRef.current) window.clearTimeout(voiceSilenceTimerRef.current);
+      voiceSilenceTimerRef.current = null; setVoiceListening(false);
+      if (event.error !== "no-speech" && event.error !== "aborted") addAgentMessage("assistant", "माइक से आवाज़ नहीं मिली। Microphone permission और इंटरनेट जाँचें, फिर दोबारा कोशिश करें।");
+    };
+    recognition.onresult = (event) => {
+      let heardSpeech = false;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i] && event.results[i][0] ? event.results[i][0].transcript.trim() : "";
+        if (transcript) { heardSpeech = true; if (event.results[i].isFinal) voiceTranscriptRef.current = (voiceTranscriptRef.current + " " + transcript).trim(); }
+      }
+      if (heardSpeech) {
+        if (voiceSilenceTimerRef.current) window.clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = window.setTimeout(() => {
+          const spokenText = voiceTranscriptRef.current.trim(); voiceSilenceTimerRef.current = null;
+          if (voiceRecognitionRef.current === recognition) { try { recognition.stop(); } catch {} }
+          if (spokenText && voiceSessionRef.current) { addAgentMessage("user", "🎙️ " + spokenText); askConversationAgent(spokenText); }
+        }, 2000);
+      }
+    };
+    try { recognition.start(); addAgentMessage("assistant", "🎙️ सुन रहा हूँ… बोलना पूरा होने के बाद 2 सेकंड रुकें; संदेश अपने-आप भेज दिया जाएगा। Voice बंद करने के लिए बटन फिर दबाएँ।"); }
+    catch { voiceSessionRef.current = false; setVoiceListening(false); addAgentMessage("assistant", "माइक शुरू नहीं हो पाया। कृपया दोबारा कोशिश करें।"); }
+  }
   function sendAgentMessage(event) {
     event.preventDefault();
     const message = agentInput.trim();
@@ -329,7 +349,7 @@ export default function JobsPage() {
               <input type="file" multiple accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx" onChange={handleAgentFiles} />
             </label>
             <input value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder="अपना संदेश लिखें…" aria-label="अपना संदेश लिखें" />
-            <button type="button" onClick={startVoiceInput} disabled={agentBusy || voiceListening} aria-label="बोलकर पूछें" title="बोलकर पूछें">{voiceListening ? "सुन रहा हूँ…" : "🎙️"}</button>
+            <button type="button" onClick={() => voiceSessionRef.current ? stopVoiceSession() : startVoiceInput()} disabled={agentBusy} aria-label={voiceSessionRef.current ? "Voice बंद करें" : "बोलकर पूछें"} title={voiceSessionRef.current ? "Voice बंद करें" : "बोलकर पूछें"}>{voiceSessionRef.current ? "Voice बंद करें" : "🎙️"}</button>
             <button type="submit" disabled={agentBusy || !agentInput.trim()}>भेजें</button>
           </form>
           <div className="jobs-agent-tools"><button type="button" onClick={compressSelectedImages} disabled={agentBusy}>{agentBusy ? "प्रोसेस हो रहा है…" : "इमेज प्रोसेस करें"}</button><button type="button" onClick={() => addAgentMessage("assistant", "आप किस भर्ती के लिए आवेदन कर रहे हैं? SSC, UPPSC, UPSSSC, Railway या UP Police लिखें। लाइव पोर्टल लिंक-जाँच उपलब्ध है, लेकिन यह verified vacancy feed नहीं है; वर्तमान पद official notice से verify करें।")}>भर्ती सुझाव</button><button type="button" onClick={() => { setAgentFiles([]); setAgentStep("start"); setAgentTask(""); addAgentMessage("assistant", "ठीक है, नई शुरुआत करते हैं। भर्ती का नाम बताइए या रिज्यूमे/दस्तावेज़ अटैच करें।"); }}>नई शुरुआत</button></div><p className="jobs-agent-disclaimer">इमेज processing आपके ब्राउज़र में होती है। यह आधिकारिक eligibility/dimensions की पुष्टि या PDF की automatic reading नहीं है।</p>
