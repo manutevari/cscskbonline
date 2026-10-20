@@ -22,6 +22,15 @@ export default function CSCLiveVoiceAssistant() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(true);
   const [error, setError] = useState("");
+  const [docAgentOpen, setDocAgentOpen] = useState(false);
+  const [recruitmentName, setRecruitmentName] = useState("");
+  const [docRules, setDocRules] = useState("");
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [targetKb, setTargetKb] = useState("50");
+  const [targetWidth, setTargetWidth] = useState("200");
+  const [targetHeight, setTargetHeight] = useState("230");
+  const [docBusy, setDocBusy] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "नमस्ते! मैं CSCSKB Online सहायक हूँ। CSC सेवाओं या appointment के बारे में पूछिए। आप हिंदी या English में लिख सकते हैं या microphone इस्तेमाल कर सकते हैं।" },
   ]);
@@ -106,6 +115,75 @@ export default function CSCLiveVoiceAssistant() {
       setListening(false);
       setError("Microphone शुरू नहीं हो सका। कृपया permission जाँचें या प्रश्न लिखें।");
     }
+  };
+
+  const processRecruitmentImage = async () => {
+    if (!docFiles.length) { setError("पहले कोई फाइल चुनें।"); return; }
+    if (!docRules.trim()) { setError("भर्ती के official notification से photo/signature का size, dimensions और format भरें।"); return; }
+    const images = docFiles.filter((file) => file.type.startsWith("image/"));
+    const unsupported = docFiles.filter((file) => !file.type.startsWith("image/"));
+    if (!images.length) {
+      setError("चुनी गई फाइलों में कोई image नहीं है। अभी PDF/video/ZIP processing उपलब्ध नहीं है।");
+      return;
+    }
+    setDocBusy(true); setError("");
+    const results: string[] = [];
+    const failures: string[] = [];
+    const width = Math.max(1, Math.min(4000, Number(targetWidth) || 200));
+    const height = Math.max(1, Math.min(4000, Number(targetHeight) || 230));
+    const maxBytes = Math.max(1, Number(targetKb) || 50) * 1024;
+    try {
+      for (const file of images) {
+        let sourceUrl = "";
+        try {
+          const image = new Image();
+          sourceUrl = URL.createObjectURL(file);
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Image पढ़ी नहीं जा सकी।"));
+            image.src = sourceUrl;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Image processor उपलब्ध नहीं है।");
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          URL.revokeObjectURL(sourceUrl); sourceUrl = "";
+          let quality = 0.92;
+          let blob: Blob | null = null;
+          for (let i = 0; i < 18; i++) {
+            blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+            if (blob && blob.size <= maxBytes) break;
+            quality *= 0.75;
+          }
+          if (!blob) throw new Error("Image export नहीं हो सकी।");
+          if (blob.size > maxBytes) throw new Error(`Compression के बाद भी फाइल ${(blob.size / 1024).toFixed(1)} KB है; अधिकतम ${targetKb} KB की सीमा हासिल नहीं हुई।`);
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const baseName = file.name.replace(/\.[^.]+$/, "") || "recruitment-document";
+          link.download = baseName + "-processed.jpg";
+          document.body.appendChild(link); link.click(); link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+          results.push(`${file.name} → ${width}×${height}px, ${(blob.size / 1024).toFixed(1)} KB`);
+        } catch (e) {
+          failures.push(`${file.name}: ${e instanceof Error ? e.message : "प्रोसेस नहीं हो सकी"}`);
+        } finally {
+          if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        }
+      }
+      const summary = [
+        results.length ? "तैयार images:\n" + results.join("\n") : "",
+        failures.length ? "प्रोसेसिंग में समस्या:\n" + failures.join("\n") : "",
+        unsupported.length ? "अभी प्रोसेस नहीं हुईं (processor बाकी है): " + unsupported.map((file) => file.name).join(", ") : "",
+        `भर्ती: ${recruitmentName || "नाम नहीं दिया"}। यह केवल size/dimensions का प्रारंभिक check है; official notification की सभी शर्तें अभी अपने-आप verify नहीं होतीं।`
+      ].filter(Boolean).join("\n\n");
+      setMessages((previous) => [...previous, { role: "assistant", content: summary }]);
+      if (!results.length || failures.length || unsupported.length) setError(summary);
+      else setDocAgentOpen(false);
+      speak(summary);
+    } finally { setDocBusy(false); }
   };
 
   const clearChatHistory = () => {
@@ -228,7 +306,22 @@ export default function CSCLiveVoiceAssistant() {
           <div ref={bottomRef} />
         </div>
         {error && <p className="voice-error" role="alert">{error}</p>}
+        {docAgentOpen && <div style={{padding:"12px 16px",borderTop:"1px solid #dbe7df",background:"#f4faf6",display:"grid",gap:8,flexShrink:0}}>
+          <strong>🗂 भर्ती Document Agent</strong>
+          <small>भर्ती का नाम और official notification में दिए गए सटीक नियम भरें। अभी नियम अपने-आप notification से नहीं निकाले जाते।</small>
+          <input value={recruitmentName} onChange={e=>setRecruitmentName(e.target.value)} placeholder="भर्ती का नाम (जैसे Police Constable)" aria-label="Recruitment name" style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8}}/>
+          <textarea value={docRules} onChange={e=>setDocRules(e.target.value)} placeholder="Official rules: photo/signature dimensions, KB limit, format…" aria-label="Official recruitment document rules" rows={2} style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8,font: "inherit"}}/>
+          <input type="file" accept="*/*" multiple onChange={e=>setDocFiles(Array.from(e.target.files || []))} aria-label="Choose recruitment documents"/>
+          <small>{docFiles.length ? `चुनी गई फाइलें (${docFiles.length}): ${docFiles.map(f=>`${f.name} · ${(f.size/1024).toFixed(1)} KB`).join(" | ")}` : "एक या अधिक फाइलें चुनें: फोटो, signature, PDF, video, ZIP या अन्य प्रकार। अभी processing केवल image के लिए उपलब्ध है।"}</small>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+            <label style={{fontSize:12}}>Max KB<input type="number" min="1" max="2048" value={targetKb} onChange={e=>setTargetKb(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+            <label style={{fontSize:12}}>Width px<input type="number" min="1" max="4000" value={targetWidth} onChange={e=>setTargetWidth(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+            <label style={{fontSize:12}}>Height px<input type="number" min="1" max="4000" value={targetHeight} onChange={e=>setTargetHeight(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+          </div>
+          <div style={{display:"flex",gap:8}}><button type="button" className="voice-action" disabled={docBusy} onClick={processRecruitmentImage}>{docBusy ? "Processing…" : "Image process & download"}</button><button type="button" onClick={()=>setDocAgentOpen(false)} style={{border:"1px solid #cbd8d0",borderRadius:8,padding:"10px",background:"#fff"}}>बंद करें</button></div>
+        </div>}
         <div className="voice-options">
+          <button type="button" onClick={()=>setDocAgentOpen(v=>!v)}>🗂 भर्ती Document Agent</button>
           <button onClick={startListening} disabled={listening || busy}>{listening ? "🎙 सुन रहा हूँ…" : "🎙 बोलें"}</button>
           <button type="button" onClick={stopVoice} aria-label="Stop voice and remain in assistant">⏹ Stop</button>
           <button className="voice-book-button" type="button" onClick={openBooking}>📅 Book Appointment</button>
