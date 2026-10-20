@@ -106,7 +106,7 @@ export async function POST(request) {
         ...(failed.length ? [`जिन पोर्टलों की जाँच नहीं हो सकी: ${failed.map((p) => p.name).join(", ")}.`] : []),
         "आप इनमें से किस भर्ती/एजेंसी को चुनना चाहेंगे? उसके बाद मैं पात्रता के लिए आपकी जानकारी एक-एक करके पूछूँगा।",
       ];
-      return lines.join("\\n");
+      return lines.join("\n");
     };
 
     const apiKey = process.env.OPENROUTER_API_KEY;
