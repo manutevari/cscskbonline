@@ -169,6 +169,7 @@ export default function JobsPage() {
         const spoken = new SpeechSynthesisUtterance(data.reply);
         spoken.lang = /[\\u0900-\\u097F]/.test(data.reply) ? "hi-IN" : "en-IN";
         spoken.rate = 1;
+        spoken.onend = () => { if (voiceSessionRef.current) window.setTimeout(() => startVoiceInput(), 350); };
         window.speechSynthesis.speak(spoken);
       }
     } catch (error) {
