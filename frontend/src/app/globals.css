@@ -22,7 +22,7 @@
   --transition: all 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
   --shadow: 0 12px 40px rgba(0,0,0,0.35);
   --shadow-lg: 0 24px 60px rgba(0,0,0,0.45);
-  --font-sans: var(--font-sans, 'Outfit'), system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-outfit, "Outfit"), var(--font-devanagari, "Noto Sans Devanagari"), system-ui, -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; scroll-behavior: smooth; }
@@ -33,7 +33,7 @@ body {
     radial-gradient(ellipse 50% 40% at 90% 10%, rgba(255,138,0,0.12) 0%, transparent 45%),
     linear-gradient(160deg, #040f25 0%, #07183a 40%, #050e23 100%);
   color: var(--text);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Noto Sans Devanagari", "Nirmala UI", "Mangal", system-ui, sans-serif;
   min-height: 100vh;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
