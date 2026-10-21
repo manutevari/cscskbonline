@@ -12,7 +12,7 @@ type PdfJsPage = {
 type PdfJsDocument = { numPages: number; getPage: (pageNumber: number) => Promise<PdfJsPage> };
 type PdfJsLibrary = {
   GlobalWorkerOptions: { workerSrc: string };
-  getDocument: (options: { data: ArrayBuffer }) => { promise: Promise<PdfJsDocument> };
+  getDocument: (options: { data: ArrayBuffer; password?: string }) => { promise: Promise<PdfJsDocument> };
 };
 
 let pdfJsPromise: Promise<PdfJsLibrary> | null = null;
@@ -105,7 +105,12 @@ export default function DocumentToolsPage() {
   const [isPdfInput, setIsPdfInput] = useState(false);
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [pdfPasswordRequired, setPdfPasswordRequired] = useState(false);
+  const [pdfPasswordIncorrect, setPdfPasswordIncorrect] = useState(false);
+  const [pdfUnlocking, setPdfUnlocking] = useState(false);
   const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
+  const pdfBytesRef = useRef<ArrayBuffer | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewBoxRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
@@ -148,6 +153,36 @@ export default function DocumentToolsPage() {
     }
   };
 
+  const openPdfWithPassword = async (password: string) => {
+    const bytes = pdfBytesRef.current;
+    if (!bytes) { setStatus("पहले PDF फाइल चुनें।"); return; }
+    setPdfUnlocking(true);
+    setPdfPasswordIncorrect(false);
+    setStatus("PDF password verify किया जा रहा है…");
+    try {
+      const pdfjs = await loadPdfJs();
+      const pdf = await pdfjs.getDocument({ data: bytes.slice(0), password }).promise;
+      pdfDocumentRef.current = pdf;
+      setPdfPageCount(pdf.numPages);
+      setPdfPage(1);
+      setPdfPasswordRequired(false);
+      setPdfPasswordIncorrect(false);
+      await renderPdfPage(pdf, 1);
+      setStatus(`PDF सफलतापूर्वक खुल गई · ${pdf.numPages} pages. चुने हुए page को crop/export कर सकते हैं।`);
+    } catch (error) {
+      const reason = error as { name?: string; message?: string; code?: number };
+      if (reason?.name === "PasswordException" || reason?.code === 1 || reason?.code === 2) {
+        setPdfPasswordRequired(true);
+        setPdfPasswordIncorrect(reason.code === 2 || /incorrect|invalid password/i.test(reason.message || ""));
+        setStatus(reason.code === 2 || /incorrect|invalid password/i.test(reason.message || "")
+          ? "Password गलत है। PDF का सही password डालकर दोबारा कोशिश करें।"
+          : "यह PDF password-protected है। खोलने के लिए इसका सही password डालें।");
+      } else {
+        setStatus(reason?.message || "PDF नहीं खुल सकी। फाइल खराब हो सकती है या encryption format supported नहीं है।");
+      }
+    } finally { setPdfUnlocking(false); }
+  };
+
   const loadFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0];
     if (!next) return;
@@ -168,21 +203,20 @@ export default function DocumentToolsPage() {
     setIsPdfInput(isPdf);
     setPdfPageCount(0);
     setPdfPage(1);
+    setPdfPassword("");
+    setPdfPasswordRequired(false);
+    setPdfPasswordIncorrect(false);
     pdfDocumentRef.current = null;
+    pdfBytesRef.current = null;
     if (isPdf) {
       setStatus("PDF खोला जा रहा है… पहली बार PDF engine लोड होने में कुछ सेकंड लग सकते हैं।");
       try {
-        const pdfjs = await loadPdfJs();
-        const pdf = await pdfjs.getDocument({ data: await next.arrayBuffer() }).promise;
-        pdfDocumentRef.current = pdf;
-        setPdfPageCount(pdf.numPages);
-        await renderPdfPage(pdf, 1);
+        pdfBytesRef.current = await next.arrayBuffer();
+        await openPdfWithPassword("");
       } catch (error) {
         setSourceUrl("");
-        setStatus(error instanceof Error ? error.message : "PDF नहीं खुल सका। कृपया वैध PDF चुनें।");
-      } finally {
-        event.target.value = "";
-      }
+        setStatus(error instanceof Error ? error.message : "PDF नहीं खुल सकी। कृपया वैध PDF चुनें।");
+      } finally { event.target.value = ""; }
       return;
     }
     const url = URL.createObjectURL(next);
@@ -355,6 +389,15 @@ export default function DocumentToolsPage() {
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
           </label>
           {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading preview…"}</div>}
+          {isPdfInput && pdfPasswordRequired && <div style={{ display: "grid", gap: 10, padding: 14, border: "1px solid #d7b76a", borderRadius: 12, background: "#fff9e9" }}>
+            <strong style={{ color: "#594a22" }}>🔒 Password-protected PDF</strong>
+            <p style={{ margin: 0, color: "#594a22", fontSize: 13, lineHeight: 1.5 }}>PDF खोलने के लिए उसका सही password डालें। Password केवल इस page की memory में इस्तेमाल होगा; इसे save या log नहीं किया जाता।</p>
+            <label style={{ display: "grid", gap: 6, color: "#594a22", fontWeight: 700 }}>PDF password
+              <input type="password" autoComplete="off" value={pdfPassword} onChange={e => setPdfPassword(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !pdfUnlocking) void openPdfWithPassword(pdfPassword); }} style={fieldStyle} placeholder="Enter PDF password" />
+            </label>
+            <button type="button" disabled={pdfUnlocking || !pdfPassword} onClick={() => void openPdfWithPassword(pdfPassword)} style={{ ...buttonStyle, opacity: pdfUnlocking || !pdfPassword ? .6 : 1 }}>{pdfUnlocking ? "Checking password…" : "🔓 Open PDF with password"}</button>
+            {pdfPasswordIncorrect && <small role="alert" style={{ color: "#a12622" }}>Password match नहीं हुआ। PDF के owner से सही password लें।</small>}
+          </div>}
           {isPdfInput && pdfPageCount > 0 && <label style={{ display: "grid", gap: 7, fontWeight: 700 }}>PDF page to crop
             <select value={pdfPage} onChange={(e) => void changePdfPage(Number(e.target.value))} disabled={busy} style={fieldStyle}>
               {Array.from({ length: pdfPageCount }, (_, index) => <option key={index + 1} value={index + 1}>Page {index + 1} of {pdfPageCount}</option>)}
@@ -387,13 +430,18 @@ export default function DocumentToolsPage() {
             <label style={labelStyle}>Max file size (KB)<input type="number" min="1" max="20000" value={maxKb} onChange={e => setMaxKb(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Output format<select value={format} onChange={e => setFormat(e.target.value as OutputFormat)} style={fieldStyle}><option value="image/jpeg">JPG / JPEG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option><option value="application/pdf">PDF (single image page)</option></select></label>
           </div>
-          <button type="button" onClick={processAndDownload} disabled={!file || busy} style={{ ...buttonStyle, padding: "14px 16px", fontSize: 16, opacity: !file || busy ? .6 : 1 }}>{busy ? "Processing…" : "Convert & Download"}</button>
+          {isPdfInput && pdfPageCount > 0 && <div style={{ display: "grid", gap: 6, padding: 13, border: "1px solid #e3c780", borderRadius: 12, background: "#fff9e9", color: "#594a22" }}>
+            <strong>🔒 Premium: Remove PDF password / decrypt original file</strong>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>यह paid feature locked है। इस project में payment gateway और server-side payment verification configured नहीं मिले, इसलिए original PDF का password हटाने/decrypt करने का action बंद है। Payment verify हुए बिना इसे unlock नहीं किया जाएगा।</p>
+            <button type="button" disabled style={{ ...secondaryButtonStyle, cursor: "not-allowed", opacity: .65 }}>🔒 Premium feature — locked</button>
+          </div>}
+          <button type="button" onClick={processAndDownload} disabled={!file || busy || (isPdfInput && (pdfPasswordRequired || !pdfPageCount))} style={{ ...buttonStyle, padding: "14px 16px", fontSize: 16, opacity: !file || busy || (isPdfInput && (pdfPasswordRequired || !pdfPageCount)) ? .6 : 1 }}>{busy ? "Processing…" : "Convert & Download"}</button>
           <p role="status" aria-live="polite" style={{ margin: 0, padding: 12, borderRadius: 10, background: "#f2f8f4", color: "#254c39", lineHeight: 1.5, overflowWrap: "anywhere" }}>{status || "फाइल चुनें, crop/resize करें और output format चुनें।"}</p>
         </div>
       </section>
 
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
-        <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. For PDF input, choose a page first; the selected page is rendered in your browser and only that cropped page is exported. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
+        <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. Password-protected PDFs can be opened when you know the correct password. The separate feature to remove a PDF password or decrypt the original file remains premium-locked until payment verification is implemented. This is not a password-cracking tool. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
       </section>
     </main>
   );
