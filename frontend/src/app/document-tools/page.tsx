@@ -334,17 +334,17 @@ export default function DocumentToolsPage() {
     : undefined;
 
   return (
-    <main style={{ maxWidth: 1050, margin: "0 auto", padding: "24px 16px 56px", color: "#17251f" }}>
+    <main style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
       <a href="/" style={{ color: "#176b4d", fontWeight: 700, textDecoration: "none" }}>← CSC Home</a>
       <header style={{ margin: "18px 0 24px" }}>
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
-        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px" }}>Crop, Resize & Convert</h1>
+        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Resize & Convert</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
-          <h2 style={{ margin: 0, fontSize: 20 }}>1. Choose File & Preview</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>1. Choose File & Preview</h2>
           <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image or PDF
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
           </label>
@@ -368,13 +368,13 @@ export default function DocumentToolsPage() {
         </div>
 
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
-          <h2 style={{ margin: 0, fontSize: 20 }}>2. Notification Rules</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>2. Notification Rules</h2>
           <label style={{ display: "grid", gap: 7, fontWeight: 700 }}>Paste notification requirement (optional)
             <textarea value={notificationText} onChange={e => setNotificationText(e.target.value)} rows={3} placeholder="Example: photo JPG, 200 x 230 pixels, maximum 50 KB" style={fieldStyle} />
           </label>
           <button type="button" onClick={applyAutoRules} style={buttonStyle}>Read common rules & apply</button>
           <p style={{ fontSize: 12, color: "#6a756e", lineHeight: 1.5, margin: 0 }}>Rule reading is pattern-based, not a full PDF/legal interpretation. Confirm each value against the official notification.</p>
-          <h2 style={{ margin: "8px 0 0", fontSize: 20 }}>3. Resize & Output</h2>
+          <h2 style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label style={labelStyle}>Width (px)<input type="number" min="1" max="5000" value={targetWidth} onChange={e => setTargetWidth(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Height (px)<input type="number" min="1" max="5000" value={targetHeight} onChange={e => setTargetHeight(e.target.value)} style={fieldStyle} /></label>
