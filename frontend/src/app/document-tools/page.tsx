@@ -126,6 +126,8 @@ export default function DocumentToolsPage() {
     });
     setSourceUrl(URL.createObjectURL(blob));
     setDimensions({ width: canvas.width, height: canvas.height });
+    setTargetWidth(String(canvas.width));
+    setTargetHeight(String(canvas.height));
     setCrop({ x: 0, y: 0, width: canvas.width, height: canvas.height });
     setCropMode("manual");
     setStatus(`PDF page ${pageNumber} / ${pdf.numPages} तैयार है। Crop area चुनें और output format चुनकर download करें।`);
@@ -263,7 +265,10 @@ export default function DocumentToolsPage() {
     const p = pointerPosition(event);
     if (!p) return;
     const start = dragRef.current;
-    setCrop({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width: Math.max(1, Math.abs(p.x - start.x)), height: Math.max(1, Math.abs(p.y - start.y)) });
+    const width = Math.max(1, Math.abs(p.x - start.x));
+    const height = Math.max(1, Math.abs(p.y - start.y));
+    setCrop({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width, height });
+    if (isPdfInput) { setTargetWidth(String(width)); setTargetHeight(String(height)); }
   };
   const endCrop = () => { dragRef.current = null; };
 
@@ -297,7 +302,8 @@ export default function DocumentToolsPage() {
       for (let i = 0; i < (mime === "image/png" ? 1 : 18); i++) {
         blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
         if (!blob) break;
-        if (format === "application/pdf" || blob.size <= maxBytes) break;
+        const pdfOverheadAllowance = format === "application/pdf" ? 2048 : 0;
+        if (blob.size + pdfOverheadAllowance <= maxBytes) break;
         quality *= 0.78;
       }
       if (!blob) throw new Error("Selected format में export नहीं हो सका।");
@@ -316,7 +322,7 @@ export default function DocumentToolsPage() {
         output = jpegToPdf(jpegBytes, w, h);
         extension = "pdf";
       }
-      if (format !== "application/pdf" && output.size > maxBytes) {
+      if (output.size > maxBytes) {
         throw new Error(`फाइल ${(output.size / 1024).toFixed(1)} KB है, जो ${maxKb} KB की सीमा से बड़ी है। अलग format, कम dimensions या अधिक KB सीमा आजमाएँ।`);
       }
       const base = file.name.replace(/\.[^.]+$/, "") || "document";
