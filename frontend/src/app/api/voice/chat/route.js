@@ -34,7 +34,7 @@ function stripTags(value) {
     .replace(/\s+/g, " ").trim();
 }
 
-function findNoticeLinks(html, baseUrl) {
+function findNoticeLinks(html, baseUrl, allowedHost) {
   const found = [];
   const pattern = /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi;
   const relevant = /recruit|vacan|advertis|noti|result|admit|answer|exam|notice|application|apply|career|भर्ती|विज्ञ|परिणाम|प्रवेश पत्र|परीक्षा|सूचना|आवेदन/i;
@@ -46,6 +46,9 @@ function findNoticeLinks(html, baseUrl) {
     try {
       const url = new URL(href, baseUrl);
       if (!["http:", "https:"].includes(url.protocol)) continue;
+      const hostname = url.hostname.toLowerCase();
+      const officialHost = allowedHost.toLowerCase();
+      if (hostname !== officialHost && !hostname.endsWith(`.${officialHost}`)) continue;
       if (!found.some((item) => item.url === url.href)) found.push({ title, url: url.href });
     } catch {}
   }
@@ -66,7 +69,7 @@ async function searchOfficialPortals() {
       });
       if (!response.ok) return { ...portal, status: "unavailable", httpStatus: response.status, notices: [] };
       const html = await response.text();
-      return { ...portal, status: "checked", httpStatus: response.status, notices: findNoticeLinks(html, portal.url) };
+      return { ...portal, status: "checked", httpStatus: response.status, notices: findNoticeLinks(html, portal.url, new URL(portal.url).hostname) };
     } catch {
       return { ...portal, status: "unavailable", notices: [] };
     }
@@ -90,7 +93,7 @@ export async function POST(request) {
     }
 
     const latestUserText = [...safeMessages].reverse().find((m) => m.role === "user")?.content || "";
-    const recruitmentIntent = /recruit|vacan|job|notification|notice|bharti|भर्ती|नौकरी|वैकेंसी|रिक्ति|नोटिफिकेशन|सरकारी परीक्षा|government exam|what can i apply|किसमें आवेदन/i.test(latestUserText);
+    const recruitmentIntent = /recruit|vacan|vacanc(?:y|ies)|opening|openings|open position|current openings|latest openings|available jobs|job opening|job openings|apply for|job|notification|notice|bharti|भर्ती|भर्तियां|भर्तियाँ|नौकरी|वैकेंसी|रिक्ति|रिक्त पद|नोटिफिकेशन|सरकारी परीक्षा|government exam|what can i apply|किसमें आवेदन|वर्तमान भर्ती/i.test(latestUserText);
     const liveSearch = recruitmentIntent ? await searchOfficialPortals() : null;
 
     const apiKey = process.env.OPENROUTER_API_KEY;
