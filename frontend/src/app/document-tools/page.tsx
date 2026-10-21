@@ -43,7 +43,7 @@ function jpegToPdf(jpeg: Uint8Array, width: number, height: number): Blob {
   let xref = "xref\n0 6\n0000000000 65535 f \n";
   for (let i = 1; i <= 5; i++) xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
   push(ascii(xref + "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n" + xrefOffset + "\n%%EOF"));
-  return new Blob(parts, { type: "application/pdf" });
+  const pdfBytes = concat(...parts);\n  return new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
 }
 function concat(...arrays: Uint8Array[]) {
   const size = arrays.reduce((sum, item) => sum + item.length, 0);
