@@ -4,6 +4,41 @@ import { ChangeEvent, PointerEvent, useEffect, useRef, useState } from "react";
 
 type OutputFormat = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 type Crop = { x: number; y: number; width: number; height: number };
+type PdfJsViewport = { width: number; height: number };
+type PdfJsPage = {
+  getViewport: (options: { scale: number }) => PdfJsViewport;
+  render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PdfJsViewport }) => { promise: Promise<void> };
+};
+type PdfJsDocument = { numPages: number; getPage: (pageNumber: number) => Promise<PdfJsPage> };
+type PdfJsLibrary = {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (options: { data: ArrayBuffer }) => { promise: Promise<PdfJsDocument> };
+};
+
+let pdfJsPromise: Promise<PdfJsLibrary> | null = null;
+function loadPdfJs(): Promise<PdfJsLibrary> {
+  const existing = (window as Window & { pdfjsLib?: PdfJsLibrary }).pdfjsLib;
+  if (existing) return Promise.resolve(existing);
+  if (!pdfJsPromise) {
+    pdfJsPromise = new Promise<PdfJsLibrary>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      script.async = true;
+      script.onload = () => {
+        const library = (window as Window & { pdfjsLib?: PdfJsLibrary }).pdfjsLib;
+        if (!library) {
+          reject(new Error("PDF engine load नहीं हो सका। कृपया इंटरनेट कनेक्शन जाँचकर फिर कोशिश करें।"));
+          return;
+        }
+        library.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        resolve(library);
+      };
+      script.onerror = () => reject(new Error("PDF engine डाउनलोड नहीं हो सका। कृपया इंटरनेट कनेक्शन जाँचकर फिर कोशिश करें।"));
+      document.head.appendChild(script);
+    });
+  }
+  return pdfJsPromise;
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -67,31 +102,91 @@ export default function DocumentToolsPage() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState<"manual" | "auto">("manual");
+  const [isPdfInput, setIsPdfInput] = useState(false);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfPage, setPdfPage] = useState(1);
+  const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewBoxRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl); }, [sourceUrl]);
 
-  const loadFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const renderPdfPage = async (pdf: PdfJsDocument, pageNumber: number) => {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.6 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("PDF preview canvas उपलब्ध नहीं है।");
+    await page.render({ canvasContext: context, viewport }).promise;
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("PDF page preview तैयार नहीं हो सका।")), "image/png");
+    });
+    setSourceUrl(URL.createObjectURL(blob));
+    setDimensions({ width: canvas.width, height: canvas.height });
+    setCrop({ x: 0, y: 0, width: canvas.width, height: canvas.height });
+    setCropMode("manual");
+    setStatus(`PDF page ${pageNumber} / ${pdf.numPages} तैयार है। Crop area चुनें और output format चुनकर download करें।`);
+  };
+
+  const changePdfPage = async (pageNumber: number) => {
+    const pdf = pdfDocumentRef.current;
+    if (!pdf || pageNumber < 1 || pageNumber > pdf.numPages) return;
+    setBusy(true);
+    setStatus("PDF page render हो रहा है…");
+    try {
+      await renderPdfPage(pdf, pageNumber);
+      setPdfPage(pageNumber);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "PDF page render नहीं हो सका।");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0];
     if (!next) return;
-    if (!next.type.startsWith("image/")) {
-      setStatus("इस संस्करण में input के रूप में JPG, PNG, WebP, GIF और browser-supported images उपलब्ध हैं। PDF को image में बदलना अभी उपलब्ध नहीं है।");
+    const isPdf = next.type === "application/pdf" || next.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf && !next.type.startsWith("image/")) {
+      setStatus("कृपया JPG, PNG, WebP, GIF, BMP, AVIF या PDF फाइल चुनें।");
       event.target.value = "";
       return;
     }
     if (next.size > 20 * 1024 * 1024) {
-      setStatus("फाइल 20 MB से बड़ी है। कृपया छोटी image चुनें।");
+      setStatus("फाइल 20 MB से बड़ी है। कृपया छोटी फाइल चुनें।");
       event.target.value = "";
       return;
     }
-    const url = URL.createObjectURL(next);
     setFile(next);
-    setSourceUrl(url);
     setDimensions({ width: 0, height: 0 });
     setCrop({ x: 0, y: 0, width: 0, height: 0 });
+    setIsPdfInput(isPdf);
+    setPdfPageCount(0);
+    setPdfPage(1);
+    pdfDocumentRef.current = null;
+    if (isPdf) {
+      setStatus("PDF खोला जा रहा है… पहली बार PDF engine लोड होने में कुछ सेकंड लग सकते हैं।");
+      try {
+        const pdfjs = await loadPdfJs();
+        const pdf = await pdfjs.getDocument({ data: await next.arrayBuffer() }).promise;
+        pdfDocumentRef.current = pdf;
+        setPdfPageCount(pdf.numPages);
+        await renderPdfPage(pdf, 1);
+      } catch (error) {
+        setSourceUrl("");
+        setStatus(error instanceof Error ? error.message : "PDF नहीं खुल सका। कृपया वैध PDF चुनें।");
+      } finally {
+        event.target.value = "";
+      }
+      return;
+    }
+    const url = URL.createObjectURL(next);
+    setSourceUrl(url);
     setStatus("फाइल चुनी गई है। Preview तैयार होने पर crop और resize कर सकते हैं।");
+    event.target.value = "";
   };
 
   const onImageLoaded = () => {
@@ -101,7 +196,7 @@ export default function DocumentToolsPage() {
     const height = image.naturalHeight;
     setDimensions({ width, height });
     setCrop({ x: 0, y: 0, width, height });
-    setStatus(`Upload सफल: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
+    setStatus(`Preview तैयार: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
   };
 
   const applyAutoRules = () => {
@@ -250,10 +345,16 @@ export default function DocumentToolsPage() {
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
           <h2 style={{ margin: 0, fontSize: 20 }}>1. Choose File & Preview</h2>
-          <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
+          <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image or PDF
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
           </label>
-          {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading image…"}</div>}
+          {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading preview…"}</div>}
+          {isPdfInput && pdfPageCount > 0 && <label style={{ display: "grid", gap: 7, fontWeight: 700 }}>PDF page to crop
+            <select value={pdfPage} onChange={(e) => void changePdfPage(Number(e.target.value))} disabled={busy} style={fieldStyle}>
+              {Array.from({ length: pdfPageCount }, (_, index) => <option key={index + 1} value={index + 1}>Page {index + 1} of {pdfPageCount}</option>)}
+            </select>
+            <small style={{ color: "#52635a", fontWeight: 400 }}>Crop applies to the selected page. Exported PDF contains the cropped page as a single-page PDF.</small>
+          </label>}
           {sourceUrl && <div ref={previewBoxRef} onPointerDown={beginCrop} onPointerMove={moveCrop} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", height: 310, border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", overflow: "hidden", touchAction: "none", cursor: "crosshair", display: "grid", placeItems: "center" }}>
             <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
             {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
@@ -286,7 +387,7 @@ export default function DocumentToolsPage() {
       </section>
 
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
-        <strong>Supported in this release:</strong> browser-supported images → JPG, PNG, WebP or single-page PDF. PDF input, PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. For sensitive documents, processing stays in this browser tab; avoid uploading files on shared devices.
+        <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. For PDF input, choose a page first; the selected page is rendered in your browser and only that cropped page is exported. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
       </section>
     </main>
   );
