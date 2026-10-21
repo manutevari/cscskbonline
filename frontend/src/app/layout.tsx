@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import CSCAppointmentAssistant from "@/components/CSCAppointmentAssistant";
 import CSCLiveVoiceAssistant from "@/components/CSCLiveVoiceAssistant";
+import DocumentToolsShortcut from "@/components/DocumentToolsShortcut";
 
 const outfit = Outfit({
   variable: "--font-sans",
@@ -39,6 +40,7 @@ export default function RootLayout({
         {children}
         <CSCAppointmentAssistant />
         <CSCLiveVoiceAssistant />
+        <DocumentToolsShortcut />
       </body>
     </html>
   );
