@@ -4,6 +4,41 @@ import { ChangeEvent, PointerEvent, useEffect, useRef, useState } from "react";
 
 type OutputFormat = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 type Crop = { x: number; y: number; width: number; height: number };
+type PdfJsViewport = { width: number; height: number };
+type PdfJsPage = {
+  getViewport: (options: { scale: number }) => PdfJsViewport;
+  render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PdfJsViewport }) => { promise: Promise<void> };
+};
+type PdfJsDocument = { numPages: number; getPage: (pageNumber: number) => Promise<PdfJsPage> };
+type PdfJsLibrary = {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (options: { data: ArrayBuffer; password?: string }) => { promise: Promise<PdfJsDocument> };
+};
+
+let pdfJsPromise: Promise<PdfJsLibrary> | null = null;
+function loadPdfJs(): Promise<PdfJsLibrary> {
+  const existing = (window as Window & { pdfjsLib?: PdfJsLibrary }).pdfjsLib;
+  if (existing) return Promise.resolve(existing);
+  if (!pdfJsPromise) {
+    pdfJsPromise = new Promise<PdfJsLibrary>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      script.async = true;
+      script.onload = () => {
+        const library = (window as Window & { pdfjsLib?: PdfJsLibrary }).pdfjsLib;
+        if (!library) {
+          reject(new Error("PDF engine load नहीं हो सका। कृपया इंटरनेट कनेक्शन जाँचकर फिर कोशिश करें।"));
+          return;
+        }
+        library.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        resolve(library);
+      };
+      script.onerror = () => reject(new Error("PDF engine डाउनलोड नहीं हो सका। कृपया इंटरनेट कनेक्शन जाँचकर फिर कोशिश करें।"));
+      document.head.appendChild(script);
+    });
+  }
+  return pdfJsPromise;
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -67,31 +102,127 @@ export default function DocumentToolsPage() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState<"manual" | "auto">("manual");
+  const [isPdfInput, setIsPdfInput] = useState(false);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [pdfPasswordRequired, setPdfPasswordRequired] = useState(false);
+  const [pdfPasswordIncorrect, setPdfPasswordIncorrect] = useState(false);
+  const [pdfUnlocking, setPdfUnlocking] = useState(false);
+  const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
+  const pdfBytesRef = useRef<ArrayBuffer | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const previewBoxRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl); }, [sourceUrl]);
 
-  const loadFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const renderPdfPage = async (pdf: PdfJsDocument, pageNumber: number) => {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.6 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("PDF preview canvas उपलब्ध नहीं है।");
+    await page.render({ canvasContext: context, viewport }).promise;
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("PDF page preview तैयार नहीं हो सका।")), "image/png");
+    });
+    setSourceUrl(URL.createObjectURL(blob));
+    setDimensions({ width: canvas.width, height: canvas.height });
+    setTargetWidth(String(canvas.width));
+    setTargetHeight(String(canvas.height));
+    setCrop({ x: 0, y: 0, width: canvas.width, height: canvas.height });
+    setCropMode("manual");
+    setStatus(`PDF page ${pageNumber} / ${pdf.numPages} तैयार है। Crop area चुनें और output format चुनकर download करें।`);
+  };
+
+  const changePdfPage = async (pageNumber: number) => {
+    const pdf = pdfDocumentRef.current;
+    if (!pdf || pageNumber < 1 || pageNumber > pdf.numPages) return;
+    setBusy(true);
+    setStatus("PDF page render हो रहा है…");
+    try {
+      await renderPdfPage(pdf, pageNumber);
+      setPdfPage(pageNumber);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "PDF page render नहीं हो सका।");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openPdfWithPassword = async (password: string) => {
+    const bytes = pdfBytesRef.current;
+    if (!bytes) { setStatus("पहले PDF फाइल चुनें।"); return; }
+    setPdfUnlocking(true);
+    setPdfPasswordIncorrect(false);
+    setStatus("PDF password verify किया जा रहा है…");
+    try {
+      const pdfjs = await loadPdfJs();
+      const pdf = await pdfjs.getDocument({ data: bytes.slice(0), password }).promise;
+      pdfDocumentRef.current = pdf;
+      setPdfPageCount(pdf.numPages);
+      setPdfPage(1);
+      setPdfPasswordRequired(false);
+      setPdfPasswordIncorrect(false);
+      await renderPdfPage(pdf, 1);
+      setStatus(`PDF सफलतापूर्वक खुल गई · ${pdf.numPages} pages. चुने हुए page को crop/export कर सकते हैं।`);
+    } catch (error) {
+      const reason = error as { name?: string; message?: string; code?: number };
+      if (reason?.name === "PasswordException" || reason?.code === 1 || reason?.code === 2) {
+        setPdfPasswordRequired(true);
+        setPdfPasswordIncorrect(reason.code === 2 || /incorrect|invalid password/i.test(reason.message || ""));
+        setStatus(reason.code === 2 || /incorrect|invalid password/i.test(reason.message || "")
+          ? "Password गलत है। PDF का सही password डालकर दोबारा कोशिश करें।"
+          : "यह PDF password-protected है। खोलने के लिए इसका सही password डालें।");
+      } else {
+        setStatus(reason?.message || "PDF नहीं खुल सकी। फाइल खराब हो सकती है या encryption format supported नहीं है।");
+      }
+    } finally { setPdfUnlocking(false); }
+  };
+
+  const loadFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0];
     if (!next) return;
-    if (!next.type.startsWith("image/")) {
-      setStatus("इस संस्करण में input के रूप में JPG, PNG, WebP, GIF और browser-supported images उपलब्ध हैं। PDF को image में बदलना अभी उपलब्ध नहीं है।");
+    const isPdf = next.type === "application/pdf" || next.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf && !next.type.startsWith("image/")) {
+      setStatus("कृपया JPG, PNG, WebP, GIF, BMP, AVIF या PDF फाइल चुनें।");
       event.target.value = "";
       return;
     }
     if (next.size > 20 * 1024 * 1024) {
-      setStatus("फाइल 20 MB से बड़ी है। कृपया छोटी image चुनें।");
+      setStatus("फाइल 20 MB से बड़ी है। कृपया छोटी फाइल चुनें।");
       event.target.value = "";
       return;
     }
-    const url = URL.createObjectURL(next);
     setFile(next);
-    setSourceUrl(url);
     setDimensions({ width: 0, height: 0 });
     setCrop({ x: 0, y: 0, width: 0, height: 0 });
+    setIsPdfInput(isPdf);
+    setPdfPageCount(0);
+    setPdfPage(1);
+    setPdfPassword("");
+    setPdfPasswordRequired(false);
+    setPdfPasswordIncorrect(false);
+    pdfDocumentRef.current = null;
+    pdfBytesRef.current = null;
+    if (isPdf) {
+      setStatus("PDF खोला जा रहा है… पहली बार PDF engine लोड होने में कुछ सेकंड लग सकते हैं।");
+      try {
+        pdfBytesRef.current = await next.arrayBuffer();
+        await openPdfWithPassword("");
+      } catch (error) {
+        setSourceUrl("");
+        setStatus(error instanceof Error ? error.message : "PDF नहीं खुल सकी। कृपया वैध PDF चुनें।");
+      } finally { event.target.value = ""; }
+      return;
+    }
+    const url = URL.createObjectURL(next);
+    setSourceUrl(url);
     setStatus("फाइल चुनी गई है। Preview तैयार होने पर crop और resize कर सकते हैं।");
+    event.target.value = "";
   };
 
   const onImageLoaded = () => {
@@ -101,7 +232,7 @@ export default function DocumentToolsPage() {
     const height = image.naturalHeight;
     setDimensions({ width, height });
     setCrop({ x: 0, y: 0, width, height });
-    setStatus(`Upload सफल: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
+    setStatus(`Preview तैयार: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
   };
 
   const applyAutoRules = () => {
@@ -168,7 +299,10 @@ export default function DocumentToolsPage() {
     const p = pointerPosition(event);
     if (!p) return;
     const start = dragRef.current;
-    setCrop({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width: Math.max(1, Math.abs(p.x - start.x)), height: Math.max(1, Math.abs(p.y - start.y)) });
+    const width = Math.max(1, Math.abs(p.x - start.x));
+    const height = Math.max(1, Math.abs(p.y - start.y));
+    setCrop({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width, height });
+    if (isPdfInput) { setTargetWidth(String(width)); setTargetHeight(String(height)); }
   };
   const endCrop = () => { dragRef.current = null; };
 
@@ -202,7 +336,8 @@ export default function DocumentToolsPage() {
       for (let i = 0; i < (mime === "image/png" ? 1 : 18); i++) {
         blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
         if (!blob) break;
-        if (format === "application/pdf" || blob.size <= maxBytes) break;
+        const pdfOverheadAllowance = format === "application/pdf" ? 2048 : 0;
+        if (blob.size + pdfOverheadAllowance <= maxBytes) break;
         quality *= 0.78;
       }
       if (!blob) throw new Error("Selected format में export नहीं हो सका।");
@@ -221,7 +356,7 @@ export default function DocumentToolsPage() {
         output = jpegToPdf(jpegBytes, w, h);
         extension = "pdf";
       }
-      if (format !== "application/pdf" && output.size > maxBytes) {
+      if (output.size > maxBytes) {
         throw new Error(`फाइल ${(output.size / 1024).toFixed(1)} KB है, जो ${maxKb} KB की सीमा से बड़ी है। अलग format, कम dimensions या अधिक KB सीमा आजमाएँ।`);
       }
       const base = file.name.replace(/\.[^.]+$/, "") || "document";
@@ -239,21 +374,36 @@ export default function DocumentToolsPage() {
     : undefined;
 
   return (
-    <main style={{ maxWidth: 1050, margin: "0 auto", padding: "24px 16px 56px", color: "#17251f" }}>
+    <main style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
       <a href="/" style={{ color: "#176b4d", fontWeight: 700, textDecoration: "none" }}>← CSC Home</a>
       <header style={{ margin: "18px 0 24px" }}>
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
-        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px" }}>Crop, Resize & Convert</h1>
+        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Resize & Convert</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
-          <h2 style={{ margin: 0, fontSize: 20 }}>1. Choose File & Preview</h2>
-          <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
+          <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>1. Choose File & Preview</h2>
+          <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image or PDF
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
           </label>
-          {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading image…"}</div>}
+          {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading preview…"}</div>}
+          {isPdfInput && pdfPasswordRequired && <div style={{ display: "grid", gap: 10, padding: 14, border: "1px solid #d7b76a", borderRadius: 12, background: "#fff9e9" }}>
+            <strong style={{ color: "#594a22" }}>🔒 Password-protected PDF</strong>
+            <p style={{ margin: 0, color: "#594a22", fontSize: 13, lineHeight: 1.5 }}>PDF खोलने के लिए उसका सही password डालें। Password केवल इस page की memory में इस्तेमाल होगा; इसे save या log नहीं किया जाता।</p>
+            <label style={{ display: "grid", gap: 6, color: "#594a22", fontWeight: 700 }}>PDF password
+              <input type="password" autoComplete="off" value={pdfPassword} onChange={e => setPdfPassword(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !pdfUnlocking) void openPdfWithPassword(pdfPassword); }} style={fieldStyle} placeholder="Enter PDF password" />
+            </label>
+            <button type="button" disabled={pdfUnlocking || !pdfPassword} onClick={() => void openPdfWithPassword(pdfPassword)} style={{ ...buttonStyle, opacity: pdfUnlocking || !pdfPassword ? .6 : 1 }}>{pdfUnlocking ? "Checking password…" : "🔓 Open PDF with password"}</button>
+            {pdfPasswordIncorrect && <small role="alert" style={{ color: "#a12622" }}>Password match नहीं हुआ। PDF के owner से सही password लें।</small>}
+          </div>}
+          {isPdfInput && pdfPageCount > 0 && <label style={{ display: "grid", gap: 7, fontWeight: 700 }}>PDF page to crop
+            <select value={pdfPage} onChange={(e) => void changePdfPage(Number(e.target.value))} disabled={busy} style={fieldStyle}>
+              {Array.from({ length: pdfPageCount }, (_, index) => <option key={index + 1} value={index + 1}>Page {index + 1} of {pdfPageCount}</option>)}
+            </select>
+            <small style={{ color: "#52635a", fontWeight: 400 }}>Crop applies to the selected page. Exported PDF contains the cropped page as a single-page PDF.</small>
+          </label>}
           {sourceUrl && <div ref={previewBoxRef} onPointerDown={beginCrop} onPointerMove={moveCrop} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", height: 310, border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", overflow: "hidden", touchAction: "none", cursor: "crosshair", display: "grid", placeItems: "center" }}>
             <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
             {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
@@ -267,26 +417,31 @@ export default function DocumentToolsPage() {
         </div>
 
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
-          <h2 style={{ margin: 0, fontSize: 20 }}>2. Notification Rules</h2>
+          <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>2. Notification Rules</h2>
           <label style={{ display: "grid", gap: 7, fontWeight: 700 }}>Paste notification requirement (optional)
             <textarea value={notificationText} onChange={e => setNotificationText(e.target.value)} rows={3} placeholder="Example: photo JPG, 200 x 230 pixels, maximum 50 KB" style={fieldStyle} />
           </label>
           <button type="button" onClick={applyAutoRules} style={buttonStyle}>Read common rules & apply</button>
           <p style={{ fontSize: 12, color: "#6a756e", lineHeight: 1.5, margin: 0 }}>Rule reading is pattern-based, not a full PDF/legal interpretation. Confirm each value against the official notification.</p>
-          <h2 style={{ margin: "8px 0 0", fontSize: 20 }}>3. Resize & Output</h2>
+          <h2 style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label style={labelStyle}>Width (px)<input type="number" min="1" max="5000" value={targetWidth} onChange={e => setTargetWidth(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Height (px)<input type="number" min="1" max="5000" value={targetHeight} onChange={e => setTargetHeight(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Max file size (KB)<input type="number" min="1" max="20000" value={maxKb} onChange={e => setMaxKb(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Output format<select value={format} onChange={e => setFormat(e.target.value as OutputFormat)} style={fieldStyle}><option value="image/jpeg">JPG / JPEG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option><option value="application/pdf">PDF (single image page)</option></select></label>
           </div>
-          <button type="button" onClick={processAndDownload} disabled={!file || busy} style={{ ...buttonStyle, padding: "14px 16px", fontSize: 16, opacity: !file || busy ? .6 : 1 }}>{busy ? "Processing…" : "Convert & Download"}</button>
+          {isPdfInput && pdfPageCount > 0 && <div style={{ display: "grid", gap: 6, padding: 13, border: "1px solid #e3c780", borderRadius: 12, background: "#fff9e9", color: "#594a22" }}>
+            <strong>🔒 Premium: Remove PDF password / decrypt original file</strong>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>यह paid feature locked है। इस project में payment gateway और server-side payment verification configured नहीं मिले, इसलिए original PDF का password हटाने/decrypt करने का action बंद है। Payment verify हुए बिना इसे unlock नहीं किया जाएगा।</p>
+            <button type="button" disabled style={{ ...secondaryButtonStyle, cursor: "not-allowed", opacity: .65 }}>🔒 Premium feature — locked</button>
+          </div>}
+          <button type="button" onClick={processAndDownload} disabled={!file || busy || (isPdfInput && (pdfPasswordRequired || !pdfPageCount))} style={{ ...buttonStyle, padding: "14px 16px", fontSize: 16, opacity: !file || busy || (isPdfInput && (pdfPasswordRequired || !pdfPageCount)) ? .6 : 1 }}>{busy ? "Processing…" : "Convert & Download"}</button>
           <p role="status" aria-live="polite" style={{ margin: 0, padding: 12, borderRadius: 10, background: "#f2f8f4", color: "#254c39", lineHeight: 1.5, overflowWrap: "anywhere" }}>{status || "फाइल चुनें, crop/resize करें और output format चुनें।"}</p>
         </div>
       </section>
 
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
-        <strong>Supported in this release:</strong> browser-supported images → JPG, PNG, WebP or single-page PDF. PDF input, PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. For sensitive documents, processing stays in this browser tab; avoid uploading files on shared devices.
+        <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. Password-protected PDFs can be opened when you know the correct password. The separate feature to remove a PDF password or decrypt the original file remains premium-locked until payment verification is implemented. This is not a password-cracking tool. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
       </section>
     </main>
   );
