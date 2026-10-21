@@ -33,7 +33,7 @@ export default function CSCLiveVoiceAssistant() {
   const [docBusy, setDocBusy] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "नमस्ते! मैं CSCSKB Online सहायक हूँ। CSC सेवाओं या appointment के बारे में पूछिए। आप हिंदी या English में लिख सकते हैं या microphone इस्तेमाल कर सकते हैं।" },
+    { role: "assistant", content: "नमस्ते जी! CSCSKB Online में आपका स्वागत है। मैं आपकी मदद के लिए यहाँ हूँ। आप सरकारी योजनाओं, भर्ती-परीक्षाओं या फॉर्म भरने के बारे में पूछ सकते हैं। आप चाहें तो हिंदी में या English में बात कर सकते हैं।" },
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -198,8 +198,20 @@ export default function CSCLiveVoiceAssistant() {
     if (!speaking || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : "en-IN";
-    utterance.rate = 1;
+    const hasHindi = /[\u0900-\u097F]/.test(text);
+    utterance.lang = hasHindi ? "hi-IN" : "en-IN";
+    // Prefer a locally installed natural-sounding voice for the response language.
+    // Browser/OS voices vary by device, so keep a native fallback if none is available.
+    const availableVoices = window.speechSynthesis.getVoices();
+    const languagePrefix = hasHindi ? "hi" : "en";
+    const matchingVoices = availableVoices.filter((voice) => voice.lang.toLowerCase().startsWith(languagePrefix));
+    const preferredVoice = hasHindi
+      ? matchingVoices.find((voice) => /google hindi|microsoft.*swara|heera|kalpana|hindi/i.test(voice.name))
+      : matchingVoices.find((voice) => /google.*english|microsoft.*(neerja|prabhat|aria|jenny|guy)|natural|neural/i.test(voice.name));
+    utterance.voice = preferredVoice || matchingVoices[0] || null;
+    utterance.rate = 0.92;
+    utterance.pitch = 1.02;
+    utterance.volume = 1;
     utterance.onend = () => {
       if (autoListenRef.current) {
         awaitingResponseRef.current = false;
@@ -228,9 +240,7 @@ export default function CSCLiveVoiceAssistant() {
       setInput("");
       openBooking();
       if (speaking && "speechSynthesis" in window) {
-        const utterance = new SpeechSynthesisUtterance("जी, मैं आपका अपॉइंटमेंट बुकिंग फॉर्म खोल रहा हूँ। कृपया अपनी जानकारी भरकर बुकिंग कन्फर्म करें।");
-        utterance.lang = "hi-IN";
-        window.speechSynthesis.speak(utterance);
+        speak("जी, मैं आपका अपॉइंटमेंट बुकिंग फ़ॉर्म खोल रहा हूँ। कृपया अपनी जानकारी भरकर बुकिंग की पुष्टि कर दीजिए।");
       }
       return;
     }
@@ -335,7 +345,7 @@ export default function CSCLiveVoiceAssistant() {
           <button type="button" onClick={clearChatHistory}>🗑 चैट मिटाएँ</button>
           <a href="/privacy/data-deletion" style={{display:"inline-flex",alignItems:"center",border:"1px solid #d0ddd4",background:"#fff",color:"#234735",borderRadius:8,padding:"8px 10px",textDecoration:"none"}}>Personal data deletion</a>
           <button onClick={() => setSpeaking((value) => !value)}>{speaking ? "🔊 Voice on" : "🔇 Voice off"}</button>
-          <span>Voice fallback: browser speech</span>
+          <span>Natural voice: device-supported Hindi / English</span>
         </div>
         <form className="voice-form" onSubmit={send}>
           <input className="voice-input" value={input} onChange={(e) => setInput(e.target.value)} placeholder="अपना सवाल लिखें…" maxLength={4000} aria-label="Your message" />
