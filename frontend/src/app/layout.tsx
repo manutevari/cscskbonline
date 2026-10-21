@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="hi" className={`${outfit.variable} ${devanagari.variable}`}>
+    <html lang="en" className={`${outfit.variable} ${devanagari.variable}`}>
       <body>
         {process.env.NEXT_PUBLIC_GA_ID ? (
           <>
