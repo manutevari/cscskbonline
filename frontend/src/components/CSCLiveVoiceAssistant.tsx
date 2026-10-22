@@ -21,9 +21,19 @@ export default function CSCLiveVoiceAssistant() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(true);
+  const [voiceLanguage, setVoiceLanguage] = useState<"hi-IN" | "en-IN">("hi-IN");
   const [error, setError] = useState("");
+  const [docAgentOpen, setDocAgentOpen] = useState(false);
+  const [recruitmentName, setRecruitmentName] = useState("");
+  const [docRules, setDocRules] = useState("");
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [targetKb, setTargetKb] = useState("50");
+  const [targetWidth, setTargetWidth] = useState("200");
+  const [targetHeight, setTargetHeight] = useState("230");
+  const [docBusy, setDocBusy] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "नमस्ते! मैं CSCSKB Online सहायक हूँ। CSC सेवाओं या appointment के बारे में पूछिए। आप हिंदी या English में लिख सकते हैं या microphone इस्तेमाल कर सकते हैं।" },
+    { role: "assistant", content: "नमस्ते जी! CSCSKB Online में आपका स्वागत है। मैं आपकी मदद के लिए यहाँ हूँ। आप सरकारी योजनाओं, भर्ती-परीक्षाओं या फॉर्म भरने के बारे में पूछ सकते हैं। आप चाहें तो हिंदी में या English में बात कर सकते हैं।" },
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -66,7 +76,7 @@ export default function CSCLiveVoiceAssistant() {
     }
     try {
       const recognition = new Recognition();
-      recognition.lang = "hi-IN";
+      recognition.lang = voiceLanguage;
       recognition.interimResults = true;
       recognition.continuous = true;
       transcriptRef.current = "";
@@ -108,6 +118,75 @@ export default function CSCLiveVoiceAssistant() {
     }
   };
 
+  const processRecruitmentImage = async () => {
+    if (!docFiles.length) { setError("पहले कोई फाइल चुनें।"); return; }
+    if (!docRules.trim()) { setError("भर्ती के official notification से photo/signature का size, dimensions और format भरें।"); return; }
+    const images = docFiles.filter((file) => file.type.startsWith("image/"));
+    const unsupported = docFiles.filter((file) => !file.type.startsWith("image/"));
+    if (!images.length) {
+      setError("चुनी गई फाइलों में कोई image नहीं है। अभी PDF/video/ZIP processing उपलब्ध नहीं है।");
+      return;
+    }
+    setDocBusy(true); setError("");
+    const results: string[] = [];
+    const failures: string[] = [];
+    const width = Math.max(1, Math.min(4000, Number(targetWidth) || 200));
+    const height = Math.max(1, Math.min(4000, Number(targetHeight) || 230));
+    const maxBytes = Math.max(1, Number(targetKb) || 50) * 1024;
+    try {
+      for (const file of images) {
+        let sourceUrl = "";
+        try {
+          const image = new Image();
+          sourceUrl = URL.createObjectURL(file);
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Image पढ़ी नहीं जा सकी।"));
+            image.src = sourceUrl;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Image processor उपलब्ध नहीं है।");
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          URL.revokeObjectURL(sourceUrl); sourceUrl = "";
+          let quality = 0.92;
+          let blob: Blob | null = null;
+          for (let i = 0; i < 18; i++) {
+            blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+            if (blob && blob.size <= maxBytes) break;
+            quality *= 0.75;
+          }
+          if (!blob) throw new Error("Image export नहीं हो सकी।");
+          if (blob.size > maxBytes) throw new Error(`Compression के बाद भी फाइल ${(blob.size / 1024).toFixed(1)} KB है; अधिकतम ${targetKb} KB की सीमा हासिल नहीं हुई।`);
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const baseName = file.name.replace(/\.[^.]+$/, "") || "recruitment-document";
+          link.download = baseName + "-processed.jpg";
+          document.body.appendChild(link); link.click(); link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+          results.push(`${file.name} → ${width}×${height}px, ${(blob.size / 1024).toFixed(1)} KB`);
+        } catch (e) {
+          failures.push(`${file.name}: ${e instanceof Error ? e.message : "प्रोसेस नहीं हो सकी"}`);
+        } finally {
+          if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+        }
+      }
+      const summary = [
+        results.length ? "तैयार images:\n" + results.join("\n") : "",
+        failures.length ? "प्रोसेसिंग में समस्या:\n" + failures.join("\n") : "",
+        unsupported.length ? "अभी प्रोसेस नहीं हुईं (processor बाकी है): " + unsupported.map((file) => file.name).join(", ") : "",
+        `भर्ती: ${recruitmentName || "नाम नहीं दिया"}। यह केवल size/dimensions का प्रारंभिक check है; official notification की सभी शर्तें अभी अपने-आप verify नहीं होतीं।`
+      ].filter(Boolean).join("\n\n");
+      setMessages((previous) => [...previous, { role: "assistant", content: summary }]);
+      if (!results.length || failures.length || unsupported.length) setError(summary);
+      else setDocAgentOpen(false);
+      speak(summary);
+    } finally { setDocBusy(false); }
+  };
+
   const clearChatHistory = () => {
     stopVoice();
     setMessages([{ role: "assistant", content: "चैट हिस्ट्री साफ़ कर दी गई है। अब आप नया प्रश्न पूछ सकते हैं।" }]);
@@ -119,8 +198,20 @@ export default function CSCLiveVoiceAssistant() {
     if (!speaking || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : "en-IN";
-    utterance.rate = 1;
+    const hasHindi = /[\u0900-\u097F]/.test(text);
+    utterance.lang = hasHindi ? "hi-IN" : "en-IN";
+    // Prefer a locally installed natural-sounding voice for the response language.
+    // Browser/OS voices vary by device, so keep a native fallback if none is available.
+    const availableVoices = window.speechSynthesis.getVoices();
+    const languagePrefix = hasHindi ? "hi" : "en";
+    const matchingVoices = availableVoices.filter((voice) => voice.lang.toLowerCase().startsWith(languagePrefix));
+    const preferredVoice = hasHindi
+      ? matchingVoices.find((voice) => /google hindi|microsoft.*swara|heera|kalpana|hindi/i.test(voice.name))
+      : matchingVoices.find((voice) => /google.*english|microsoft.*(neerja|prabhat|aria|jenny|guy)|natural|neural/i.test(voice.name));
+    utterance.voice = preferredVoice || matchingVoices[0] || null;
+    utterance.rate = 0.92;
+    utterance.pitch = 1.02;
+    utterance.volume = 1;
     utterance.onend = () => {
       if (autoListenRef.current) {
         awaitingResponseRef.current = false;
@@ -149,9 +240,7 @@ export default function CSCLiveVoiceAssistant() {
       setInput("");
       openBooking();
       if (speaking && "speechSynthesis" in window) {
-        const utterance = new SpeechSynthesisUtterance("जी, मैं आपका अपॉइंटमेंट बुकिंग फॉर्म खोल रहा हूँ। कृपया अपनी जानकारी भरकर बुकिंग कन्फर्म करें।");
-        utterance.lang = "hi-IN";
-        window.speechSynthesis.speak(utterance);
+        speak("जी, मैं आपका अपॉइंटमेंट बुकिंग फ़ॉर्म खोल रहा हूँ। कृपया अपनी जानकारी भरकर बुकिंग की पुष्टि कर दीजिए।");
       }
       return;
     }
@@ -210,7 +299,8 @@ export default function CSCLiveVoiceAssistant() {
         .voice-input{min-width:0;flex:1;padding:14px 13px;border:1px solid #cbd8d0;border-radius:10px;color:#17251f;background:#fff;font:inherit;font-size:16px}
         .voice-action{border:0;border-radius:10px;padding:13px 16px;background:#176b4d;color:white;font-weight:700;font-size:15px;cursor:pointer}
         .voice-action:disabled{opacity:.5;cursor:default}.voice-error{margin:0;padding:8px 12px;color:#9c2525;font-size:12px;background:#fff6f6}
-        .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b;flex-wrap:wrap}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:8px 10px;cursor:pointer}.voice-options .voice-book-button{background:#176b4d;border-color:#176b4d;color:#fff;font-weight:800}
+        .voice-options{display:flex;gap:8px;padding:0 12px 10px;font-size:12px;align-items:center;color:#42564b;flex-wrap:wrap}
+        .voice-language-label{font-size:12px;font-weight:800;color:#42564b}.voice-language-select{border:1px solid #d0ddd4;border-radius:8px;background:#fff;color:#234735;padding:8px 10px;font:inherit;max-width:100%}.voice-options button{border:1px solid #d0ddd4;background:#fff;color:#234735;border-radius:8px;padding:8px 10px;cursor:pointer}.voice-options .voice-book-button{background:#176b4d;border-color:#176b4d;color:#fff;font-weight:800}
         @media(max-width:480px){.voice-panel{right:8px;bottom:8px;width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:none}.voice-panel.minimized{height:auto;bottom:8px}.voice-head{padding:12px;min-height:66px}.voice-head strong{font-size:16px}.voice-minimize,.voice-close{width:40px;height:40px;flex-basis:40px}.voice-messages{padding:14px;gap:14px}.voice-msg{max-width:100%;font-size:16px;line-height:1.75;padding:13px 14px}.voice-fab{right:12px;bottom:165px;padding:13px 16px}.voice-orb-button{width:100px;height:100px}.voice-stage{min-height:170px}}
       `}</style>
       {open && <section className={`voice-panel ${minimized ? "minimized" : ""}`} role="dialog" aria-modal="false" aria-label="CSCSKB Live Assistant">
@@ -228,14 +318,34 @@ export default function CSCLiveVoiceAssistant() {
           <div ref={bottomRef} />
         </div>
         {error && <p className="voice-error" role="alert">{error}</p>}
+        {docAgentOpen && <div style={{padding:"12px 16px",borderTop:"1px solid #dbe7df",background:"#f4faf6",display:"grid",gap:8,flexShrink:0}}>
+          <strong>🗂 भर्ती Document Agent</strong>
+          <small>भर्ती का नाम और official notification में दिए गए सटीक नियम भरें। अभी नियम अपने-आप notification से नहीं निकाले जाते।</small>
+          <input value={recruitmentName} onChange={e=>setRecruitmentName(e.target.value)} placeholder="भर्ती का नाम (जैसे Police Constable)" aria-label="Recruitment name" style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8}}/>
+          <textarea value={docRules} onChange={e=>setDocRules(e.target.value)} placeholder="Official rules: photo/signature dimensions, KB limit, format…" aria-label="Official recruitment document rules" rows={2} style={{padding:9,border:"1px solid #cbd8d0",borderRadius:8,font: "inherit"}}/>
+          <input type="file" accept="*/*" multiple onChange={e=>setDocFiles(Array.from(e.target.files || []))} aria-label="Choose recruitment documents"/>
+          <small>{docFiles.length ? `चुनी गई फाइलें (${docFiles.length}): ${docFiles.map(f=>`${f.name} · ${(f.size/1024).toFixed(1)} KB`).join(" | ")}` : "एक या अधिक फाइलें चुनें: फोटो, signature, PDF, video, ZIP या अन्य प्रकार। अभी processing केवल image के लिए उपलब्ध है।"}</small>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+            <label style={{fontSize:12}}>Max KB<input type="number" min="1" max="2048" value={targetKb} onChange={e=>setTargetKb(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+            <label style={{fontSize:12}}>Width px<input type="number" min="1" max="4000" value={targetWidth} onChange={e=>setTargetWidth(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+            <label style={{fontSize:12}}>Height px<input type="number" min="1" max="4000" value={targetHeight} onChange={e=>setTargetHeight(e.target.value)} style={{width:"100%",padding:7,border:"1px solid #cbd8d0",borderRadius:6}}/></label>
+          </div>
+          <div style={{display:"flex",gap:8}}><button type="button" className="voice-action" disabled={docBusy} onClick={processRecruitmentImage}>{docBusy ? "Processing…" : "Image process & download"}</button><button type="button" onClick={()=>setDocAgentOpen(false)} style={{border:"1px solid #cbd8d0",borderRadius:8,padding:"10px",background:"#fff"}}>बंद करें</button></div>
+        </div>}
         <div className="voice-options">
+          <label className="voice-language-label" htmlFor="voice-language">Speech / भाषा</label>
+          <select id="voice-language" className="voice-language-select" value={voiceLanguage} onChange={(e) => setVoiceLanguage(e.target.value as "hi-IN" | "en-IN")} aria-label="Voice input language">
+            <option value="hi-IN">हिंदी (Hindi)</option>
+            <option value="en-IN">English</option>
+          </select>
+          <button type="button" onClick={()=>setDocAgentOpen(v=>!v)}>🗂 भर्ती Document Agent</button>
           <button onClick={startListening} disabled={listening || busy}>{listening ? "🎙 सुन रहा हूँ…" : "🎙 बोलें"}</button>
           <button type="button" onClick={stopVoice} aria-label="Stop voice and remain in assistant">⏹ Stop</button>
           <button className="voice-book-button" type="button" onClick={openBooking}>📅 Book Appointment</button>
           <button type="button" onClick={clearChatHistory}>🗑 चैट मिटाएँ</button>
           <a href="/privacy/data-deletion" style={{display:"inline-flex",alignItems:"center",border:"1px solid #d0ddd4",background:"#fff",color:"#234735",borderRadius:8,padding:"8px 10px",textDecoration:"none"}}>Personal data deletion</a>
           <button onClick={() => setSpeaking((value) => !value)}>{speaking ? "🔊 Voice on" : "🔇 Voice off"}</button>
-          <span>Voice fallback: browser speech</span>
+          <span>Natural voice: device-supported Hindi / English</span>
         </div>
         <form className="voice-form" onSubmit={send}>
           <input className="voice-input" value={input} onChange={(e) => setInput(e.target.value)} placeholder="अपना सवाल लिखें…" maxLength={4000} aria-label="Your message" />

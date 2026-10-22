@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import JobsExamDashboard from "./JobsExamDashboard";
+import { useEffect, useMemo, useState } from "react";
 
 const jobs = [
   { id: 1, title: "SSC भर्ती और परीक्षा अपडेट", category: "केंद्र सरकार", qualification: "10वीं / 12वीं / स्नातक", minAge: 18, maxAge: 30, url: "https://ssc.gov.in/" },
@@ -65,6 +64,23 @@ export default function JobsPage() {
       setLiveError(error.message || "लाइव अपडेट प्राप्त नहीं हो सके। कृपया फिर कोशिश करें।");
     } finally {
       setLiveLoading(false);
+  const [liveFeed, setLiveFeed] = useState(null);
+  const [liveFeedLoading, setLiveFeedLoading] = useState(false);
+  const [liveFeedError, setLiveFeedError] = useState("");
+  const [feedLanguage, setFeedLanguage] = useState("both");
+
+  async function refreshOfficialNotices(force = false) {
+    setLiveFeedLoading(true);
+    setLiveFeedError("");
+    try {
+      const response = await fetch("/api/recruitment/live" + (force ? "?refresh=1" : ""), { cache: "no-store" });
+      if (!response.ok) throw new Error("Official portal scan is unavailable right now.");
+      const data = await response.json();
+      setLiveFeed(data);
+    } catch {
+      setLiveFeedError("अभी official notifications प्राप्त नहीं हो सके। / Official notices could not be fetched right now.");
+    } finally {
+      setLiveFeedLoading(false);
     }
   }
 
@@ -238,6 +254,10 @@ export default function JobsPage() {
     setAgentInput("");
     askConversationAgent(message);
   }
+    refreshOfficialNotices();
+    const timer = window.setInterval(() => refreshOfficialNotices(), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const filtered = useMemo(() => jobs.filter((job) => {
     const qMatch = qualification === "All" || job.qualification.toLowerCase().includes(qualification.toLowerCase());
     const aMatch = age === "All" || (age === "18-25" ? job.maxAge >= 18 && job.minAge <= 25 : age === "26-35" ? job.maxAge >= 26 && job.minAge <= 35 : job.maxAge >= 36);
@@ -289,6 +309,43 @@ export default function JobsPage() {
           </div>
           <p className="live-disclaimer">ध्यान दें: यह लाइव वेबसाइट-जाँच है, आधिकारिक भर्ती डेटाबेस/API नहीं। यह पेज पर दिखने वाले लिंक पहचानता है; इससे vacancy की स्थिति, अंतिम तारीख या पात्रता की पुष्टि नहीं होती। अंतिम जानकारी आधिकारिक notification से जाँचें।</p>
         </>}
+      </section>
+
+      <section className="official-notices" aria-labelledby="official-notices-heading">
+        <div className="official-notices-head">
+          <div>
+            <span className="eyebrow">OFFICIAL SOURCE SCAN • आधिकारिक स्रोत</span>
+            <h2 id="official-notices-heading">Live Recruitment & Exam Notifications / लाइव भर्ती एवं परीक्षा सूचनाएँ</h2>
+            <p>Links are scanned from official portal homepages every 5 minutes. A link is a lead to check—not proof that a vacancy is active.</p>
+          </div>
+          <div className="official-notice-actions">
+            <label>Language / भाषा
+              <select value={feedLanguage} onChange={(e) => setFeedLanguage(e.target.value)}>
+                <option value="both">Hindi + English / हिंदी + English</option>
+                <option value="hi">Hindi / हिंदी</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => refreshOfficialNotices(true)} disabled={liveFeedLoading}>{liveFeedLoading ? "Checking… / जाँच रहे हैं…" : "Check now / अभी जाँचें"}</button>
+          </div>
+        </div>
+        {liveFeed?.checkedAt && <p className="official-notice-meta">Last checked / अंतिम जाँच: {new Date(liveFeed.checkedAt).toLocaleString()} • Sources: {(liveFeed.sources || []).filter((x) => x.status === "ok").length}/{(liveFeed.sources || []).length} reachable</p>}
+        {liveFeedError && <p className="official-notice-error" role="status">{liveFeedError}</p>}
+        {liveFeed && <div className="official-source-status">
+          {(liveFeed.sources || []).map((source) => <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className={source.status === "ok" ? "source-ok" : "source-down"}>
+            <span>{source.name}</span><small>{source.status === "ok" ? (feedLanguage === "en" ? "Checked" : feedLanguage === "hi" ? "जाँचा गया" : "Checked / जाँचा गया") : (feedLanguage === "en" ? "Unavailable" : feedLanguage === "hi" ? "उपलब्ध नहीं" : "Unavailable / उपलब्ध नहीं")}</small>
+          </a>)}
+        </div>}
+        {liveFeed && liveFeed.notices?.length > 0 ? <div className="official-notice-grid">
+          {liveFeed.notices.map((notice) => <article key={notice.id} className="official-notice-card">
+            <div className="official-notice-tags"><span>{notice.board}</span><span>{notice.kind.replace("-", " ")}</span></div>
+            <h3>{notice.title}</h3>
+            <p>{feedLanguage === "en" ? "Detected on the official portal. Open the source to verify details." : feedLanguage === "hi" ? "आधिकारिक पोर्टल पर लिंक मिला है। तारीख और पात्रता के लिए मूल नोटिस खोलें।" : "Official portal link detected. / आधिकारिक पोर्टल पर लिंक मिला है।"}</p>
+            <a href={notice.url} target="_blank" rel="noreferrer">{feedLanguage === "en" ? "Open official notice ↗" : feedLanguage === "hi" ? "आधिकारिक नोटिस खोलें ↗" : "Open official notice / नोटिस खोलें ↗"}</a>
+            <small>{feedLanguage === "en" ? "Link scan, not vacancy verification" : feedLanguage === "hi" ? "लिंक स्कैन, भर्ती की पुष्टि नहीं" : "Link scan, not vacancy verification / भर्ती की पुष्टि नहीं"}</small>
+          </article>)}
+        </div> : liveFeed && <p className="official-notice-empty">{feedLanguage === "en" ? "No matching notice links were extracted from the portal homepages. This does not mean no vacancies exist; open the official portals above." : feedLanguage === "hi" ? "पोर्टल के मुख्य पृष्ठों से कोई संबंधित लिंक नहीं मिला। इसका अर्थ यह नहीं कि भर्ती नहीं है; आधिकारिक पोर्टल खोलें।" : "No notice links extracted / कोई लिंक नहीं मिला। This does not prove there are no vacancies / इसका अर्थ भर्ती न होना नहीं है।"}</p>}
+        <p className="official-notice-disclaimer">{feedLanguage === "en" ? liveFeed?.disclaimer : feedLanguage === "hi" ? "यह जाँच आधिकारिक वेबसाइट के मुख्य पृष्ठ पर उपलब्ध लिंक देखती है, कोई आधिकारिक API या पूरी vacancy database नहीं है। अंतिम तारीख, पात्रता और active status मूल notification में जाँचें।" : "Automated homepage link scan—not an official API or verified vacancy database. / यह स्वचालित लिंक-जाँच है, पूरी सत्यापित भर्ती सूची नहीं।"}</p>
       </section>
 
       <section id="latest-jobs" className="section-block">
@@ -410,6 +467,11 @@ export default function JobsPage() {
         .hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}.hero-actions a,.jobs-apply{display:inline-block;padding:11px 15px;border-radius:10px;background:#ff8a00;color:#160c00;text-decoration:none;font-weight:900}
         .hero-actions a+ a{background:#12335f;color:#fff;border:1px solid rgba(255,255,255,.2)}
         .jobs-notice{margin:18px 0;padding:16px 18px;border:1px solid rgba(255,174,0,.3);background:rgba(255,138,0,.08);border-radius:14px;color:#dbeafe;line-height:1.65}
+        .official-notices{margin:22px 0;padding:clamp(16px,3vw,24px);border:1px solid rgba(76,160,255,.28);border-radius:20px;background:linear-gradient(135deg,rgba(14,64,120,.45),rgba(18,39,73,.65))}
+        .official-notices-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;flex-wrap:wrap}.official-notices h2{margin:6px 0;color:#fff;font-size:clamp(1.35rem,3vw,1.9rem)}.official-notices-head p{color:#b7c7df;max-width:660px;line-height:1.55}
+        .official-notice-actions{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}.official-notice-actions label{display:grid;gap:5px;color:#dce8f8;font-size:.8rem;font-weight:700}.official-notice-actions select,.official-notice-actions button{padding:10px;border-radius:9px;border:1px solid #526e94;background:#102748;color:#fff;font:inherit}.official-notice-actions button{background:#ff8a00;border-color:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}.official-notice-actions button:disabled{opacity:.65;cursor:wait}
+        .official-notice-meta,.official-notice-disclaimer{color:#9fb3cf;font-size:.82rem;line-height:1.6}.official-notice-error{color:#ffd2d2}.official-source-status{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.official-source-status a{display:flex;flex-direction:column;gap:3px;text-decoration:none;border:1px solid rgba(255,255,255,.15);border-radius:9px;padding:9px 11px;color:#fff;background:rgba(255,255,255,.05)}.official-source-status small{color:#9cf56f}.official-source-status .source-down small{color:#ffc38c}
+        .official-notice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}.official-notice-card{min-width:0;padding:15px;border:1px solid rgba(255,255,255,.14);border-radius:14px;background:rgba(0,0,0,.12)}.official-notice-tags{display:flex;gap:7px;flex-wrap:wrap}.official-notice-tags span{font-size:.72rem;color:#b9d9ff;border:1px solid #345577;border-radius:99px;padding:3px 8px}.official-notice-card h3{color:#fff;overflow-wrap:anywhere;margin:10px 0;font-size:1rem}.official-notice-card p{color:#b7c7df;font-size:.87rem;line-height:1.5}.official-notice-card a{display:inline-block;color:#ffbd67;font-weight:900;text-decoration:none;margin:4px 0 8px}.official-notice-card small{display:block;color:#94a8c6;font-size:.76rem}.official-notice-empty{color:#dbeafe;border:1px dashed #526e94;padding:14px;border-radius:10px}
         .section-block{margin:28px 0}.section-heading{margin-bottom:16px}.section-heading h2{font-size:clamp(1.45rem,3vw,2rem);margin:5px 0 3px;color:#fff}
         .jobs-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
         .jobs-filters label{display:grid;gap:7px;color:#b7c7df;font-size:.88rem;font-weight:700}
@@ -423,7 +485,7 @@ export default function JobsPage() {
         .portal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.portal-links a{color:#dceeff;text-decoration:none;border:1px solid rgba(255,255,255,.16);background:rgba(11,114,231,.13);border-radius:9px;padding:8px 10px;font-size:.84rem;font-weight:700}.portal-links a:hover{border-color:#ff8a00}
         .jobs-help{margin-top:20px}.jobs-help h2{margin:0 0 10px;color:#fff}.jobs-help li{margin:8px 0;color:#b7c7df;line-height:1.5}
         .jobs-empty{color:#b7c7df}.jobs-footer{text-align:center;color:#8298b8;font-size:.8rem;padding:26px 0}
-        @media(max-width:700px){.jobs-filters,.jobs-grid,.portal-grid{grid-template-columns:1fr}.jobs-header{padding:20px}.portal-tabs{margin-right:-2px}.jobs-card,.portal-card{padding:16px}}
+        @media(max-width:700px){.jobs-filters,.jobs-grid,.portal-grid,.official-notice-grid{grid-template-columns:1fr}.jobs-header{padding:20px}.portal-tabs{margin-right:-2px}.jobs-card,.portal-card{padding:16px}}
       `}
       </style>
     </main>
