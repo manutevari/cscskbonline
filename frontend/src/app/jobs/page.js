@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import JobsExamDashboard from "./JobsExamDashboard";
 
 const jobs = [
   { id: 1, title: "SSC भर्ती और परीक्षा अपडेट", category: "केंद्र सरकार", qualification: "10वीं / 12वीं / स्नातक", minAge: 18, maxAge: 30, url: "https://ssc.gov.in/" },
