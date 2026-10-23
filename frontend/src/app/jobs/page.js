@@ -257,10 +257,12 @@ export default function JobsPage() {
     setAgentInput("");
     askConversationAgent(message);
   }
+  useEffect(() => {
     refreshOfficialNotices();
     const timer = window.setInterval(() => refreshOfficialNotices(), 5 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
   const filtered = useMemo(() => jobs.filter((job) => {
     const qMatch = qualification === "All" || job.qualification.toLowerCase().includes(qualification.toLowerCase());
     const aMatch = age === "All" || (age === "18-25" ? job.maxAge >= 18 && job.minAge <= 25 : age === "26-35" ? job.maxAge >= 26 && job.minAge <= 35 : job.maxAge >= 36);
