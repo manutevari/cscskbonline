@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type Appointment = {
   id: string;
@@ -88,6 +89,7 @@ function currentISTMinutes() {
 }
 
 export default function CSCAppointmentAssistant() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"menu" | "book" | "success">("menu");
   const [appointment, setAppointment] = useState<Appointment | null>(null);
@@ -299,10 +301,10 @@ export default function CSCAppointmentAssistant() {
         </div>
       )}
 
-      <div className="csc-appt-float">
+      {pathname !== "/jobs" && <div className="csc-appt-float">
         {!open && <div className="csc-appt-prompt"><strong>Need a CSC service?</strong><span>Book an appointment</span></div>}
         <button className="csc-appt-fab" onClick={() => { setOpen(true); setMode("menu"); }} aria-label="Book CSC Appointment" title="Book CSC Appointment"><span>📅</span><b>Book Appointment</b></button>
-      </div>
+      </div>}
     </>
   );
 }

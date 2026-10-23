@@ -10,7 +10,11 @@
   "dependencies": {
     "next": "^16.3.5",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
+    "tesseract.js": "^6.0.1",
+    "pdfjs-dist": "^5.4.149"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

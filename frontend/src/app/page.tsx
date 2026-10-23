@@ -496,8 +496,8 @@ export default function Home() {
           <div className="footer-bottom">
             <span>© 2024 CSC. All rights reserved.</span>
             <div style={{ display: "flex", gap: "1.5rem" }}>
-              <a href="#">Privacy Policy</a>
-              <a href="#">Terms & Conditions</a>
+              <a href="/privacy">Privacy Policy</a>
+              <a href="/privacy">Privacy &amp; Terms</a>
             </div>
           </div>
         </div>
