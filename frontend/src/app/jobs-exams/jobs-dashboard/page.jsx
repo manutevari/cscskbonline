@@ -6,7 +6,6 @@ import JobsExamDashboard from "../../jobs/JobsExamDashboard";
 const items = [
   { key: "jobs", label: "Latest Jobs" },
   { key: "documents", label: "Documents & Eligibility" },
-  { key: "forms", label: "Government Forms" },
   { key: "courses", label: "CSC Courses" },
 ];
 
