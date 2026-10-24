@@ -4,7 +4,7 @@ import JobsExamDashboard from "../../jobs/JobsExamDashboard";
 
 const navItems = [
   { href: "#jobs-dashboard", label: "Latest Jobs" },
-  { href: "#document-workspace", label: "Documents & Eligibility" },
+  { href: "#jobs-dashboard", label: "Documents & Eligibility" },
   { href: "#government-forms", label: "Government Forms" },
   { href: "/jobs/courses", label: "CSC Courses" },
 ];
