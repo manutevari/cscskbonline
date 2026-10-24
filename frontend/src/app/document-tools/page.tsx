@@ -246,14 +246,8 @@ export default function DocumentToolsPage() {
       const f = formatMatch[1].toLowerCase();
       setFormat(f === "png" ? "image/png" : f === "webp" ? "image/webp" : "image/jpeg");
     }
-    if (dimMatch && dimensions.width && dimensions.height) {
-      const targetRatio = Number(dimMatch[1]) / Number(dimMatch[2]);
-      let width = dimensions.width, height = dimensions.height;
-      if (width / height > targetRatio) width = Math.round(height * targetRatio);
-      else height = Math.round(width / targetRatio);
-      setCrop({ x: Math.round((dimensions.width - width) / 2), y: Math.round((dimensions.height - height) / 2), width, height });
-      setCropMode("auto");
-    }
+    // Reading notification rules must never crop the preview automatically.
+    // The full page remains visible until the user explicitly clicks Auto Crop.
     setStatus(sizeMatch || dimMatch || formatMatch
       ? "Notification text से कुछ शर्तें पहचानी गईं। कृपया निकाले गए dimensions, KB और format को official notification से मिलाकर confirm करें।"
       : "आम pattern नहीं मिला। कृपया dimensions, KB limit और format नीचे manually भरें।");
@@ -402,7 +396,12 @@ export default function DocumentToolsPage() {
             <select value={pdfPage} onChange={(e) => void changePdfPage(Number(e.target.value))} disabled={busy} style={fieldStyle}>
               {Array.from({ length: pdfPageCount }, (_, index) => <option key={index + 1} value={index + 1}>Page {index + 1} of {pdfPageCount}</option>)}
             </select>
-            <small style={{ color: "#52635a", fontWeight: 400 }}>Crop applies to the selected page. Exported PDF contains the cropped page as a single-page PDF.</small>
+            <small style={{ color: "#52635a", fontWeight: 400 }}>पूरा PDF एक-एक पेज करके देखें। Crop केवल चुने हुए पेज पर लागू होगा; PDF export अभी single-page output है।</small>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <button type="button" onClick={() => void changePdfPage(pdfPage - 1)} disabled={busy || pdfPage <= 1} style={{ ...secondaryButtonStyle, opacity: busy || pdfPage <= 1 ? .5 : 1 }}>← Previous page</button>
+              <strong style={{ fontSize: 13, whiteSpace: "nowrap" }}>Page {pdfPage} of {pdfPageCount}</strong>
+              <button type="button" onClick={() => void changePdfPage(pdfPage + 1)} disabled={busy || pdfPage >= pdfPageCount} style={{ ...secondaryButtonStyle, opacity: busy || pdfPage >= pdfPageCount ? .5 : 1 }}>Next page →</button>
+            </div>
           </label>}
           {sourceUrl && <div ref={previewBoxRef} onPointerDown={beginCrop} onPointerMove={moveCrop} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", height: 310, border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", overflow: "hidden", touchAction: "none", cursor: "crosshair", display: "grid", placeItems: "center" }}>
             <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
@@ -410,8 +409,7 @@ export default function DocumentToolsPage() {
             <span style={{ position: "absolute", bottom: 8, left: 8, background: "#102d22dd", color: "white", borderRadius: 7, padding: "5px 8px", fontSize: 12 }}>Drag to select crop area</span>
           </div>}
           {dimensions.width > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <button type="button" onClick={autoCrop} style={buttonStyle}>Auto Crop to target ratio</button>
-            <button type="button" onClick={() => { setCrop({ x: 0, y: 0, width: dimensions.width, height: dimensions.height }); setCropMode("manual"); }} style={secondaryButtonStyle}>Use full image</button>
+            <button type="button" onClick={autoCrop} style={buttonStyle}>Auto Crop</button>
           </div>}
           <small style={{ color: "#52635a" }}>Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · {cropMode === "auto" ? "Auto" : "Manual"}</small>
         </div>
