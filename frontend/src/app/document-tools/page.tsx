@@ -100,8 +100,10 @@ export default function DocumentToolsPage() {
   const [format, setFormat] = useState<OutputFormat>("image/jpeg");
   const [notificationText, setNotificationText] = useState("");
   const [status, setStatus] = useState("");
+  const [selectedCrops, setSelectedCrops] = useState<Array<{ id: number; label: string; dataUrl: string }>>([]);
+  const [nextCropId, setNextCropId] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [cropMode, setCropMode] = useState<"manual" | "auto">("manual");
+  const [cropMode, setCropMode] = useState<"manual">("manual");
   const [isPdfInput, setIsPdfInput] = useState(false);
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfPage, setPdfPage] = useState(1);
@@ -253,19 +255,6 @@ export default function DocumentToolsPage() {
       : "आम pattern नहीं मिला। कृपया dimensions, KB limit और format नीचे manually भरें।");
   };
 
-  const autoCrop = () => {
-    if (!dimensions.width || !dimensions.height) return;
-    const w = Math.max(1, Number(targetWidth) || 200);
-    const h = Math.max(1, Number(targetHeight) || 230);
-    const ratio = w / h;
-    let cw = dimensions.width;
-    let ch = Math.round(cw / ratio);
-    if (ch > dimensions.height) { ch = dimensions.height; cw = Math.round(ch * ratio); }
-    setCrop({ x: Math.round((dimensions.width - cw) / 2), y: Math.round((dimensions.height - ch) / 2), width: cw, height: ch });
-    setCropMode("auto");
-    setStatus("Center auto-crop तैयार है। Preview देखकर सुनिश्चित करें कि चेहरा/signature या जरूरी content नहीं कट रहा।");
-  };
-
   const pointerPosition = (event: PointerEvent<HTMLDivElement>) => {
     const box = previewBoxRef.current;
     if (!box || !dimensions.width || !dimensions.height) return null;
@@ -311,7 +300,7 @@ export default function DocumentToolsPage() {
     const y = Math.max(0, Math.min(dimensions.height - 1, Math.round(crop.y)));
     const cw = Math.max(1, Math.min(dimensions.width - x, Math.round(crop.width)));
     const ch = Math.max(1, Math.min(dimensions.height - y, Math.round(crop.height)));
-    if (crop.width < 2 || crop.height < 2) { setStatus("Preview में crop का area चुनें या Auto Crop दबाएँ।"); return; }
+    if (crop.width < 2 || crop.height < 2) { setStatus("Preview में drag करके crop area manually चुनें।"); return; }
     setBusy(true);
     setStatus("फाइल process हो रही है…");
     try {
@@ -369,6 +358,7 @@ export default function DocumentToolsPage() {
 
   return (
     <main style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
+      <style>{`@media print { body * { visibility: hidden !important; } .print-layout-panel, .print-layout-panel * { visibility: visible !important; } .print-layout-panel { position: absolute !important; inset: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: white !important; } .print-layout-panel > *:not(.print-output) { display: none !important; } .print-output { display: block !important; } }`}</style>
       <a href="/" style={{ color: "#176b4d", fontWeight: 700, textDecoration: "none" }}>← CSC Home</a>
       <header style={{ margin: "18px 0 24px" }}>
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
@@ -408,10 +398,21 @@ export default function DocumentToolsPage() {
             {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
             <span style={{ position: "absolute", bottom: 8, left: 8, background: "#102d22dd", color: "white", borderRadius: 7, padding: "5px 8px", fontSize: 12 }}>Drag to select crop area</span>
           </div>}
-          {dimensions.width > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <button type="button" onClick={autoCrop} style={buttonStyle}>Auto Crop</button>
-          </div>}
-          <small style={{ color: "#52635a" }}>Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · {cropMode === "auto" ? "Auto" : "Manual"}</small>
+          <small style={{ color: "#52635a" }}>Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · Manual</small>
+          {dimensions.width > 0 && <button type="button" onClick={() => {
+            const image = imageRef.current;
+            if (!image || crop.width < 2 || crop.height < 2) { setStatus("पहले preview में drag करके crop area चुनें।"); return; }
+            const x = Math.max(0, Math.min(dimensions.width - 1, Math.round(crop.x)));
+            const y = Math.max(0, Math.min(dimensions.height - 1, Math.round(crop.y)));
+            const width = Math.max(1, Math.min(dimensions.width - x, Math.round(crop.width)));
+            const height = Math.max(1, Math.min(dimensions.height - y, Math.round(crop.height)));
+            const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext("2d"); if (!ctx) { setStatus("Crop select नहीं हो सका।"); return; }
+            ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
+            const label = (file?.name || "Image") + (isPdfInput ? " · Page " + pdfPage : " · Image");
+            setSelectedCrops(items => [...items, { id: nextCropId, label, dataUrl: canvas.toDataURL("image/png") }]);
+            setNextCropId(id => id + 1); setStatus("Crop Print Layout में जोड़ दिया गया।");
+          }} style={buttonStyle}>Select crop → Add to Print Layout</button>}
         </div>
 
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
@@ -438,6 +439,25 @@ export default function DocumentToolsPage() {
         </div>
       </section>
 
+      <section className="print-layout-panel" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
+        <h2 style={{ marginTop: 0 }}>4. Merge & Print Layout</h2>
+        <p>हर image/PDF से crop select करके यहाँ जोड़ें। ↑/↓ से क्रम बदलें; Print से browser print dialog खुलेगा।</p>
+        {selectedCrops.length === 0 ? <p>अभी कोई crop select नहीं है।</p> : <div style={{ display: "grid", gap: 10 }}>
+          {selectedCrops.map((item, index) => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "72px minmax(0,1fr) auto", alignItems: "center", gap: 10, padding: 10, border: "1px solid #d8e4dc", borderRadius: 10 }}>
+            <img src={item.dataUrl} alt={item.label} style={{ width: 72, height: 72, objectFit: "contain", background: "#f6faf8", borderRadius: 6 }} />
+            <div><strong>{index + 1}. {item.label}</strong><div style={{ fontSize: 12 }}>Selected crop</div></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <button type="button" disabled={index === 0} onClick={() => setSelectedCrops(items => { const next = [...items]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} style={secondaryButtonStyle}>↑</button>
+              <button type="button" disabled={index === selectedCrops.length - 1} onClick={() => setSelectedCrops(items => { const next = [...items]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; })} style={secondaryButtonStyle}>↓</button>
+              <button type="button" onClick={() => setSelectedCrops(items => items.filter(cropItem => cropItem.id !== item.id))} style={secondaryButtonStyle}>Remove</button>
+            </div>
+          </div>)}
+        </div>}
+        <button type="button" disabled={!selectedCrops.length} onClick={() => { if (selectedCrops.length) window.print(); }} style={{ ...buttonStyle, marginTop: 12 }}>Print selected layout</button>
+        <div className="print-output" style={{ display: "none" }}>
+          {selectedCrops.map((item, index) => <div key={item.id} style={{ breakInside: "avoid", marginBottom: 10, textAlign: "center" }}><img src={item.dataUrl} alt={item.label} style={{ maxWidth: "100%", maxHeight: "65mm", objectFit: "contain" }} /><div style={{ fontSize: 8 }}>{index + 1}</div></div>)}
+        </div>
+      </section>
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
         <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. Password-protected PDFs can be opened when you know the correct password. The separate feature to remove a PDF password or decrypt the original file remains premium-locked until payment verification is implemented. This is not a password-cracking tool. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
       </section>
