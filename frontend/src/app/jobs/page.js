@@ -303,7 +303,7 @@ export default function JobsPage() {
         {liveData && <>
           <p className="live-meta">पिछली जाँच: {new Date(liveData.checkedAt).toLocaleString("hi-IN")} · मिले लिंक: {liveData.totalUpdates}</p>
           <div className="portal-grid">
-            {liveData.portals.map((portal) => <article className="portal-card" key={portal.name}>
+            {(Array.isArray(liveData.portals) ? liveData.portals : []).map((portal) => <article className="portal-card" key={portal.name}>
               <span className="eyebrow">{portal.category}</span>
               <h3>{portal.name}</h3>
               <p>{portal.status === "checked" ? "पोर्टल से अभी संपर्क हुआ" : "यह पोर्टल अभी उपलब्ध नहीं है"}</p>
