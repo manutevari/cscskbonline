@@ -249,7 +249,7 @@ export default function DocumentToolsPage() {
       setFormat(f === "png" ? "image/png" : f === "webp" ? "image/webp" : "image/jpeg");
     }
     // Reading notification rules must never crop the preview automatically.
-    // The full page remains visible until the user explicitly clicks Auto Crop.
+    // The full page remains visible until the user manually selects a crop area.
     setStatus(sizeMatch || dimMatch || formatMatch
       ? "Notification text से कुछ शर्तें पहचानी गईं। कृपया निकाले गए dimensions, KB और format को official notification से मिलाकर confirm करें।"
       : "आम pattern नहीं मिला। कृपया dimensions, KB limit और format नीचे manually भरें।");
@@ -358,11 +358,11 @@ export default function DocumentToolsPage() {
 
   return (
     <main style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
-      <style>{`@media print { body * { visibility: hidden !important; } .print-layout-panel, .print-layout-panel * { visibility: visible !important; } .print-layout-panel { position: absolute !important; inset: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: white !important; } .print-layout-panel > *:not(.print-output) { display: none !important; } .print-output { display: block !important; } }`}</style>
+      <style>{`@page { size: A4 portrait; margin: 8mm; } @media print { body * { visibility: hidden !important; } .print-layout-panel, .print-layout-panel * { visibility: visible !important; } .print-layout-panel { position: absolute !important; inset: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: white !important; } .print-layout-panel > *:not(.print-output) { display: none !important; } .print-output { display: flex !important; flex-direction: column !important; height: 281mm !important; width: 100% !important; box-sizing: border-box !important; overflow: hidden !important; } .print-output > div { flex: 1 1 0 !important; min-height: 0 !important; margin: 0 !important; padding: 1mm 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; break-inside: avoid !important; overflow: hidden !important; } .print-output > div img { max-width: 100% !important; max-height: calc(100% - 5mm) !important; width: auto !important; height: auto !important; object-fit: contain !important; } .print-output > div div { font-size: 7pt !important; line-height: 1 !important; margin-top: 1mm !important; } }`}</style>
       <a href="/" style={{ color: "#176b4d", fontWeight: 700, textDecoration: "none" }}>← CSC Home</a>
       <header style={{ margin: "18px 0 24px" }}>
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
-        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Resize & Convert</h1>
+        <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Select, Merge & Print Layout</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
 
@@ -455,7 +455,7 @@ export default function DocumentToolsPage() {
         </div>}
         <button type="button" disabled={!selectedCrops.length} onClick={() => { if (selectedCrops.length) window.print(); }} style={{ ...buttonStyle, marginTop: 12 }}>Print selected layout</button>
         <div className="print-output" style={{ display: "none" }}>
-          {selectedCrops.map((item, index) => <div key={item.id} style={{ breakInside: "avoid", marginBottom: 10, textAlign: "center" }}><img src={item.dataUrl} alt={item.label} style={{ maxWidth: "100%", maxHeight: "65mm", objectFit: "contain" }} /><div style={{ fontSize: 8 }}>{index + 1}</div></div>)}
+          {selectedCrops.map((item, index) => <div key={item.id} style={{ breakInside: "avoid", marginBottom: 2, textAlign: "center" }}><img src={item.dataUrl} alt={item.label} style={{ maxWidth: "100%", maxHeight: "58mm", objectFit: "contain" }} /><div style={{ fontSize: 8 }}>{index + 1}</div></div>)}
         </div>
       </section>
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
