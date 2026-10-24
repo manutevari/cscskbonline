@@ -284,7 +284,6 @@ export default function JobsPage() {
         <strong>महत्वपूर्ण सूचना:</strong> यह पोर्टल पाँच आधिकारिक भर्ती वेबसाइटों को चेक करके कुछ भर्ती/परीक्षा-संबंधी लिंक पहचानने की कोशिश करता है। यह verified vacancy/result feed या आधिकारिक API नहीं है। लिंक छूट सकते हैं या अप्रासंगिक हो सकते हैं; अंतिम तारीख, पात्रता, आयु-सीमा और परिणाम हमेशा आधिकारिक नोटिस से सत्यापित करें।
       </section>
 
-      <JobsExamDashboard />
 
       <section className="section-block live-recruitment" aria-live="polite">
         <div className="section-heading">
