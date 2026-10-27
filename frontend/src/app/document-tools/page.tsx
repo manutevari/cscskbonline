@@ -91,6 +91,9 @@ function concat(...arrays: Uint8Array[]) {
 
 export default function DocumentToolsPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchStatus, setBatchStatus] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 0, height: 0 });
@@ -352,6 +355,65 @@ export default function DocumentToolsPage() {
     }
   };
 
+  const loadBatchImages = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files || []);
+    if (!selected.length) return;
+    const images = selected.filter((item) => item.type.startsWith("image/"));
+    const rejected = selected.length - images.length;
+    const tooLarge = images.filter((item) => item.size > 20 * 1024 * 1024);
+    const valid = images.filter((item) => item.size <= 20 * 1024 * 1024).slice(0, 20);
+    setBatchFiles(valid);
+    setBatchStatus((rejected ? rejected + " non-image/PDF file(s) skipped. " : "") + (tooLarge.length ? tooLarge.length + " file(s) over 20 MB skipped. " : "") + (images.length > 20 ? "Only the first 20 images are queued. " : "") + (valid.length ? valid.length + " image(s) ready for batch processing." : "No valid images selected. Choose up to 20 images, each under 20 MB."));
+    event.target.value = "";
+  };
+
+  const processBatchImages = async () => {
+    if (!batchFiles.length) { setBatchStatus("पहले एक या अधिक image files चुनें।"); return; }
+    setBatchBusy(true);
+    setBatchStatus("Images process हो रही हैं…");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const w = Math.max(1, Math.min(5000, Math.round(Number(targetWidth) || 200)));
+      const h = Math.max(1, Math.min(5000, Math.round(Number(targetHeight) || 230)));
+      const maxBytes = Math.max(1, Number(maxKb) || 50) * 1024;
+      let success = 0;
+      const failures: string[] = [];
+      for (const inputFile of batchFiles) {
+        try {
+          const bitmap = await createImageBitmap(inputFile);
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas unavailable");
+          if (format === "image/jpeg" || format === "application/pdf") { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); }
+          ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height, 0, 0, w, h);
+          bitmap.close();
+          const mime = format === "application/pdf" ? "image/jpeg" : format;
+          let quality = 0.92;
+          let blob: Blob | null = null;
+          for (let attempt = 0; attempt < (mime === "image/png" ? 1 : 18); attempt++) {
+            blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
+            if (!blob || blob.size <= maxBytes) break;
+            quality *= 0.78;
+          }
+          if (!blob) throw new Error("Could not export this format");
+          if (format === "application/pdf") throw new Error("Batch PDF output is not supported yet; choose JPG, PNG or WebP");
+          if (blob.size > maxBytes) throw new Error("Could not meet the KB limit; reduce dimensions or increase Max KB");
+          const extension = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+          const base = inputFile.name.replace(/\.[^.]+$/, "") || "image";
+          zip.file(base + "-processed." + extension, blob);
+          success++;
+        } catch (error) { failures.push(inputFile.name + ": " + (error instanceof Error ? error.message : "processing failed")); }
+      }
+      if (!success) throw new Error("No images were processed. " + failures.join(" | "));
+      const archive = await zip.generateAsync({ type: "blob" });
+      downloadBlob(archive, "cscskb-processed-images.zip");
+      setBatchStatus(success + " image(s) processed at " + w + " × " + h + " px and packed into ZIP. " + (failures.length ? failures.length + " skipped/failed: " + failures.join(" | ") : "All queued images succeeded.") + " Note: batch mode resizes the full image; manual crop is still done in the single-file editor.");
+    } catch (error) { setBatchStatus(error instanceof Error ? error.message : "Batch processing failed."); }
+    finally { setBatchBusy(false); }
+  };
+
   const previewStyle = dimensions.width && dimensions.height
     ? { width: "100%", height: "100%", objectFit: "contain" as const }
     : undefined;
@@ -372,6 +434,14 @@ export default function DocumentToolsPage() {
           <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image or PDF
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
           </label>
+          <div style={{ display: "grid", gap: 8, padding: 12, border: "1px solid #d8e4dc", borderRadius: 10, background: "#f7fbf8" }}>
+            <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Batch upload — multiple images
+              <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" onChange={loadBatchImages} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#fff" }} />
+            </label>
+            <small style={{ color: "#52635a" }}>{batchFiles.length ? batchFiles.map((item) => item.name).join(", ") : "Up to 20 images, max 20 MB each. This batch action currently supports images, not PDFs."}</small>
+            <button type="button" onClick={() => void processBatchImages()} disabled={!batchFiles.length || batchBusy} style={{ ...buttonStyle, opacity: !batchFiles.length || batchBusy ? .6 : 1 }}>{batchBusy ? "Processing batch…" : "Process images & Download ZIP"}</button>
+            <p role="status" aria-live="polite" style={{ margin: 0, fontSize: 13, color: "#254c39", overflowWrap: "anywhere" }}>{batchStatus || "Batch processing applies the width, height, format and KB settings on the right. It resizes full images; use the single-file editor for manual crop."}</p>
+          </div>
           {file && <div style={{ fontSize: 13, color: "#52635a" }}>{file.name} · {(file.size / 1024).toFixed(1)} KB · {dimensions.width ? `${dimensions.width} × ${dimensions.height}px` : "Reading preview…"}</div>}
           {isPdfInput && pdfPasswordRequired && <div style={{ display: "grid", gap: 10, padding: 14, border: "1px solid #d7b76a", borderRadius: 12, background: "#fff9e9" }}>
             <strong style={{ color: "#594a22" }}>🔒 Password-protected PDF</strong>
