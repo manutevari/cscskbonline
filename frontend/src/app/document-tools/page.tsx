@@ -512,6 +512,72 @@ export default function DocumentToolsPage() {
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
 
+      <section aria-label="Document and AI tools directory" style={{ margin: "0 0 20px", padding: 16, border: "1px solid #cbded1", borderRadius: 16, background: "#edf6f0" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+          <div><h2 style={{ margin: 0, fontSize: 19 }}>Explore tools</h2><p style={{ margin: "4px 0 0", fontSize: 13, color: "#52635a" }}>Tools grouped by task. CSC SKB features are being built into this workspace; external links open the corresponding Pi7 tool site.</p></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", gap: 10 }}>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼️ Image & Photo</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li><a href="#resize-output" style={{ color: "#176b4d" }}>Crop, Auto Crop & Resize (this tool)</a></li>
+              <li><a href="https://image.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>More image tools ↗</a></li>
+              <li>Compress to KB/MB · Passport photo · Signature resize</li>
+              <li>Background, blur, rotate, flip, watermark</li>
+              <li>Image OCR · Metadata · Format conversion</li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>📄 PDF & Documents</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li><a href="#print-layout" style={{ color: "#176b4d" }}>Merge crops & A4 print layout</a></li>
+              <li><a href="https://pdf.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>More PDF tools ↗</a></li>
+              <li>Merge · Split · Rotate · Crop PDF</li>
+              <li>PDF compression · PDF to images</li>
+              <li>OCR · Word/Excel conversion (planned locally)</li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>🎧 Audio</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li>Cut · Merge · Compress</li><li>Speed · Pitch · Audio format</li>
+              <li><a href="https://audio.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Open Pi7 Audio tools ↗</a></li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>🎞️ GIF & Video</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li>GIF optimize · Video to GIF</li><li>GIF resize · Compression</li>
+              <li><a href="https://gif.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Open Pi7 GIF tools ↗</a></li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>📦 Bulk & Collage</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li>Multi-image resize/compress and ZIP download (available below)</li>
+              <li>Photo collage · Combine images</li>
+              <li><a href="https://bulkresizer.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Bulk resizer ↗</a></li>
+              <li><a href="https://collage.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Collage maker ↗</a></li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>✨ AI Image Tools</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li>Image enhance / upscale</li><li>Background & unwanted-object removal</li>
+              <li><a href="https://vision.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Open Pi7 Vision ↗</a></li>
+              <li><a href="https://thetoolhive.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>AI writing, prompts & creator tools ↗</a></li>
+            </ul>
+          </details>
+          <details style={{ padding: 12, border: "1px solid #cbded1", borderRadius: 10, background: "#fff" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>🧰 Developer & Other</summary>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.9, fontSize: 14 }}>
+              <li>Base64 encode/decode · Hash generator</li><li>Text editor · Metadata tools</li>
+              <li><a href="https://base64.pi7.org/" target="_blank" rel="noreferrer" style={{ color: "#176b4d" }}>Open Base64 tools ↗</a></li>
+            </ul>
+          </details>
+        </div>
+      </section>
+
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
         <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
           <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>1. Choose File & Preview</h2>
@@ -580,7 +646,7 @@ export default function DocumentToolsPage() {
           </label>
           <button type="button" onClick={applyAutoRules} style={buttonStyle}>Read common rules & apply</button>
           <p style={{ fontSize: 12, color: "#6a756e", lineHeight: 1.5, margin: 0 }}>Rule reading is pattern-based, not a full PDF/legal interpretation. Confirm each value against the official notification.</p>
-          <h2 style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
+          <h2 id="resize-output" style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label style={labelStyle}>Dimension unit
               <select value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm" | "in")} style={fieldStyle}>
@@ -612,7 +678,7 @@ export default function DocumentToolsPage() {
         </div>
       </section>
 
-      <section className="print-layout-panel" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
+      <section id="print-layout" className="print-layout-panel" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
         <h2 style={{ marginTop: 0 }}>4. Merge & Print Layout</h2>
         <p>हर image/PDF से crop select करके यहाँ जोड़ें। ↑/↓ से क्रम बदलें; Print से browser print dialog खुलेगा।</p>
         {selectedCrops.length === 0 ? <p>अभी कोई crop select नहीं है।</p> : <div style={{ display: "grid", gap: 10 }}>
