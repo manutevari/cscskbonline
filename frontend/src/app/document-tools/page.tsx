@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useEffect, useRef, useState } from "react";
+import ToolRagSearch from "@/components/ToolRagSearch";
 
 type OutputFormat = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 type Crop = { x: number; y: number; width: number; height: number };
@@ -534,6 +535,8 @@ export default function DocumentToolsPage() {
         <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Select, Merge & Print Layout</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
+
+      <ToolRagSearch />
 
       <section aria-label="Document and AI tools directory" style={{ margin: "0 0 20px", padding: 16, border: "1px solid #cbded1", borderRadius: 16, background: "#edf6f0" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
