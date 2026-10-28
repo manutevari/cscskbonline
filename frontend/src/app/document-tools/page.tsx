@@ -99,6 +99,9 @@ export default function DocumentToolsPage() {
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 0, height: 0 });
   const [targetWidth, setTargetWidth] = useState("200");
   const [targetHeight, setTargetHeight] = useState("230");
+  const [dimensionUnit, setDimensionUnit] = useState<"px" | "cm" | "mm" | "in">("px");
+  const [dpi, setDpi] = useState("300");
+  const [aspectRatio, setAspectRatio] = useState("free");
   const [maxKb, setMaxKb] = useState("50");
   const [format, setFormat] = useState<OutputFormat>("image/jpeg");
   const [notificationText, setNotificationText] = useState("");
@@ -355,13 +358,30 @@ export default function DocumentToolsPage() {
   };
   const endCrop = () => { dragRef.current = null; };
 
+  const dimensionToPixels = (value: string, unit: "px" | "cm" | "mm" | "in", resolution: number) => {
+    const amount = Math.max(0.01, Number(value) || 1);
+    if (unit === "px") return Math.round(amount);
+    if (unit === "cm") return Math.round((amount / 2.54) * resolution);
+    if (unit === "mm") return Math.round((amount / 25.4) * resolution);
+    return Math.round(amount * resolution);
+  };
+
+  const updateAspectRatio = (ratio: string) => {
+    setAspectRatio(ratio);
+    const width = Math.max(1, Number(targetWidth) || 1);
+    if (ratio === "free") return;
+    const [rw, rh] = ratio.split(":").map(Number);
+    if (rw > 0 && rh > 0) setTargetHeight(String(Math.max(1, Math.round(width * rh / rw))));
+  };
+
   const processAndDownload = async () => {
     if (!file || !sourceUrl || !dimensions.width || !dimensions.height) {
       setStatus("पहले image चुनें और preview लोड होने दें।");
       return;
     }
-    const w = Math.max(1, Math.min(5000, Math.round(Number(targetWidth) || 200)));
-    const h = Math.max(1, Math.min(5000, Math.round(Number(targetHeight) || 230)));
+    const resolution = Math.max(72, Math.min(1200, Math.round(Number(dpi) || 300)));
+    const w = Math.max(1, Math.min(12000, dimensionToPixels(targetWidth, dimensionUnit, resolution)));
+    const h = Math.max(1, Math.min(12000, dimensionToPixels(targetHeight, dimensionUnit, resolution)));
     const x = Math.max(0, Math.min(dimensions.width - 1, Math.round(crop.x)));
     const y = Math.max(0, Math.min(dimensions.height - 1, Math.round(crop.y)));
     const cw = Math.max(1, Math.min(dimensions.width - x, Math.round(crop.width)));
@@ -437,8 +457,9 @@ export default function DocumentToolsPage() {
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
-      const w = Math.max(1, Math.min(5000, Math.round(Number(targetWidth) || 200)));
-      const h = Math.max(1, Math.min(5000, Math.round(Number(targetHeight) || 230)));
+      const resolution = Math.max(72, Math.min(1200, Math.round(Number(dpi) || 300)));
+      const w = Math.max(1, Math.min(12000, dimensionToPixels(targetWidth, dimensionUnit, resolution)));
+      const h = Math.max(1, Math.min(12000, dimensionToPixels(targetHeight, dimensionUnit, resolution)));
       const maxBytes = Math.max(1, Number(maxKb) || 50) * 1024;
       let success = 0;
       const failures: string[] = [];
@@ -561,8 +582,23 @@ export default function DocumentToolsPage() {
           <p style={{ fontSize: 12, color: "#6a756e", lineHeight: 1.5, margin: 0 }}>Rule reading is pattern-based, not a full PDF/legal interpretation. Confirm each value against the official notification.</p>
           <h2 style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <label style={labelStyle}>Width (px)<input type="number" min="1" max="5000" value={targetWidth} onChange={e => setTargetWidth(e.target.value)} style={fieldStyle} /></label>
-            <label style={labelStyle}>Height (px)<input type="number" min="1" max="5000" value={targetHeight} onChange={e => setTargetHeight(e.target.value)} style={fieldStyle} /></label>
+            <label style={labelStyle}>Dimension unit
+              <select value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm" | "in")} style={fieldStyle}>
+                <option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option><option value="in">Inches (in)</option>
+              </select>
+            </label>
+            <label style={labelStyle}>DPI / print resolution
+              <select value={dpi} onChange={e => setDpi(e.target.value)} style={fieldStyle}>
+                <option value="72">72 DPI — screen</option><option value="96">96 DPI — standard</option><option value="150">150 DPI — draft print</option><option value="200">200 DPI</option><option value="300">300 DPI — print</option><option value="600">600 DPI — high resolution</option>
+              </select>
+            </label>
+            <label style={labelStyle}>Width ({dimensionUnit})<input type="number" min="0.01" max={dimensionUnit === "px" ? "12000" : "1000"} step={dimensionUnit === "px" ? "1" : "0.1"} value={targetWidth} onChange={e => setTargetWidth(e.target.value)} style={fieldStyle} /></label>
+            <label style={labelStyle}>Height ({dimensionUnit})<input type="number" min="0.01" max={dimensionUnit === "px" ? "12000" : "1000"} step={dimensionUnit === "px" ? "1" : "0.1"} value={targetHeight} onChange={e => setTargetHeight(e.target.value)} style={fieldStyle} /></label>
+            <label style={labelStyle}>Aspect ratio
+              <select value={aspectRatio} onChange={e => updateAspectRatio(e.target.value)} style={fieldStyle}>
+                <option value="free">Custom / free</option><option value="1:1">1:1 — square</option><option value="3:4">3:4 — portrait</option><option value="4:3">4:3 — landscape</option><option value="2:3">2:3 — photo</option><option value="3:2">3:2 — photo</option><option value="4:5">4:5 — social portrait</option><option value="16:9">16:9 — widescreen</option><option value="9:16">9:16 — vertical</option>
+              </select>
+            </label>
             <label style={labelStyle}>Max file size (KB)<input type="number" min="1" max="20000" value={maxKb} onChange={e => setMaxKb(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Output format<select value={format} onChange={e => setFormat(e.target.value as OutputFormat)} style={fieldStyle}><option value="image/jpeg">JPG / JPEG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option><option value="application/pdf">PDF (single image page)</option></select></label>
           </div>
