@@ -240,6 +240,69 @@ export default function DocumentToolsPage() {
     setStatus(`Preview तैयार: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
   };
 
+  const applyAutoCrop = () => {
+    const image = imageRef.current;
+    if (!image || !dimensions.width || !dimensions.height) {
+      setStatus("पहले image/PDF चुनें और preview लोड होने दें।");
+      return;
+    }
+    try {
+      // Analyze a downscaled copy so large uploads remain responsive.
+      const scale = Math.min(1, 1000 / Math.max(dimensions.width, dimensions.height));
+      const scanWidth = Math.max(1, Math.round(dimensions.width * scale));
+      const scanHeight = Math.max(1, Math.round(dimensions.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = scanWidth;
+      canvas.height = scanHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("Auto Crop canvas उपलब्ध नहीं है।");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, scanWidth, scanHeight);
+      ctx.drawImage(image, 0, 0, scanWidth, scanHeight);
+      const pixels = ctx.getImageData(0, 0, scanWidth, scanHeight).data;
+      let minX = scanWidth, minY = scanHeight, maxX = -1, maxY = -1;
+      // Ignore near-white paper/background and tiny JPEG noise.
+      const threshold = 244;
+      for (let y = 0; y < scanHeight; y++) {
+        for (let x = 0; x < scanWidth; x++) {
+          const i = (y * scanWidth + x) * 4;
+          const alpha = pixels[i + 3];
+          const isContent = alpha > 8 && (pixels[i] < threshold || pixels[i + 1] < threshold || pixels[i + 2] < threshold);
+          if (isContent) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < minX || maxY < minY) {
+        setStatus("Auto Crop को स्पष्ट content नहीं मिला। Manual crop इस्तेमाल करें या Reset Crop दबाएँ।");
+        return;
+      }
+      // Add a small safety margin so text near the detected edge is not clipped.
+      const marginX = Math.max(2, Math.round((maxX - minX + 1) * 0.015));
+      const marginY = Math.max(2, Math.round((maxY - minY + 1) * 0.015));
+      const x = Math.max(0, Math.floor((minX - marginX) / scale));
+      const y = Math.max(0, Math.floor((minY - marginY) / scale));
+      const right = Math.min(dimensions.width, Math.ceil((maxX + 1 + marginX) / scale));
+      const bottom = Math.min(dimensions.height, Math.ceil((maxY + 1 + marginY) / scale));
+      setCrop({ x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) });
+      setStatus("Auto Crop ने non-white content detect किया है। Download या print से पहले crop preview ज़रूर जाँचें।");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Auto Crop असफल रहा। Manual crop इस्तेमाल करें।");
+    }
+  };
+
+  const resetCrop = () => {
+    if (!dimensions.width || !dimensions.height) {
+      setStatus("पहले image/PDF चुनें और preview लोड होने दें।");
+      return;
+    }
+    setCrop({ x: 0, y: 0, width: dimensions.width, height: dimensions.height });
+    setStatus("Crop reset हो गया है। पूरा page/image चुना गया है।");
+  };
+
   const applyAutoRules = () => {
     const text = notificationText;
     const sizeMatch = text.match(/(?:max(?:imum)?\s*)?(\d+(?:\.\d+)?)\s*(kb|k\s*b)/i);
@@ -468,6 +531,10 @@ export default function DocumentToolsPage() {
             {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
             <span style={{ position: "absolute", bottom: 8, left: 8, background: "#102d22dd", color: "white", borderRadius: 7, padding: "5px 8px", fontSize: 12 }}>Drag to select crop area</span>
           </div>}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" onClick={applyAutoCrop} disabled={!sourceUrl || busy} style={{ ...buttonStyle, opacity: !sourceUrl || busy ? .6 : 1 }}>✨ Auto Crop</button>
+            <button type="button" onClick={resetCrop} disabled={!sourceUrl || busy} style={{ ...secondaryButtonStyle, opacity: !sourceUrl || busy ? .6 : 1 }}>Reset Crop</button>
+          </div>
           <small style={{ color: "#52635a" }}>Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · Manual</small>
           {dimensions.width > 0 && <button type="button" onClick={() => {
             const image = imageRef.current;
