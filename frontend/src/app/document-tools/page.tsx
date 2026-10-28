@@ -366,6 +366,29 @@ export default function DocumentToolsPage() {
     return Math.round(amount * resolution);
   };
 
+  const changeDimensionUnit = (nextUnit: "px" | "cm" | "mm" | "in") => {
+    const resolution = Math.max(72, Math.min(1200, Math.round(Number(dpi) || 300)));
+    const toPx = (value: string) => dimensionToPixels(value, dimensionUnit, resolution);
+    const fromPx = (pixels: number) => {
+      if (nextUnit === "px") return String(Math.round(pixels));
+      if (nextUnit === "cm") return (pixels / resolution * 2.54).toFixed(2);
+      if (nextUnit === "mm") return (pixels / resolution * 25.4).toFixed(1);
+      return (pixels / resolution).toFixed(2);
+    };
+    setTargetWidth(fromPx(toPx(targetWidth)));
+    setTargetHeight(fromPx(toPx(targetHeight)));
+    setDimensionUnit(nextUnit);
+  };
+
+  const applySizePreset = (preset: string) => {
+    if (preset === "custom") return;
+    if (preset === "a4") { setDimensionUnit("mm"); setTargetWidth("210"); setTargetHeight("297"); setAspectRatio("free"); }
+    if (preset === "passport") { setDimensionUnit("mm"); setTargetWidth("35"); setTargetHeight("45"); setAspectRatio("free"); }
+    if (preset === "signature") { setDimensionUnit("cm"); setTargetWidth("6"); setTargetHeight("2"); setAspectRatio("free"); }
+    if (preset === "photo200x230") { setDimensionUnit("px"); setTargetWidth("200"); setTargetHeight("230"); setAspectRatio("free"); }
+    if (preset === "signature140x60") { setDimensionUnit("px"); setTargetWidth("140"); setTargetHeight("60"); setAspectRatio("free"); }
+  };
+
   const updateAspectRatio = (ratio: string) => {
     setAspectRatio(ratio);
     const width = Math.max(1, Number(targetWidth) || 1);
@@ -649,7 +672,7 @@ export default function DocumentToolsPage() {
           <h2 id="resize-output" style={{ margin: "8px 0 0", fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>3. Resize & Output</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label style={labelStyle}>Dimension unit
-              <select value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm" | "in")} style={fieldStyle}>
+              <select value={dimensionUnit} onChange={e => changeDimensionUnit(e.target.value as "px" | "cm" | "mm" | "in")} style={fieldStyle}>
                 <option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option><option value="in">Inches (in)</option>
               </select>
             </label>
@@ -660,6 +683,11 @@ export default function DocumentToolsPage() {
             </label>
             <label style={labelStyle}>Width ({dimensionUnit})<input type="number" min="0.01" max={dimensionUnit === "px" ? "12000" : "1000"} step={dimensionUnit === "px" ? "1" : "0.1"} value={targetWidth} onChange={e => setTargetWidth(e.target.value)} style={fieldStyle} /></label>
             <label style={labelStyle}>Height ({dimensionUnit})<input type="number" min="0.01" max={dimensionUnit === "px" ? "12000" : "1000"} step={dimensionUnit === "px" ? "1" : "0.1"} value={targetHeight} onChange={e => setTargetHeight(e.target.value)} style={fieldStyle} /></label>
+            <label style={labelStyle}>Quick size preset
+              <select defaultValue="custom" onChange={e => applySizePreset(e.target.value)} style={fieldStyle}>
+                <option value="custom">Custom dimensions</option><option value="a4">A4 page — 210 × 297 mm</option><option value="passport">Passport photo — 35 × 45 mm</option><option value="signature">Signature — 6 × 2 cm</option><option value="photo200x230">Photo — 200 × 230 px</option><option value="signature140x60">Signature — 140 × 60 px</option>
+              </select>
+            </label>
             <label style={labelStyle}>Aspect ratio
               <select value={aspectRatio} onChange={e => updateAspectRatio(e.target.value)} style={fieldStyle}>
                 <option value="free">Custom / free</option><option value="1:1">1:1 — square</option><option value="3:4">3:4 — portrait</option><option value="4:3">4:3 — landscape</option><option value="2:3">2:3 — photo</option><option value="3:2">3:2 — photo</option><option value="4:5">4:5 — social portrait</option><option value="16:9">16:9 — widescreen</option><option value="9:16">9:16 — vertical</option>
