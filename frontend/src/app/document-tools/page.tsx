@@ -474,17 +474,43 @@ export default function DocumentToolsPage() {
     : undefined;
 
   return (
-    <main style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
+    <main className="document-tools-page" style={{ maxWidth: 1050, margin: "24px auto", padding: "24px 16px 40px", color: "#17251f", background: "#f6faf8", border: "1px solid #dce7df", borderRadius: 22, boxShadow: "0 18px 48px rgba(0,0,0,.18)" }}>
       <style>{`@page { size: A4 portrait; margin: 8mm; } @media print { body * { visibility: hidden !important; } .print-layout-panel, .print-layout-panel * { visibility: visible !important; } .print-layout-panel { position: absolute !important; inset: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: white !important; } .print-layout-panel > *:not(.print-output) { display: none !important; } .print-output { display: flex !important; flex-direction: column !important; height: 281mm !important; width: 100% !important; box-sizing: border-box !important; overflow: hidden !important; } .print-output > div { flex: 1 1 0 !important; min-height: 0 !important; margin: 0 !important; padding: 1mm 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; break-inside: avoid !important; overflow: hidden !important; } .print-output > div img { max-width: 100% !important; max-height: calc(100% - 5mm) !important; width: auto !important; height: auto !important; object-fit: contain !important; } .print-output > div div { font-size: 7pt !important; line-height: 1 !important; margin-top: 1mm !important; } }`}</style>
       <a href="/" style={{ color: "#176b4d", fontWeight: 700, textDecoration: "none" }}>← CSC Home</a>
+      <style>{`
+        .document-tools-page, .document-tools-page * { box-sizing: border-box; }
+        .document-tools-page { width: min(100% - 24px, 1050px); }
+        .document-tools-grid { min-width: 0; }
+        .document-tools-card { min-width: 0; }
+        .document-tools-page button, .document-tools-page input, .document-tools-page select, .document-tools-page textarea { max-width: 100%; }
+        .document-tools-page input, .document-tools-page select, .document-tools-page textarea { font-size: 16px; }
+        .document-preview-scroll { width: 100%; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+        .document-tools-page button { min-height: 42px; }
+        @media (max-width: 640px) {
+          .document-tools-page { width: 100%; margin: 0 auto !important; padding: 14px 10px 28px !important; border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important; box-shadow: none !important; }
+          .document-tools-page header { margin: 12px 0 18px !important; }
+          .document-tools-page header h1 { font-size: 27px !important; line-height: 1.18 !important; }
+          .document-tools-page header p:last-child { font-size: 14px; }
+          .document-tools-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+          .document-tools-card { padding: 13px !important; border-radius: 13px !important; gap: 12px !important; }
+          .document-tools-card h2 { font-size: 18px !important; }
+          .document-tools-page label { min-width: 0; overflow-wrap: anywhere; }
+          .document-tools-page input[type="file"] { width: 100%; min-width: 0; font-size: 14px; padding: 9px !important; }
+          .document-tools-page button { white-space: normal; overflow-wrap: anywhere; }
+          .document-preview-scroll { height: min(52vh, 420px) !important; min-height: 250px; border-radius: 9px !important; }
+          .document-tools-page .print-layout-panel { margin-top: 12px !important; padding: 13px !important; }
+          .document-tools-page .print-layout-panel > div > div { grid-template-columns: 56px minmax(0, 1fr) auto !important; gap: 7px !important; padding: 8px !important; }
+          .document-tools-page .print-layout-panel img { max-width: 100%; }
+        }
+      `}</style>
       <header style={{ margin: "18px 0 24px" }}>
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
         <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Select, Merge & Print Layout</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
       </header>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
-        <div style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
+      <section className="document-tools-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
+        <div className="document-tools-card" style={{ border: "1px solid #d8e4dc", borderRadius: 16, padding: 18, background: "#fff", display: "grid", gap: 14 }}>
           <h2 style={{ margin: 0, fontSize: 20, color: "#17251f", letterSpacing: "-.02em" }}>1. Choose File & Preview</h2>
           <label style={{ display: "grid", gap: 8, fontWeight: 700 }}>Choose image or PDF
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,application/pdf,.pdf" onChange={loadFile} style={{ padding: 10, border: "1px dashed #9eb7a7", borderRadius: 10, background: "#f7fbf8" }} />
@@ -531,7 +557,7 @@ export default function DocumentToolsPage() {
               <button type="button" onClick={() => setZoom(value => Math.min(200, value + 10))} disabled={zoom >= 200} style={secondaryButtonStyle}>+</button>
               <button type="button" onClick={() => setZoom(100)} style={secondaryButtonStyle}>Reset</button>
             </div>
-            <div style={{ height: 420, maxWidth: "100%", overflow: "auto", border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", touchAction: "pan-x pan-y" }}>
+            <div className="document-preview-scroll" style={{ height: 420, maxWidth: "100%", overflow: "auto", border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", touchAction: "pan-x pan-y" }}>
               <div ref={previewBoxRef} onPointerDown={cropMode === "manual" ? beginCrop : undefined} onPointerMove={cropMode === "manual" ? moveCrop : undefined} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", width: `${zoom}%`, minWidth: "100%", touchAction: cropMode === "manual" ? "none" : "pan-x pan-y", cursor: cropMode === "manual" ? "crosshair" : "default" }}>
                 <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
                 {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
@@ -578,7 +604,7 @@ export default function DocumentToolsPage() {
         </div>
       </section>
 
-      <section className="print-layout-panel" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
+      <section className="print-layout-panel document-tools-card" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
         <h2 style={{ marginTop: 0 }}>4. Merge & Print Layout</h2>
         <p>हर image/PDF से crop select करके यहाँ जोड़ें। ↑/↓ से क्रम बदलें; Print से browser print dialog खुलेगा।</p>
         {selectedCrops.length === 0 ? <p>अभी कोई crop select नहीं है।</p> : <div style={{ display: "grid", gap: 10 }}>
