@@ -106,7 +106,8 @@ export default function DocumentToolsPage() {
   const [selectedCrops, setSelectedCrops] = useState<Array<{ id: number; label: string; dataUrl: string }>>([]);
   const [nextCropId, setNextCropId] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [cropMode, setCropMode] = useState<"manual">("manual");
+  const [cropMode, setCropMode] = useState<"manual" | "auto">("manual");
+  const [zoom, setZoom] = useState(100);
   const [isPdfInput, setIsPdfInput] = useState(false);
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfPage, setPdfPage] = useState(1);
@@ -117,8 +118,7 @@ export default function DocumentToolsPage() {
   const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
   const pdfBytesRef = useRef<ArrayBuffer | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const previewBoxRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const previewBoxRef = useRef<HTMLDivElement>(null);  const dragRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl); }, [sourceUrl]);
 
@@ -237,8 +237,7 @@ export default function DocumentToolsPage() {
     const height = image.naturalHeight;
     setDimensions({ width, height });
     setCrop({ x: 0, y: 0, width, height });
-    setStatus(`Preview तैयार: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);
-  };
+    setStatus(`Preview तैयार: ${file?.name || "image"} · ${width} × ${height}px · ${((file?.size || 0) / 1024).toFixed(1)} KB`);  };
 
   const applyAutoRules = () => {
     const text = notificationText;
@@ -261,15 +260,13 @@ export default function DocumentToolsPage() {
   const pointerPosition = (event: PointerEvent<HTMLDivElement>) => {
     const box = previewBoxRef.current;
     if (!box || !dimensions.width || !dimensions.height) return null;
-    const rect = box.getBoundingClientRect();
-    const scale = Math.min(rect.width / dimensions.width, rect.height / dimensions.height);
-    const renderedWidth = dimensions.width * scale;
-    const renderedHeight = dimensions.height * scale;
-    const left = rect.left + (rect.width - renderedWidth) / 2;
-    const top = rect.top + (rect.height - renderedHeight) / 2;
+    const image = imageRef.current;
+    if (!image) return null;
+    const rect = image.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
     return {
-      x: Math.max(0, Math.min(dimensions.width, Math.round((event.clientX - left) / scale))),
-      y: Math.max(0, Math.min(dimensions.height, Math.round((event.clientY - top) / scale))),
+      x: Math.max(0, Math.min(dimensions.width, Math.round((event.clientX - rect.left) * dimensions.width / rect.width))),
+      y: Math.max(0, Math.min(dimensions.height, Math.round((event.clientY - rect.top) * dimensions.height / rect.height))),
     };
   };
   const beginCrop = (event: PointerEvent<HTMLDivElement>) => {
@@ -291,6 +288,63 @@ export default function DocumentToolsPage() {
     if (isPdfInput) { setTargetWidth(String(width)); setTargetHeight(String(height)); }
   };
   const endCrop = () => { dragRef.current = null; };
+
+  const applyAutoCrop = async () => {
+    if (!file || !dimensions.width || !dimensions.height) return;
+    setCropMode("auto");
+    if (isPdfInput) {
+      setCrop({ x: 0, y: 0, width: dimensions.width, height: dimensions.height });
+      setStatus("PDF page का पूरा page area Auto Crop में चुना गया है। जरूरत हो तो Manual Crop चुनकर बदलें।");
+      return;
+    }
+    setStatus("Document edges detect किए जा रहे हैं…");
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("Auto crop processor उपलब्ध नहीं है।");
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const sample = (x: number, y: number) => {
+        const i = (y * canvas.width + x) * 4;
+        return [pixels[i], pixels[i + 1], pixels[i + 2]];
+      };
+      const corners = [sample(0, 0), sample(canvas.width - 1, 0), sample(0, canvas.height - 1), sample(canvas.width - 1, canvas.height - 1)];
+      const bg = [0, 1, 2].map(channel => corners.reduce((sum, color) => sum + color[channel], 0) / corners.length);
+      let minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
+      const threshold = 42;
+      for (let y = 0; y < canvas.height; y += 2) {
+        for (let x = 0; x < canvas.width; x += 2) {
+          const i = (y * canvas.width + x) * 4;
+          const distance = Math.abs(pixels[i] - bg[0]) + Math.abs(pixels[i + 1] - bg[1]) + Math.abs(pixels[i + 2] - bg[2]);
+          if (distance > threshold) {
+            minX = Math.min(minX, x); minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+          }
+        }
+      }
+      if (maxX < minX || maxY < minY) {
+        setCrop({ x: 0, y: 0, width: dimensions.width, height: dimensions.height });
+        setStatus("स्पष्ट document boundary नहीं मिली। पूरा image सुरक्षित रखा है; बेहतर परिणाम के लिए Manual Crop करें।");
+        return;
+      }
+      const padX = Math.round((maxX - minX + 1) * 0.025);
+      const padY = Math.round((maxY - minY + 1) * 0.025);
+      const x = Math.max(0, Math.floor((minX - padX) / scale));
+      const y = Math.max(0, Math.floor((minY - padY) / scale));
+      const right = Math.min(dimensions.width, Math.ceil((maxX + padX + 1) / scale));
+      const bottom = Math.min(dimensions.height, Math.ceil((maxY + padY + 1) / scale));
+      setCrop({ x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) });
+      setStatus("Auto Crop ने संभावित document boundary चुनी है। Download से पहले पूरा preview जाँच लें; जरूरत हो तो Manual Crop करें।");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Auto crop पूरा नहीं हो सका। Manual Crop इस्तेमाल करें।");
+      setCropMode("manual");
+    }
+  };
 
   const processAndDownload = async () => {
     if (!file || !sourceUrl || !dimensions.width || !dimensions.height) {
@@ -357,8 +411,7 @@ export default function DocumentToolsPage() {
 
   const loadBatchImages = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files || []);
-    if (!selected.length) return;
-    const images = selected.filter((item) => item.type.startsWith("image/"));
+    if (!selected.length) return;    const images = selected.filter((item) => item.type.startsWith("image/"));
     const rejected = selected.length - images.length;
     const tooLarge = images.filter((item) => item.size > 20 * 1024 * 1024);
     const valid = images.filter((item) => item.size <= 20 * 1024 * 1024).slice(0, 20);
@@ -415,7 +468,7 @@ export default function DocumentToolsPage() {
   };
 
   const previewStyle = dimensions.width && dimensions.height
-    ? { width: "100%", height: "100%", objectFit: "contain" as const }
+    ? { display: "block", width: "100%", height: "auto", maxWidth: "none" }
     : undefined;
 
   return (
@@ -463,12 +516,27 @@ export default function DocumentToolsPage() {
               <button type="button" onClick={() => void changePdfPage(pdfPage + 1)} disabled={busy || pdfPage >= pdfPageCount} style={{ ...secondaryButtonStyle, opacity: busy || pdfPage >= pdfPageCount ? .5 : 1 }}>Next page →</button>
             </div>
           </label>}
-          {sourceUrl && <div ref={previewBoxRef} onPointerDown={beginCrop} onPointerMove={moveCrop} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", height: 310, border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", overflow: "hidden", touchAction: "none", cursor: "crosshair", display: "grid", placeItems: "center" }}>
-            <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
-            {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
-            <span style={{ position: "absolute", bottom: 8, left: 8, background: "#102d22dd", color: "white", borderRadius: 7, padding: "5px 8px", fontSize: 12 }}>Drag to select crop area</span>
-          </div>}
-          <small style={{ color: "#52635a" }}>Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · Manual</small>
+          {sourceUrl && <>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <strong style={{ fontSize: 13 }}>Crop mode</strong>
+              <button type="button" aria-pressed={cropMode === "manual"} onClick={() => setCropMode("manual")} style={{ ...secondaryButtonStyle, background: cropMode === "manual" ? "#176b4d" : "#fff", color: cropMode === "manual" ? "#fff" : "#234735" }}>Manual Crop (Default)</button>
+              <button type="button" aria-pressed={cropMode === "auto"} onClick={() => void applyAutoCrop()} style={{ ...secondaryButtonStyle, background: cropMode === "auto" ? "#176b4d" : "#fff", color: cropMode === "auto" ? "#fff" : "#234735" }}>Auto Crop</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Zoom</span>
+              <button type="button" onClick={() => setZoom(value => Math.max(50, value - 10))} disabled={zoom <= 50} style={secondaryButtonStyle}>−</button>
+              <span style={{ minWidth: 48, textAlign: "center", fontSize: 13 }}>{zoom}%</span>
+              <button type="button" onClick={() => setZoom(value => Math.min(200, value + 10))} disabled={zoom >= 200} style={secondaryButtonStyle}>+</button>
+              <button type="button" onClick={() => setZoom(100)} style={secondaryButtonStyle}>Reset</button>
+            </div>
+            <div style={{ height: 420, maxWidth: "100%", overflow: "auto", border: "1px solid #cddbd2", borderRadius: 12, background: "#eef3ef", touchAction: "pan-x pan-y" }}>
+              <div ref={previewBoxRef} onPointerDown={cropMode === "manual" ? beginCrop : undefined} onPointerMove={cropMode === "manual" ? moveCrop : undefined} onPointerUp={endCrop} onPointerCancel={endCrop} style={{ position: "relative", width: `${zoom}%`, minWidth: "100%", touchAction: cropMode === "manual" ? "none" : "pan-x pan-y", cursor: cropMode === "manual" ? "crosshair" : "default" }}>
+                <img ref={imageRef} src={sourceUrl} onLoad={onImageLoaded} alt="Uploaded image preview" style={previewStyle} draggable={false} />
+                {dimensions.width > 0 && <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "rgba(9,30,20,.28)", clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${(crop.y + crop.height) / dimensions.height * 100}%, ${(crop.x + crop.width) / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, ${crop.x / dimensions.width * 100}% ${crop.y / dimensions.height * 100}%, 0 0)` }} />}
+              </div>
+            </div>
+            <small style={{ color: "#52635a" }}>Preview scrollable है। Horizontal/vertical scroll और zoom से पूरा A4 page या ID card देखें। Crop: {Math.round(crop.x)}, {Math.round(crop.y)} · {Math.round(crop.width)} × {Math.round(crop.height)} px · {cropMode === "manual" ? "Manual" : "Auto (check before export)"}</small>
+          </>}
           {dimensions.width > 0 && <button type="button" onClick={() => {
             const image = imageRef.current;
             if (!image || crop.width < 2 || crop.height < 2) { setStatus("पहले preview में drag करके crop area चुनें।"); return; }
@@ -477,8 +545,7 @@ export default function DocumentToolsPage() {
             const width = Math.max(1, Math.min(dimensions.width - x, Math.round(crop.width)));
             const height = Math.max(1, Math.min(dimensions.height - y, Math.round(crop.height)));
             const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext("2d"); if (!ctx) { setStatus("Crop select नहीं हो सका।"); return; }
-            ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
+            const ctx = canvas.getContext("2d"); if (!ctx) { setStatus("Crop select नहीं हो सका।"); return; }            ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
             const label = (file?.name || "Image") + (isPdfInput ? " · Page " + pdfPage : " · Image");
             setSelectedCrops(items => [...items, { id: nextCropId, label, dataUrl: canvas.toDataURL("image/png") }]);
             setNextCropId(id => id + 1); setStatus("Crop Print Layout में जोड़ दिया गया।");
