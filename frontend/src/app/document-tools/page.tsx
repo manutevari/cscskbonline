@@ -118,7 +118,8 @@ export default function DocumentToolsPage() {
   const pdfDocumentRef = useRef<PdfJsDocument | null>(null);
   const pdfBytesRef = useRef<ArrayBuffer | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const previewBoxRef = useRef<HTMLDivElement>(null);  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const previewBoxRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl); }, [sourceUrl]);
 
@@ -411,7 +412,8 @@ export default function DocumentToolsPage() {
 
   const loadBatchImages = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files || []);
-    if (!selected.length) return;    const images = selected.filter((item) => item.type.startsWith("image/"));
+    if (!selected.length) return;
+    const images = selected.filter((item) => item.type.startsWith("image/"));
     const rejected = selected.length - images.length;
     const tooLarge = images.filter((item) => item.size > 20 * 1024 * 1024);
     const valid = images.filter((item) => item.size <= 20 * 1024 * 1024).slice(0, 20);
