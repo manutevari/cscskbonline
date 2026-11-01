@@ -14,6 +14,14 @@ const SLOT_STEP = 15;
 
 function cleanPhone(value: string) { return value.replace(/\D/g, "").replace(/^0+/, ""); }
 
+// WhatsApp Cloud API expects the recipient in international format. The booking form collects 10-digit Indian mobile numbers.
+function toWhatsAppPhone(value: string) {
+  const digits = cleanPhone(value);
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return digits;
+  return digits;
+}
+
 function istDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
@@ -74,7 +82,7 @@ async function sendWhatsApp(to: string, appointment: Booking, role: "customer" |
   const response = await fetch(`${GRAPH_URL}/${phoneNumberId}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      messaging_product: "whatsapp", to: cleanPhone(to), type: "template",
+      messaging_product: "whatsapp", to: toWhatsAppPhone(to), type: "template",
       template: { name: template, language: { code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en_US" },
         components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text: String(text) })) }] },
     }),
