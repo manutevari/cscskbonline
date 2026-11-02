@@ -236,7 +236,7 @@ export default function PrintEditorPage() {
     <div className="workspace">
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
-        <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onPointerUp={() => setDragId(null)} onPointerLeave={() => setDragId(null)} onPointerMove={e => {
+        <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onPointerMove={e => {
           if (!stageRef.current) return;
           const rect=stageRef.current.getBoundingClientRect(), sx=794/rect.width, sy=1123/rect.height;
           if(resizeState){
