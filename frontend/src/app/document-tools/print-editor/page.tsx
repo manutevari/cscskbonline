@@ -162,6 +162,18 @@ export default function PrintEditorPrototypePage() {
     setStatus("Selected image हटाई गई।");
   };
 
+  const updatePositionMm = (axis: "x" | "y", rawValue: string) => {
+    if (!selected) return;
+    if (rawValue.trim() === "") return;
+    const mm = Number(rawValue);
+    if (!Number.isFinite(mm)) return;
+    const px = axis === "x" ? mm * PAGE_W / 210 : mm * PAGE_H / 297;
+    const max = axis === "x" ? PAGE_W - selected.w : PAGE_H - selected.h;
+    setItems(previous => previous.map(item => item.id === selected.id
+      ? { ...item, [axis]: clamp(px, 0, max) }
+      : item));
+  };
+
   const resetSelected = () => {
     if (!selected) return;
     setItems(previous => previous.map(item => item.id === selected.id ? { ...item, rotation: 0 } : item));
@@ -202,6 +214,10 @@ export default function PrintEditorPrototypePage() {
         .side h2{font-size:17px;margin:0}
         .meta{font-size:13px;color:#5a6b60;line-height:1.5;overflow-wrap:anywhere}
         .help{font-size:13px;color:#607066;line-height:1.55}
+        .position-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .field{display:grid;gap:5px;font-size:12px;color:#53645a;font-weight:700}
+        .field input{width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbd9ce;border-radius:7px;padding:9px;font:inherit;color:#17251f;background:#fff}
+        .field input:focus{outline:2px solid #8bbca1;outline-offset:1px}
         @media(max-width:760px){.workspace{grid-template-columns:1fr}.side{order:-1}.stage{max-height:none}.toolbar>*{max-width:100%}}
         @media print{
           @page{size:A4 portrait;margin:0}
@@ -272,9 +288,17 @@ export default function PrintEditorPrototypePage() {
             <strong>{selected.name}</strong>
             <div className="meta">Width: {Math.round(selected.w / PAGE_W * 210)} mm</div>
             <div className="meta">Height: {Math.round(selected.h / PAGE_H * 297)} mm</div>
-            <div className="meta">X: {Math.round(selected.x / PAGE_W * 210)} mm · Y: {Math.round(selected.y / PAGE_H * 297)} mm</div>
+            <div className="position-grid">
+              <label className="field">X position (mm)
+                <input type="number" min="0" max={Math.max(0, (PAGE_W - selected.w) / PAGE_W * 210).toFixed(1)} step="0.1" value={(selected.x / PAGE_W * 210).toFixed(1)} onChange={event => updatePositionMm("x", event.target.value)} />
+              </label>
+              <label className="field">Y position (mm)
+                <input type="number" min="0" max={Math.max(0, (PAGE_H - selected.h) / PAGE_H * 297).toFixed(1)} step="0.1" value={(selected.y / PAGE_H * 297).toFixed(1)} onChange={event => updatePositionMm("y", event.target.value)} />
+              </label>
+            </div>
+            <div className="meta">Position is measured from the top-left corner of the A4 page.</div>
             <div className="meta">Rotation: {Math.round(selected.rotation)}°</div>
-            <p className="help">Drag image: move it. Bottom-right handle: resize while preserving aspect ratio. Top circular handle: rotate. Touch gestures are supported.</p>
+            <p className="help">Drag image: move it. X/Y fields: set exact position in millimeters. Bottom-right handle: resize while preserving aspect ratio. Top circular handle: rotate. Touch gestures are supported.</p>
           </> : <p className="help">किसी image को select करें। फिर उसे drag, resize या rotate करें।</p>}
           <div className="meta">Page boundary: A4 · 210 × 297 mm</div>
           <div className="meta">यह prototype original uploaded image file को modify नहीं करता।</div>
