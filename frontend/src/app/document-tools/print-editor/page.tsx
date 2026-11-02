@@ -38,17 +38,42 @@ export default function PrintEditorPage() {
   const [customW, setCustomW] = useState("210");
   const [customH, setCustomH] = useState("297");
   const [photoCopies, setPhotoCopies] = useState("8");
+  const [photoWidthMm, setPhotoWidthMm] = useState("35");
+  const [photoHeightMm, setPhotoHeightMm] = useState("45");
+  const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
+  const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
   const urlsRef = useRef<string[]>([]);
   const selected = useMemo(() => items.find(i => i.id === selectedId) || null, [items, selectedId]);
   const pageSize = preset === "Custom" ? { w: Math.max(20, Number(customW) || 210), h: Math.max(20, Number(customH) || 297) } : PRESETS[preset];
   const pageItems = items.filter(i => i.pageId === activePage);
 
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+      if (typing || !(event.ctrlKey || event.metaKey)) return;
+      if (event.key.toLowerCase() === "c" && selected) {
+        event.preventDefault();
+        setClipboardItem({ ...selected });
+        setStatus("Selected photo copied. Press Ctrl+V to paste a duplicate.");
+      } else if (event.key.toLowerCase() === "v" && clipboardItem) {
+        event.preventDefault();
+        const copy = { ...clipboardItem, id: uid(), name: clipboardItem.name + " copy", pageId: activePage, x: Math.min(794 - clipboardItem.w, clipboardItem.x + 24), y: Math.min(1123 - clipboardItem.h, clipboardItem.y + 24) };
+        setItems(old => [...old, copy]); setSelectedId(copy.id);
+        setStatus("Photo pasted on the current page.");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected, clipboardItem, activePage]);
 
   const addImage = async (file: File, pageId = activePage) => {
     if (!file.type.startsWith("image/")) return;
@@ -115,25 +140,38 @@ export default function PrintEditorPage() {
     const source = selected;
     if (!source) { setStatus("पहले photo select करें।"); return; }
     const count = Math.max(1, Math.min(30, Number(photoCopies) || 8));
-    const cols = count <= 4 ? 2 : count <= 9 ? 3 : 4;
-    const rows = Math.ceil(count / cols), gap = 16;
-    const w = 130, h = 160;
-    const startX = (794 - (cols * w + (cols - 1) * gap)) / 2;
-    const startY = (1123 - (rows * h + (rows - 1) * gap)) / 2;
+    const mmToX = 794 / pageSize.w, mmToY = 1123 / pageSize.h;
+    const w = Math.max(20, Number(photoWidthMm) || 35) * mmToX;
+    const h = Math.max(20, Number(photoHeightMm) || 45) * mmToY;
+    const gap = 3 * mmToX;
+    const left = Math.max(0, Number(pageMargins.left) || 0) * mmToX;
+    const right = 794 - Math.max(0, Number(pageMargins.right) || 0) * mmToX;
+    const top = Math.max(0, Number(pageMargins.top) || 0) * mmToY;
+    const bottom = 1123 - Math.max(0, Number(pageMargins.bottom) || 0) * mmToY;
+    const cols = Math.max(1, Math.min(count, Math.floor((right - left + gap) / (w + gap))));
+    const rows = Math.ceil(count / cols);
+    const startX = left + Math.max(0, (right - left - (cols * w + (cols - 1) * gap)) / 2);
+    const startY = top + Math.max(0, (bottom - top - (rows * h + (rows - 1) * gap)) / 2);
     const copies = Array.from({ length: count }, (_, index) => ({ ...source, id: uid(), name: source.name + " · copy " + (index + 1), x: startX + (index % cols) * (w + gap), y: startY + Math.floor(index / cols) * (h + gap), w, h }));
     setItems(old => [...old.filter(i => i.pageId !== activePage), ...copies.map(i => ({ ...i, pageId: activePage }))]);
     setMode("photo"); setStatus(count + " copies का photo sheet बनाया गया। Print से पहले size और spacing जाँचें।");
   };
   const arrangeGrid = () => {
     const count = pageItems.length; if (!count) return;
-    const cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols), gap = 18;
-    const cellW = (794 - gap * (cols + 1)) / cols, cellH = (1123 - gap * (rows + 1)) / rows;
+    const mmToX = 794 / pageSize.w, mmToY = 1123 / pageSize.h;
+    const left = Math.max(0, Number(pageMargins.left) || 0) * mmToX;
+    const right = 794 - Math.max(0, Number(pageMargins.right) || 0) * mmToX;
+    const top = Math.max(0, Number(pageMargins.top) || 0) * mmToY;
+    const bottom = 1123 - Math.max(0, Number(pageMargins.bottom) || 0) * mmToY;
+    const gap = 4 * mmToX;
+    const cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols);
+    const cellW = (right - left - gap * (cols + 1)) / cols, cellH = (bottom - top - gap * (rows + 1)) / rows;
     setItems(old => old.map(item => {
       if (item.pageId !== activePage) return item;
       const index = pageItems.findIndex(p => p.id === item.id);
       const ratio = item.w / item.h, scale = Math.min((cellW - 12) / item.w, (cellH - 12) / item.h);
       const w = item.w * scale, h = item.h * scale;
-      return { ...item, x: gap + (index % cols) * (cellW + gap) + (cellW - w) / 2, y: gap + Math.floor(index / cols) * (cellH + gap) + (cellH - h) / 2, w, h };
+      return { ...item, x: left + gap + (index % cols) * (cellW + gap) + (cellW - w) / 2, y: top + gap + Math.floor(index / cols) * (cellH + gap) + (cellH - h) / 2, w, h };
     }));
     setMode("grid"); setStatus("इस page के photos automatic grid में arrange किए गए।");
   };
@@ -151,7 +189,8 @@ export default function PrintEditorPage() {
       .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box}.placed.active{border:2px solid #176b4d}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}
       .side{background:white;border:1px solid #dce5de;border-radius:12px;padding:13px;display:grid;gap:10px}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
-      .pages{display:flex;gap:6px;flex-wrap:wrap}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
+      .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
+      .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
       @media(max-width:780px){.workspace{grid-template-columns:1fr}.side{order:-1}}
       @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.side{display:none!important}.workspace,.stage-wrap{display:block!important;padding:0!important;margin:0!important;background:transparent!important}.stage{width:${pageSize.w}mm!important;height:${pageSize.h}mm!important;aspect-ratio:auto!important;box-shadow:none!important;overflow:hidden!important;page-break-after:always;break-after:page}.placed{border:0!important}}
     `}</style>
@@ -169,8 +208,10 @@ export default function PrintEditorPage() {
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
       <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
-      <label className="field">Photo copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
-      <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create photo sheet from selected</button>
+      <label className="field">Copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
+      <label className="field">Photo width (mm)<input type="number" min="20" max="100" step="0.1" value={photoWidthMm} onChange={e => setPhotoWidthMm(e.target.value)} /></label>
+      <label className="field">Photo height (mm)<input type="number" min="20" max="120" step="0.1" value={photoHeightMm} onChange={e => setPhotoHeightMm(e.target.value)} /></label>
+      <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
     <div className="workspace">
@@ -179,10 +220,14 @@ export default function PrintEditorPage() {
         <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onPointerUp={() => setDragId(null)} onPointerLeave={() => setDragId(null)} onPointerMove={e => {
           if (!dragId || !stageRef.current) return;
           const rect = stageRef.current.getBoundingClientRect(), scaleX = 794 / rect.width, scaleY = 1123 / rect.height;
-          const x = (e.clientX - rect.left) * scaleX, y = (e.clientY - rect.top) * scaleY;
-          setItems(old => old.map(i => i.id === dragId ? { ...i, x: Math.max(0, Math.min(794 - i.w, x - i.w / 2)), y: Math.max(0, Math.min(1123 - i.h, y - i.h / 2)) } : i));
+          const x = (e.clientX - rect.left) * scaleX - dragOffsetRef.current.x;
+          const y = (e.clientY - rect.top) * scaleY - dragOffsetRef.current.y;
+          const mmToX = 794 / pageSize.w, mmToY = 1123 / pageSize.h;
+          const minX = Math.max(0, Number(pageMargins.left) || 0) * mmToX, maxX = 794 - Math.max(0, Number(pageMargins.right) || 0) * mmToX;
+          const minY = Math.max(0, Number(pageMargins.top) || 0) * mmToY, maxY = 1123 - Math.max(0, Number(pageMargins.bottom) || 0) * mmToY;
+          setItems(old => old.map(i => i.id === dragId ? { ...i, x: Math.max(minX, Math.min(maxX - i.w, x)), y: Math.max(minY, Math.min(maxY - i.h, y)) } : i));
         }}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); setSelectedId(item.id); setDragId(item.id); }}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} />
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
@@ -191,18 +236,24 @@ export default function PrintEditorPage() {
       <aside className="side">
         <h2>Photo / page organizer</h2>
         <p className="small">किसी thumbnail को चुनें। अलग page में भेजने के लिए destination चुनें।</p>
+        <strong className="small">Page margins (mm)</strong>
+        <div className="margin-grid">
+          {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="50" step="0.5" value={pageMargins[side]} onChange={e => setPageMargins(old => ({...old,[side]:e.target.value}))} /></label>)}
+        </div>
+        <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
         <div className="thumbs">{items.map(item => <div key={item.id} className="thumb" onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
           <img src={item.src} alt="" /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
         </div>)}</div>
         {selected && <><hr /><strong className="small">{selected.name}</strong>
           <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <label className="field">X<input type="number" step="1" value={Math.round(selected.x)} onChange={e => updateSelected("x",e.target.value)} /></label>
-            <label className="field">Y<input type="number" step="1" value={Math.round(selected.y)} onChange={e => updateSelected("y",e.target.value)} /></label>
-            <label className="field">Width<input type="number" min="12" value={Math.round(selected.w)} onChange={e => updateSelected("w",e.target.value)} /></label>
-            <label className="field">Height<input type="number" min="12" value={Math.round(selected.h)} onChange={e => updateSelected("h",e.target.value)} /></label>
+            <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
+            <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
+            <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
           </div>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
-          <button className="btn secondary" onClick={() => {setItems(old => [...old,{...selected,id:uid(),name:selected.name+" copy"}]);}}>Duplicate</button>
+          <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
+          <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
           <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
         </>}
         <p className="small">PDF pages are rendered locally in this browser. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
