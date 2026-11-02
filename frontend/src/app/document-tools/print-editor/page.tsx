@@ -42,6 +42,8 @@ export default function PrintEditorPage() {
   const [photoHeightMm, setPhotoHeightMm] = useState("45");
   const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
@@ -59,21 +61,32 @@ export default function PrintEditorPage() {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
-      if (typing || !(event.ctrlKey || event.metaKey)) return;
-      if (event.key.toLowerCase() === "c" && selected) {
-        event.preventDefault();
-        setClipboardItem({ ...selected });
-        setStatus("Selected photo copied. Press Ctrl+V to paste a duplicate.");
-      } else if (event.key.toLowerCase() === "v" && clipboardItem) {
+      if (typing) return;
+      const command = event.ctrlKey || event.metaKey;
+      if (command && event.key.toLowerCase() === "a") {
+        event.preventDefault(); setSelectedIds(pageItems.map(i => i.id)); setStatus("इस page की सभी photos select हुईं। Resize fields केवल active photo को बदलते हैं।"); return;
+      }
+      if (command && event.key.toLowerCase() === "c" && selected) {
+        event.preventDefault(); setClipboardItem({ ...selected }); setStatus("Selected photo copied. Press Ctrl+V to paste."); return;
+      }
+      if (command && event.key.toLowerCase() === "x" && selected) {
+        event.preventDefault(); setClipboardItem({ ...selected }); setItems(old => old.filter(i => i.id !== selected.id)); setSelectedId(null); setSelectedIds(old => old.filter(id => id !== selected.id)); setStatus("Selected photo cut. Press Ctrl+V to paste."); return;
+      }
+      if (command && event.key.toLowerCase() === "v" && clipboardItem) {
         event.preventDefault();
         const copy = { ...clipboardItem, id: uid(), name: clipboardItem.name + " copy", pageId: activePage, x: Math.min(794 - clipboardItem.w, clipboardItem.x + 24), y: Math.min(1123 - clipboardItem.h, clipboardItem.y + 24) };
-        setItems(old => [...old, copy]); setSelectedId(copy.id);
-        setStatus("Photo pasted on the current page.");
+        setItems(old => [...old, copy]); setSelectedId(copy.id); setSelectedIds([copy.id]); setStatus("Photo pasted on the current page."); return;
+      }
+      if (!command && selected && ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+        event.preventDefault(); const step=event.shiftKey?5:1;
+        const key=event.key==="ArrowLeft"?"x":event.key==="ArrowRight"?"x":event.key==="ArrowUp"?"y":"y";
+        const delta=event.key==="ArrowLeft"||event.key==="ArrowUp"?-step:step;
+        updateSelected(key,String(selected[key]+delta));
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selected, clipboardItem, activePage]);
+  }, [selected, clipboardItem, activePage, pageItems]);
 
   const addImage = async (file: File, pageId = activePage) => {
     if (!file.type.startsWith("image/")) return;
@@ -189,7 +202,10 @@ export default function PrintEditorPage() {
       .btn{border:0;border-radius:8px;padding:9px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#24533d;border:1px solid #cbd9ce}.btn:disabled{opacity:.45}
       .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px;align-items:start}
       .stage-wrap{padding:12px;background:#e9eeeb;border-radius:12px;min-width:0}.stage{position:relative;width:100%;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:none}
-      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box}.placed.active{border:2px solid #176b4d}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}
+      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}
+      .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
+      .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
+      .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
       .side{background:white;border:1px solid #dce5de;border-radius:12px;padding:13px;display:grid;gap:10px}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
@@ -221,24 +237,33 @@ export default function PrintEditorPage() {
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
         <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onPointerUp={() => setDragId(null)} onPointerLeave={() => setDragId(null)} onPointerMove={e => {
-          if (!dragId || !stageRef.current) return;
-          const rect = stageRef.current.getBoundingClientRect(), scaleX = 794 / rect.width, scaleY = 1123 / rect.height;
-          const x = (e.clientX - rect.left) * scaleX - dragOffsetRef.current.x;
-          const y = (e.clientY - rect.top) * scaleY - dragOffsetRef.current.y;
-          const mmToX = 794 / pageSize.w, mmToY = 1123 / pageSize.h;
-          const minX = Math.max(0, Number(pageMargins.left) || 0) * mmToX, maxX = 794 - Math.max(0, Number(pageMargins.right) || 0) * mmToX;
-          const minY = Math.max(0, Number(pageMargins.top) || 0) * mmToY, maxY = 1123 - Math.max(0, Number(pageMargins.bottom) || 0) * mmToY;
-          setItems(old => old.map(i => i.id === dragId ? { ...i, x: Math.max(minX, Math.min(maxX - i.w, x)), y: Math.max(minY, Math.min(maxY - i.h, y)) } : i));
-        }}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setDragId(item.id); }}>
+          if (!stageRef.current) return;
+          const rect=stageRef.current.getBoundingClientRect(), sx=794/rect.width, sy=1123/rect.height;
+          if(resizeState){
+            const dx=(e.clientX-resizeState.startX)*sx, dy=(e.clientY-resizeState.startY)*sy;
+            setItems(old=>old.map(i=>{if(i.id!==resizeState.id)return i;let {x,y,w,h}=i;const handle=resizeState.handle;
+              if(handle.includes("e"))w=Math.max(12,resizeState.startW+dx);if(handle.includes("s"))h=Math.max(12,resizeState.startH+dy);
+              if(handle.includes("w")){w=Math.max(12,resizeState.startW-dx);x=i.x+(resizeState.startW-w);}
+              if(handle.includes("n")){h=Math.max(12,resizeState.startH-dy);y=i.y+(resizeState.startH-h);}
+              return {...i,x,y,w,h};}));
+            return;
+          }
+          if(!dragId)return;
+          const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
+          setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} />
+            {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
       </div>
       <aside className="side">
         <h2>Photo / page organizer</h2>
-        <p className="small">किसी thumbnail को चुनें। अलग page में भेजने के लिए destination चुनें।</p>
+        <p className="small">एक photo पर click करें; Ctrl+click से कई चुनें। Ctrl+A से current page की सभी photos select होंगी।</p>
+        <button className="btn secondary" onClick={()=>{setSelectedIds(pageItems.map(i=>i.id));setStatus("Current page की सभी photos select हुईं।")}}>Select all on this page</button>
+        <button className="btn secondary" onClick={()=>{setSelectedIds([]);setStatus("Selection clear कर दी गई।")}}>Clear selection</button>
         <strong className="small">Page margins (mm)</strong>
         <div className="margin-grid">
           {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="50" step="0.5" value={pageMargins[side]} onChange={e => setPageMargins(old => ({...old,[side]:e.target.value}))} /></label>)}
