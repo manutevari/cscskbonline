@@ -143,18 +143,21 @@ export default function PrintEditorPage() {
     const mmToX = 794 / pageSize.w, mmToY = 1123 / pageSize.h;
     const w = Math.max(20, Number(photoWidthMm) || 35) * mmToX;
     const h = Math.max(20, Number(photoHeightMm) || 45) * mmToY;
-    const gap = 3 * mmToX;
+    const gap = 2 * mmToX;
     const left = Math.max(0, Number(pageMargins.left) || 0) * mmToX;
     const right = 794 - Math.max(0, Number(pageMargins.right) || 0) * mmToX;
     const top = Math.max(0, Number(pageMargins.top) || 0) * mmToY;
     const bottom = 1123 - Math.max(0, Number(pageMargins.bottom) || 0) * mmToY;
     const cols = Math.max(1, Math.min(count, Math.floor((right - left + gap) / (w + gap))));
-    const rows = Math.ceil(count / cols);
+    const rows = Math.max(1, Math.floor((bottom - top + gap) / (h + gap)));
+    const capacity = cols * rows;
+    const actualCount = Math.min(count, capacity);
     const startX = left + Math.max(0, (right - left - (cols * w + (cols - 1) * gap)) / 2);
-    const startY = top + Math.max(0, (bottom - top - (rows * h + (rows - 1) * gap)) / 2);
-    const copies = Array.from({ length: count }, (_, index) => ({ ...source, id: uid(), name: source.name + " · copy " + (index + 1), x: startX + (index % cols) * (w + gap), y: startY + Math.floor(index / cols) * (h + gap), w, h }));
-    setItems(old => [...old.filter(i => i.pageId !== activePage), ...copies.map(i => ({ ...i, pageId: activePage }))]);
-    setMode("photo"); setStatus(count + " copies का photo sheet बनाया गया। Print से पहले size और spacing जाँचें।");
+    const usedRows = Math.ceil(actualCount / cols);
+    const startY = top + Math.max(0, (bottom - top - (usedRows * h + (usedRows - 1) * gap)) / 2);
+    const copies = Array.from({ length: actualCount }, (_, index) => ({ ...source, id: uid(), name: source.name + " · copy " + (index + 1), x: startX + (index % cols) * (w + gap), y: startY + Math.floor(index / cols) * (h + gap), w, h }));
+    setItems(old => [...old, ...copies.map(i => ({ ...i, pageId: activePage }))]);
+    setMode("photo"); setStatus(actualCount + " copies का photo sheet बनाया गया।" + (actualCount < count ? " इस page पर margins और photo size के अनुसार अधिकतम " + capacity + " copies fit हुईं; बाकी के लिए दूसरा page जोड़ें।" : " Print से पहले size और spacing जाँचें।"));
   };
   const arrangeGrid = () => {
     const count = pageItems.length; if (!count) return;
