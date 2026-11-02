@@ -81,7 +81,7 @@ export default function PrintEditorPrototypePage() {
   };
 
   const beginGesture = (
-    event: PointerEvent<HTMLDivElement>,
+    event: PointerEvent<HTMLElement>,
     item: LayoutItem,
     mode: Gesture["mode"],
   ) => {
@@ -207,7 +207,8 @@ export default function PrintEditorPrototypePage() {
           @page{size:A4 portrait;margin:0}
           body{margin:0!important;background:#fff!important}
           .editor-shell{padding:0!important;margin:0!important;max-width:none!important}
-          .topline,.intro,h1,.toolbar,.status,.side,.page-wrap{display:none!important}
+          .topline,.intro,h1,.toolbar,.status,.side{display:none!important}
+          .page-wrap{display:block!important;padding:0!important;background:transparent!important;border-radius:0!important}
           .workspace{display:block!important}
           .stage{width:210mm!important;height:297mm!important;max-height:none!important;aspect-ratio:auto!important;box-shadow:none!important;overflow:hidden!important}
           .item{outline:none!important}
