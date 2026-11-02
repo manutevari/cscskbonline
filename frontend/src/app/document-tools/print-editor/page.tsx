@@ -244,7 +244,7 @@ export default function PrintEditorPrototypePage() {
             onPointerMove={handlePointerMove}
             onPointerUp={endGesture}
             onPointerCancel={endGesture}
-            onPointerDown={() => setSelectedId(null)}
+            onPointerDown={event => { if (event.target === event.currentTarget) setSelectedId(null); }}
           >
             {items.map(item => (
               <div
