@@ -507,6 +507,7 @@ export default function DocumentToolsPage() {
         <p style={{ color: "#176b4d", fontWeight: 800, marginBottom: 8 }}>CSC DOCUMENT TOOLS</p>
         <h1 style={{ fontSize: "clamp(28px,5vw,42px)", lineHeight: 1.15, margin: "0 0 10px", color: "#17251f", letterSpacing: "-.03em" }}>Crop, Select, Merge & Print Layout</h1>
         <p style={{ color: "#52635a", lineHeight: 1.6, maxWidth: 760, margin: 0 }}>Image processing आपके browser में होता है। Original file बदली नहीं जाती। Notification rules को confirm करें और download से पहले preview जाँचें।</p>
+        <a href="/document-tools/print-editor" style={{ display: "inline-flex", marginTop: 14, padding: "11px 15px", borderRadius: 10, background: "#176b4d", color: "#fff", fontWeight: 800, textDecoration: "none" }}>Open Smart Print Layout Editor →</a>
       </header>
 
       <section className="document-tools-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,360px),1fr))", gap: 18, alignItems: "start" }}>
