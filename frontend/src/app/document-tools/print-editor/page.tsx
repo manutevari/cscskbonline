@@ -55,6 +55,9 @@ export default function PrintEditorPage() {
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
+  const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -124,14 +127,15 @@ export default function PrintEditorPage() {
         // Ask for a password only after the complete file has been read.
         const loadingTask = pdfjs.getDocument({ data: bytes });
         let passwordCancelled = false;
-        loadingTask.onPassword = async (updatePassword: (password: string) => void, reason: number) => {
-          setStatus(file.name + " — PDF fully uploaded. Password required to open it.");
-          await new Promise<void>(resolve => { window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())); });
-          const entered = window.prompt(reason === 2
-            ? "Incorrect password. Enter the correct password for " + file.name + ":"
-            : "PDF fully uploaded. This file is password-protected. Enter its password to use it:", "");
-          if (entered === null) { passwordCancelled = true; void loadingTask.destroy(); return; }
-          updatePassword(entered);
+        loadingTask.onPassword = (updatePassword: (password: string) => void, reason: number) => {
+          setPdfPassword("");
+          setPasswordPrompt({ fileName: file.name, incorrect: reason === 2 });
+          setStatus(file.name + " — password required to unlock this PDF.");
+          passwordResolverRef.current = (entered: string | null) => {
+            setPasswordPrompt(null); passwordResolverRef.current = null;
+            if (entered === null) { passwordCancelled = true; void loadingTask.destroy(); return; }
+            updatePassword(entered);
+          };
         };
         let pdf: any;
         try { pdf = await loadingTask.promise; }
@@ -161,6 +165,13 @@ export default function PrintEditorPage() {
       else setStatus(e.message || "कुछ files process नहीं हो सकीं।");
     } finally { setBusy(false); }
   };
+
+  const submitPdfPassword = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pdfPassword.trim()) { setStatus("PDF password दर्ज करें।"); return; }
+    passwordResolverRef.current?.(pdfPassword); setPdfPassword("");
+  };
+  const cancelPdfPassword = () => { passwordResolverRef.current?.(null); setPdfPassword(""); };
 
   const addPage = () => {
     const id = Math.max(0, ...pages.map(p => p.id)) + 1;
@@ -328,6 +339,15 @@ export default function PrintEditorPage() {
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
+      <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
+        <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
+        <p style={{margin:0,color:"#58685e",fontSize:14}}><strong>{passwordPrompt.fileName}</strong></p>
+        {passwordPrompt.incorrect && <p role="alert" style={{margin:0,color:"#b42318",fontSize:13}}>Password incorrect. Please try again.</p>}
+        <label className="field">PDF password<input autoFocus type="password" autoComplete="off" value={pdfPassword} onChange={e=>setPdfPassword(e.target.value)} placeholder="Enter PDF password" /></label>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button type="button" className="btn secondary" onClick={cancelPdfPassword}>Cancel</button><button type="submit" className="btn">Unlock PDF</button></div>
+        <p className="small" style={{margin:0}}>Password is used locally to open this file and is not saved by this editor.</p>
+      </form></div>}
     <div className="workspace">
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
