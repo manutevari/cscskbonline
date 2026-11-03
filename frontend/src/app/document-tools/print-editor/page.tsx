@@ -10,21 +10,27 @@ const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> =
 };
 const uid = () => "item-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
 let pdfJsPromise: Promise<any> | null = null;
-function loadPdfJs(): Promise<any> {
-  if (typeof window === "undefined") return Promise.reject(new Error("PDF browser engine unavailable."));
-  const w = window as any;
-  if (w.pdfjsLib) return Promise.resolve(w.pdfjsLib);
-  if (!pdfJsPromise) pdfJsPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    script.onload = () => {
-      if (!w.pdfjsLib) return reject(new Error("PDF engine load नहीं हो सका।"));
-      w.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      resolve(w.pdfjsLib);
-    };
-    script.onerror = () => reject(new Error("PDF engine डाउनलोड नहीं हो सका। इंटरनेट कनेक्शन जाँचें।"));
-    document.head.appendChild(script);
-  });
+async function loadPdfJs(): Promise<any> {
+  if (typeof window === "undefined") throw new Error("PDF browser engine unavailable.");
+  if (!pdfJsPromise) {
+    pdfJsPromise = import("pdfjs-dist/legacy/build/pdf.mjs")
+      .then((pdfjs: any) => {
+        // Use the worker shipped with the installed package instead of relying on
+        // a third-party CDN script, which can be blocked or unavailable on CSC PCs.
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).toString();
+        return pdfjs;
+      })
+      .catch((error: unknown) => {
+        pdfJsPromise = null; // allow retry after a transient chunk/load failure
+        throw new Error(
+          "PDF engine load नहीं हो सका। Page refresh करके फिर कोशिश करें। " +
+          (error instanceof Error ? error.message : "")
+        );
+      });
+  }
   return pdfJsPromise;
 }
 
