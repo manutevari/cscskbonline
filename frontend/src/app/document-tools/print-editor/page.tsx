@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number };
+type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type LayoutPage = { id: number; label: string };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
@@ -49,6 +49,9 @@ export default function PrintEditorPage() {
   const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
+  const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
+  const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
@@ -174,6 +177,73 @@ export default function PrintEditorPage() {
     const n = Number(value); if (!Number.isFinite(n)) return;
     setItems(old => old.map(i => i.id === selected.id ? { ...i, [key]: Math.max(key === "w" || key === "h" ? 12 : 0, n) } : i));
   };
+  const saveEditSnapshot = () => setEditHistory(old => [...old.slice(-19), items.map(item => ({ ...item }))]);
+
+  const cropSelected = async () => {
+    if (!selected) return;
+    const left = Math.max(0, Math.min(99, Number(cropRect.left) || 0));
+    const top = Math.max(0, Math.min(99, Number(cropRect.top) || 0));
+    const width = Math.max(1, Math.min(100 - left, Number(cropRect.width) || 100));
+    const height = Math.max(1, Math.min(100 - top, Number(cropRect.height) || 100));
+    const image = new Image();
+    image.src = selected.src;
+    try {
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Image crop के लिए load नहीं हुई।")); });
+      const sx = Math.round(image.naturalWidth * left / 100), sy = Math.round(image.naturalHeight * top / 100);
+      const sw = Math.max(1, Math.round(image.naturalWidth * width / 100)), sh = Math.max(1, Math.round(image.naturalHeight * height / 100));
+      const canvas = document.createElement("canvas"); canvas.width = sw; canvas.height = sh;
+      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Crop canvas उपलब्ध नहीं है।");
+      ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Crop image save नहीं हो सकी।")), "image/png"));
+      const src = URL.createObjectURL(blob); urlsRef.current.push(src);
+      saveEditSnapshot();
+      setItems(old => old.map(item => item.id === selected.id ? { ...item, src, originalSrc: item.originalSrc || item.src, w: item.w * width / 100, h: item.h * height / 100, rotation: 0 } : item));
+      setCropRect({ left: "0", top: "0", width: "100", height: "100" });
+      setStatus("Crop लागू हो गया। Original file अलग रहती है; layout में cropped copy इस्तेमाल होगी।");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Crop लागू नहीं हो सका।"); }
+  };
+
+  const rotateSelected = async (degrees: number) => {
+    if (!selected) return;
+    const image = new Image(); image.src = selected.src;
+    try {
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Image rotate के लिए load नहीं हुई।")); });
+      const swap = Math.abs(degrees) % 180 === 90;
+      const canvas = document.createElement("canvas");
+      canvas.width = swap ? image.naturalHeight : image.naturalWidth;
+      canvas.height = swap ? image.naturalWidth : image.naturalHeight;
+      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Rotate canvas उपलब्ध नहीं है।");
+      ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(degrees * Math.PI / 180);
+      ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Rotate image save नहीं हो सकी।")), "image/png"));
+      const src = URL.createObjectURL(blob); urlsRef.current.push(src); saveEditSnapshot();
+      setItems(old => old.map(item => item.id === selected.id ? { ...item, src, originalSrc: item.originalSrc || item.src, w: swap ? item.h : item.w, h: swap ? item.w : item.h, rotation: 0 } : item));
+      setStatus("Image rotate हो गई।");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Rotate लागू नहीं हो सका।"); }
+  };
+
+  const updateImageFilter = (key: "brightness" | "contrast" | "sharpness", value: number) => {
+    if (!selected) return;
+    saveEditSnapshot();
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, [key]: value } : item));
+  };
+
+  const undoEdit = () => {
+    const previous = editHistory[editHistory.length - 1];
+    if (!previous) return;
+    setItems(previous.map(item => ({ ...item })));
+    setEditHistory(old => old.slice(0, -1));
+    setStatus("पिछला image edit undo कर दिया गया।");
+  };
+
+  const resetSelected = () => {
+    if (!selected) return;
+    saveEditSnapshot();
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, src: item.originalSrc || item.src, originalSrc: undefined, brightness: 100, contrast: 100, sharpness: 0, rotation: 0 } : item));
+    setCropRect({ left: "0", top: "0", width: "100", height: "100" });
+    setStatus("Selected image के edits reset कर दिए गए।");
+  };
+
   const createPhotoSheet = () => {
     const source = selected;
     if (!source) { setStatus("पहले photo select करें।"); return; }
@@ -227,7 +297,7 @@ export default function PrintEditorPage() {
       .btn{border:0;border-radius:8px;padding:9px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#24533d;border:1px solid #cbd9ce}.btn:disabled{opacity:.45}
       .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px;align-items:start}
       .stage-wrap{padding:12px;background:#e9eeeb;border-radius:12px;min-width:0}.stage{position:relative;width:100%;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:none}
-      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}
+      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
@@ -277,7 +347,7 @@ export default function PrintEditorPage() {
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
         }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
-            <img src={item.src} alt={item.name} draggable={false} />
+            <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} />
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
@@ -295,7 +365,7 @@ export default function PrintEditorPage() {
         <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
         <div className="thumbs">{items.map(item => <div key={item.id} className={"thumb "+(selectedIds.includes(item.id)?"chosen":"")} onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
           <input type="checkbox" aria-label={"Select "+item.name} checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={e=>{setActivePage(item.pageId);if(e.target.checked){setSelectedIds(old=>old.includes(item.id)?old:[...old,item.id]);setSelectedId(item.id);}else{setSelectedIds(old=>old.filter(id=>id!==item.id));if(selectedId===item.id){const next=selectedIds.find(id=>id!==item.id);setSelectedId(next||null);}}}} />
-          <img src={item.src} alt="" /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
+          <img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
         </div>)}</div>
         {selected && <><hr /><strong className="small">{selected.name}</strong>
           <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -304,12 +374,35 @@ export default function PrintEditorPage() {
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
           </div>
+          <section className="edit-controls">
+            <strong className="small">Image editing</strong>
+            <div className="edit-grid">
+              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="passport">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
+              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
+              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
+              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
+            </div>
+            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={()=>rotateSelected(-90)}>↶ Rotate 90°</button>
+              <button className="btn secondary" onClick={()=>rotateSelected(90)}>↷ Rotate 90°</button>
+            </div>
+            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
+            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
+            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
+              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
+            </div>
+            <p className="small">Crop values are percentages of the original image. Sharpness is stored for a future image-processing pass; brightness and contrast are previewed and printed.</p>
+          </section>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
           <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
         </>}
-        <p className="small">PDF pages are rendered locally in this browser. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
+        <p className="small">PDF pages are rendered locally in this browser. Crop/rotate create local image copies; brightness/contrast are applied in preview and print. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
       </aside>
     </div>
   </main>;
