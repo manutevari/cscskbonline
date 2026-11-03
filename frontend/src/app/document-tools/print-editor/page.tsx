@@ -289,6 +289,7 @@ export default function PrintEditorPage() {
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
 
   return <main className="editor">
+    <svg aria-hidden="true" width="0" height="0" style={{position:"absolute"}}><defs>{[0,1,2,3,4,5].map(level=><filter key={level} id={"sharpness-"+level}><feConvolveMatrix order="3" kernelMatrix={level===0?"0 0 0 0 1 0 0 0 0":`0 -${level} 0 -${level} ${1+4*level} -${level} 0 -${level} 0`} divisor="1" preserveAlpha="true" /></filter>)}</defs></svg>
     <style jsx>{`
       .editor{max-width:1200px;margin:auto;padding:22px 16px 40px;font-family:Arial,sans-serif;color:#17251f}
       .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.back{color:#176b4d;text-decoration:none;font-weight:700}
@@ -347,7 +348,7 @@ export default function PrintEditorPage() {
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
         }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
-            <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} />
+            <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
@@ -377,7 +378,7 @@ export default function PrintEditorPage() {
           <section className="edit-controls">
             <strong className="small">Image editing</strong>
             <div className="edit-grid">
-              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="passport">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
               <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
               <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
               <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
@@ -395,7 +396,7 @@ export default function PrintEditorPage() {
               <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
               <button className="btn secondary" onClick={resetSelected}>Reset image</button>
             </div>
-            <p className="small">Crop values are percentages of the original image. Sharpness is stored for a future image-processing pass; brightness and contrast are previewed and printed.</p>
+            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
           </section>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
