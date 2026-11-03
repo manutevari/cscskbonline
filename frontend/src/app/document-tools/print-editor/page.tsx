@@ -94,6 +94,25 @@ export default function PrintEditorPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, clipboardItem, activePage, pageItems]);
 
+  useEffect(() => {
+    const raw = sessionStorage.getItem("cscskb-print-layout-queue");
+    if (!raw) return;
+    sessionStorage.removeItem("cscskb-print-layout-queue");
+    try {
+      const queued = JSON.parse(raw) as Array<{ name: string; dataUrl: string }>;
+      void (async () => {
+        for (const entry of queued) {
+          const response = await fetch(entry.dataUrl);
+          const blob = await response.blob();
+          await addImage(new File([blob], entry.name.replace(/[^a-z0-9._-]+/gi, "-") + ".png", { type: "image/png" }));
+        }
+        if (queued.length) setStatus(queued.length + " crop(s) Document Tools से Print Layout में भेजे गए।");
+      })().catch(error => setStatus(error instanceof Error ? error.message : "Queued images load नहीं हो सकीं।"));
+    } catch {
+      setStatus("Document Tools से भेजी गई image queue पढ़ी नहीं जा सकी। कृपया image दोबारा भेजें।");
+    }
+  }, []);
+
   const addImage = async (file: File, pageId = activePage) => {
     if (!file.type.startsWith("image/")) return;
     const src = URL.createObjectURL(file); urlsRef.current.push(src);

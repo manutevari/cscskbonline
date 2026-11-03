@@ -103,8 +103,6 @@ export default function DocumentToolsPage() {
   const [format, setFormat] = useState<OutputFormat>("image/jpeg");
   const [notificationText, setNotificationText] = useState("");
   const [status, setStatus] = useState("");
-  const [selectedCrops, setSelectedCrops] = useState<Array<{ id: number; label: string; dataUrl: string }>>([]);
-  const [nextCropId, setNextCropId] = useState(1);
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState<"manual" | "auto">("manual");
   const [zoom, setZoom] = useState(100);
@@ -576,8 +574,14 @@ export default function DocumentToolsPage() {
             const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext("2d"); if (!ctx) { setStatus("Crop select नहीं हो सका।"); return; }            ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
             const label = (file?.name || "Image") + (isPdfInput ? " · Page " + pdfPage : " · Image");
-            setSelectedCrops(items => [...items, { id: nextCropId, label, dataUrl: canvas.toDataURL("image/png") }]);
-            setNextCropId(id => id + 1); setStatus("Crop Print Layout में जोड़ दिया गया।");
+            try {
+              const queue = JSON.parse(sessionStorage.getItem("cscskb-print-layout-queue") || "[]") as Array<{ name: string; dataUrl: string }>;
+              queue.push({ name: label, dataUrl: canvas.toDataURL("image/png") });
+              sessionStorage.setItem("cscskb-print-layout-queue", JSON.stringify(queue));
+              window.location.href = "/document-tools/print-editor?from=tools";
+            } catch {
+              setStatus("Crop तैयार है, लेकिन browser storage में भेजा नहीं जा सका। Print Layout Editor खोलकर image अलग से upload करें।");
+            }
           }} style={buttonStyle}>Select crop → Add to Print Layout</button>}
         </div>
 
@@ -605,24 +609,10 @@ export default function DocumentToolsPage() {
         </div>
       </section>
 
-      <section className="print-layout-panel document-tools-card" style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff", border: "1px solid #d8e4dc", color: "#17251f", lineHeight: 1.6 }}>
-        <h2 style={{ marginTop: 0 }}>4. Merge & Print Layout</h2>
-        <p>हर image/PDF से crop select करके यहाँ जोड़ें। ↑/↓ से क्रम बदलें; Print से browser print dialog खुलेगा।</p>
-        {selectedCrops.length === 0 ? <p>अभी कोई crop select नहीं है।</p> : <div style={{ display: "grid", gap: 10 }}>
-          {selectedCrops.map((item, index) => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "72px minmax(0,1fr) auto", alignItems: "center", gap: 10, padding: 10, border: "1px solid #d8e4dc", borderRadius: 10 }}>
-            <img src={item.dataUrl} alt={item.label} style={{ width: 72, height: 72, objectFit: "contain", background: "#f6faf8", borderRadius: 6 }} />
-            <div><strong>{index + 1}. {item.label}</strong><div style={{ fontSize: 12 }}>Selected crop</div></div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <button type="button" disabled={index === 0} onClick={() => setSelectedCrops(items => { const next = [...items]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} style={secondaryButtonStyle}>↑</button>
-              <button type="button" disabled={index === selectedCrops.length - 1} onClick={() => setSelectedCrops(items => { const next = [...items]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; })} style={secondaryButtonStyle}>↓</button>
-              <button type="button" onClick={() => setSelectedCrops(items => items.filter(cropItem => cropItem.id !== item.id))} style={secondaryButtonStyle}>Remove</button>
-            </div>
-          </div>)}
-        </div>}
-        <button type="button" disabled={!selectedCrops.length} onClick={() => { if (selectedCrops.length) window.print(); }} style={{ ...buttonStyle, marginTop: 12 }}>Print selected layout</button>
-        <div className="print-output" style={{ display: "none" }}>
-          {selectedCrops.map((item, index) => <div key={item.id} style={{ breakInside: "avoid", marginBottom: 2, textAlign: "center" }}><img src={item.dataUrl} alt={item.label} style={{ maxWidth: "100%", maxHeight: "58mm", objectFit: "contain" }} /><div style={{ fontSize: 8 }}>{index + 1}</div></div>)}
-        </div>
+      <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#f2f8f4", border: "1px solid #d8e4dc", color: "#254c39", lineHeight: 1.6 }}>
+        <strong>Print Layout</strong>
+        <p style={{ margin: "6px 0 10px" }}>Images और PDF pages को arrange, resize, collage या photo-sheet बनाने और print करने के लिए एक ही dedicated editor इस्तेमाल करें।</p>
+        <a href="/document-tools/print-editor" style={{ display: "inline-flex", padding: "10px 14px", borderRadius: 10, background: "#176b4d", color: "#fff", fontWeight: 800, textDecoration: "none" }}>Open Print Layout Editor →</a>
       </section>
       <section style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#fff9e9", border: "1px solid #ead8a7", color: "#594a22", lineHeight: 1.6 }}>
         <strong>Supported in this release:</strong> image or PDF input → crop/resize the preview and download as JPG, PNG, WebP or single-page PDF. Password-protected PDFs can be opened when you know the correct password. The separate feature to remove a PDF password or decrypt the original file remains premium-locked until payment verification is implemented. This is not a password-cracking tool. PDF-to-Word, Excel conversion, multi-page PDF editing and OCR are not included yet. PDF.js is loaded from cdnjs on first PDF use; the document itself is processed locally in this browser tab and is not uploaded by this tool.
