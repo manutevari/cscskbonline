@@ -146,8 +146,20 @@ export default function PrintEditorPage() {
           }
           throw pdfError;
         }
+        const permissions = await pdf.getPermissions();
+        const permissionFlags = pdfjs.PermissionFlag;
+        if (permissions) {
+          const canPrint = permissions.includes(permissionFlags.PRINT);
+          const canCopy = permissions.includes(permissionFlags.COPY);
+          if (!canPrint || !canCopy) {
+            const restricted = [!canPrint ? "printing" : "", !canCopy ? "copying/editing" : ""].filter(Boolean).join(" and ");
+            setStatus(file.name + " — PDF permissions restrict " + restricted + ". The file was not added to the editor.");
+            continue;
+          }
+        }
+        const highQualityPrint = !permissions || permissions.includes(permissionFlags.PRINT_HIGH_QUALITY);
         for (let n = 1; n <= pdf.numPages; n++) {
-          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: 2.5 });
+          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: highQualityPrint ? 2.5 : 1.5 });
           const canvas = document.createElement("canvas");
           canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
           const ctx = canvas.getContext("2d");
