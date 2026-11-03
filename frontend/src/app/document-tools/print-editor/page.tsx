@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number };
+type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type LayoutPage = { id: number; label: string };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
@@ -49,10 +49,15 @@ export default function PrintEditorPage() {
   const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
+  const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
+  const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
-  const [pdfPassword, setPdfPassword] = useState("");
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
+  const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -119,9 +124,42 @@ export default function PrintEditorPage() {
         if (file.type.startsWith("image/")) { await addImage(file); added++; continue; }
         const pdfjs = await loadPdfJs();
         const bytes = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: bytes, password: pdfPassword || undefined }).promise;
+        // Ask for a password only after the complete file has been read.
+        const loadingTask = pdfjs.getDocument({ data: bytes });
+        let passwordCancelled = false;
+        loadingTask.onPassword = (updatePassword: (password: string) => void, reason: number) => {
+          setPdfPassword("");
+          setPasswordPrompt({ fileName: file.name, incorrect: reason === 2 });
+          setStatus(file.name + " — password required to unlock this PDF.");
+          passwordResolverRef.current = (entered: string | null) => {
+            setPasswordPrompt(null); passwordResolverRef.current = null;
+            if (entered === null) { passwordCancelled = true; void loadingTask.destroy(); return; }
+            updatePassword(entered);
+          };
+        };
+        let pdf: any;
+        try { pdf = await loadingTask.promise; }
+        catch (pdfError) {
+          if (passwordCancelled) {
+            setStatus(file.name + " हटाई गई — password नहीं दिया गया, इसलिए कोई page या खाली column नहीं जोड़ा गया.");
+            continue;
+          }
+          throw pdfError;
+        }
+        const permissions = await pdf.getPermissions();
+        const permissionFlags = pdfjs.PermissionFlag;
+        if (permissions) {
+          const canPrint = permissions.includes(permissionFlags.PRINT);
+          const canCopy = permissions.includes(permissionFlags.COPY);
+          if (!canPrint || !canCopy) {
+            const restricted = [!canPrint ? "printing" : "", !canCopy ? "copying/editing" : ""].filter(Boolean).join(" and ");
+            setStatus(file.name + " — PDF permissions restrict " + restricted + ". The file was not added to the editor.");
+            continue;
+          }
+        }
+        const highQualityPrint = !permissions || permissions.includes(permissionFlags.PRINT_HIGH_QUALITY);
         for (let n = 1; n <= pdf.numPages; n++) {
-          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: 1.5 });
+          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: highQualityPrint ? 2.5 : 1.5 });
           const canvas = document.createElement("canvas");
           canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
           const ctx = canvas.getContext("2d");
@@ -140,6 +178,13 @@ export default function PrintEditorPage() {
     } finally { setBusy(false); }
   };
 
+  const submitPdfPassword = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pdfPassword.trim()) { setStatus("PDF password दर्ज करें।"); return; }
+    passwordResolverRef.current?.(pdfPassword); setPdfPassword("");
+  };
+  const cancelPdfPassword = () => { passwordResolverRef.current?.(null); setPdfPassword(""); };
+
   const addPage = () => {
     const id = Math.max(0, ...pages.map(p => p.id)) + 1;
     setPages(old => [...old, { id, label: "Page " + id }]); setActivePage(id);
@@ -155,6 +200,73 @@ export default function PrintEditorPage() {
     const n = Number(value); if (!Number.isFinite(n)) return;
     setItems(old => old.map(i => i.id === selected.id ? { ...i, [key]: Math.max(key === "w" || key === "h" ? 12 : 0, n) } : i));
   };
+  const saveEditSnapshot = () => setEditHistory(old => [...old.slice(-19), items.map(item => ({ ...item }))]);
+
+  const cropSelected = async () => {
+    if (!selected) return;
+    const left = Math.max(0, Math.min(99, Number(cropRect.left) || 0));
+    const top = Math.max(0, Math.min(99, Number(cropRect.top) || 0));
+    const width = Math.max(1, Math.min(100 - left, Number(cropRect.width) || 100));
+    const height = Math.max(1, Math.min(100 - top, Number(cropRect.height) || 100));
+    const image = new Image();
+    image.src = selected.src;
+    try {
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Image crop के लिए load नहीं हुई।")); });
+      const sx = Math.round(image.naturalWidth * left / 100), sy = Math.round(image.naturalHeight * top / 100);
+      const sw = Math.max(1, Math.round(image.naturalWidth * width / 100)), sh = Math.max(1, Math.round(image.naturalHeight * height / 100));
+      const canvas = document.createElement("canvas"); canvas.width = sw; canvas.height = sh;
+      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Crop canvas उपलब्ध नहीं है।");
+      ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Crop image save नहीं हो सकी।")), "image/png"));
+      const src = URL.createObjectURL(blob); urlsRef.current.push(src);
+      saveEditSnapshot();
+      setItems(old => old.map(item => item.id === selected.id ? { ...item, src, originalSrc: item.originalSrc || item.src, w: item.w * width / 100, h: item.h * height / 100, rotation: 0 } : item));
+      setCropRect({ left: "0", top: "0", width: "100", height: "100" });
+      setStatus("Crop लागू हो गया। Original file अलग रहती है; layout में cropped copy इस्तेमाल होगी।");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Crop लागू नहीं हो सका।"); }
+  };
+
+  const rotateSelected = async (degrees: number) => {
+    if (!selected) return;
+    const image = new Image(); image.src = selected.src;
+    try {
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Image rotate के लिए load नहीं हुई।")); });
+      const swap = Math.abs(degrees) % 180 === 90;
+      const canvas = document.createElement("canvas");
+      canvas.width = swap ? image.naturalHeight : image.naturalWidth;
+      canvas.height = swap ? image.naturalWidth : image.naturalHeight;
+      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Rotate canvas उपलब्ध नहीं है।");
+      ctx.translate(canvas.width / 2, canvas.height / 2); ctx.rotate(degrees * Math.PI / 180);
+      ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Rotate image save नहीं हो सकी।")), "image/png"));
+      const src = URL.createObjectURL(blob); urlsRef.current.push(src); saveEditSnapshot();
+      setItems(old => old.map(item => item.id === selected.id ? { ...item, src, originalSrc: item.originalSrc || item.src, w: swap ? item.h : item.w, h: swap ? item.w : item.h, rotation: 0 } : item));
+      setStatus("Image rotate हो गई।");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Rotate लागू नहीं हो सका।"); }
+  };
+
+  const updateImageFilter = (key: "brightness" | "contrast" | "sharpness", value: number) => {
+    if (!selected) return;
+    saveEditSnapshot();
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, [key]: value } : item));
+  };
+
+  const undoEdit = () => {
+    const previous = editHistory[editHistory.length - 1];
+    if (!previous) return;
+    setItems(previous.map(item => ({ ...item })));
+    setEditHistory(old => old.slice(0, -1));
+    setStatus("पिछला image edit undo कर दिया गया।");
+  };
+
+  const resetSelected = () => {
+    if (!selected) return;
+    saveEditSnapshot();
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, src: item.originalSrc || item.src, originalSrc: undefined, brightness: 100, contrast: 100, sharpness: 0, rotation: 0 } : item));
+    setCropRect({ left: "0", top: "0", width: "100", height: "100" });
+    setStatus("Selected image के edits reset कर दिए गए।");
+  };
+
   const createPhotoSheet = () => {
     const source = selected;
     if (!source) { setStatus("पहले photo select करें।"); return; }
@@ -200,6 +312,7 @@ export default function PrintEditorPage() {
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
 
   return <main className="editor">
+    <svg aria-hidden="true" width="0" height="0" style={{position:"absolute"}}><defs>{[0,1,2,3,4,5].map(level=><filter key={level} id={"sharpness-"+level}><feConvolveMatrix order="3" kernelMatrix={level===0?"0 0 0 0 1 0 0 0 0":`0 -${level} 0 -${level} ${1+4*level} -${level} 0 -${level} 0`} divisor="1" preserveAlpha="true" /></filter>)}</defs></svg>
     <style jsx>{`
       .editor{max-width:1200px;margin:auto;padding:22px 16px 40px;font-family:Arial,sans-serif;color:#17251f}
       .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.back{color:#176b4d;text-decoration:none;font-weight:700}
@@ -208,23 +321,22 @@ export default function PrintEditorPage() {
       .btn{border:0;border-radius:8px;padding:9px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#24533d;border:1px solid #cbd9ce}.btn:disabled{opacity:.45}
       .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px;align-items:start}
       .stage-wrap{padding:12px;background:#e9eeeb;border-radius:12px;min-width:0}.stage{position:relative;width:100%;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:none}
-      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}
+      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
       .side{background:white;border:1px solid #dce5de;border-radius:12px;padding:13px;display:grid;gap:10px}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
-      .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
       @media(max-width:780px){.workspace{grid-template-columns:1fr}.side{order:-1}}
-      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.side{display:none!important}.workspace,.stage-wrap{display:block!important;padding:0!important;margin:0!important;background:transparent!important}.stage{width:${pageSize.w}mm!important;height:${pageSize.h}mm!important;aspect-ratio:auto!important;box-shadow:none!important;overflow:hidden!important;page-break-after:always;break-after:page}.placed{border:0!important}}
+      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.workspace{display:none!important}.print-pages{display:block!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Tools</a><span className="small">Multi-file · PDF pages · Custom print size</span></div>
     <h1>Print Layout Editor</h1>
     <p className="intro">एक ही जगह images और PDFs जोड़ें। PDF के हर page का preview layout में आएगा। तय करें कौन-सी photos एक collage में रहेंगी और कौन अलग pages पर जाएँगी।</p>
     <section className="toolbar">
       <label className="btn secondary">Add images / PDFs<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
-      <label className="field">PDF password (if required)<input type="password" value={pdfPassword} onChange={e => setPdfPassword(e.target.value)} placeholder="PDF password" /></label>
       <button className="btn secondary" onClick={addPage}>+ Separate page</button>
       <button className="btn" onClick={print} disabled={!items.length || busy}>Print preview</button>
     </section>
@@ -239,6 +351,16 @@ export default function PrintEditorPage() {
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
+      <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
+        <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
+        <p style={{margin:0,color:"#58685e",fontSize:14}}><strong>{passwordPrompt.fileName}</strong></p>
+        {passwordPrompt.incorrect && <p role="alert" style={{margin:0,color:"#b42318",fontSize:13}}>Password incorrect. Please try again.</p>}
+        <label className="field">PDF password<input autoFocus type="password" autoComplete="off" value={pdfPassword} onChange={e=>setPdfPassword(e.target.value)} placeholder="Enter PDF password" /></label>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button type="button" className="btn secondary" onClick={cancelPdfPassword}>Cancel</button><button type="submit" className="btn">Unlock PDF</button></div>
+        <p className="small" style={{margin:0}}>Password is used locally to open this file and is not saved by this editor.</p>
+      </form></div>}
+    <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
     <div className="workspace">
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
@@ -259,7 +381,7 @@ export default function PrintEditorPage() {
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
         }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
-            <img src={item.src} alt={item.name} draggable={false} />
+            <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
@@ -277,7 +399,7 @@ export default function PrintEditorPage() {
         <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
         <div className="thumbs">{items.map(item => <div key={item.id} className={"thumb "+(selectedIds.includes(item.id)?"chosen":"")} onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
           <input type="checkbox" aria-label={"Select "+item.name} checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={e=>{setActivePage(item.pageId);if(e.target.checked){setSelectedIds(old=>old.includes(item.id)?old:[...old,item.id]);setSelectedId(item.id);}else{setSelectedIds(old=>old.filter(id=>id!==item.id));if(selectedId===item.id){const next=selectedIds.find(id=>id!==item.id);setSelectedId(next||null);}}}} />
-          <img src={item.src} alt="" /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
+          <img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
         </div>)}</div>
         {selected && <><hr /><strong className="small">{selected.name}</strong>
           <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -286,12 +408,35 @@ export default function PrintEditorPage() {
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
           </div>
+          <section className="edit-controls">
+            <strong className="small">Image editing</strong>
+            <div className="edit-grid">
+              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
+              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
+              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
+              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
+            </div>
+            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={()=>rotateSelected(-90)}>↶ Rotate 90°</button>
+              <button className="btn secondary" onClick={()=>rotateSelected(90)}>↷ Rotate 90°</button>
+            </div>
+            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
+            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
+            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
+              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
+            </div>
+            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
+          </section>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
           <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
         </>}
-        <p className="small">PDF pages are rendered locally in this browser. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
+        <p className="small">PDF pages are rendered locally in this browser. Crop/rotate create local image copies; brightness/contrast are applied in preview and print. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
       </aside>
     </div>
   </main>;
