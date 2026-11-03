@@ -50,7 +50,6 @@ export default function PrintEditorPage() {
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
-  const [pdfPassword, setPdfPassword] = useState("");
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [busy, setBusy] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -119,7 +118,27 @@ export default function PrintEditorPage() {
         if (file.type.startsWith("image/")) { await addImage(file); added++; continue; }
         const pdfjs = await loadPdfJs();
         const bytes = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: bytes, password: pdfPassword || undefined }).promise;
+        // Ask for a password only after the complete file has been read.
+        const loadingTask = pdfjs.getDocument({ data: bytes });
+        let passwordCancelled = false;
+        loadingTask.onPassword = async (updatePassword: (password: string) => void, reason: number) => {
+          setStatus(file.name + " — PDF fully uploaded. Password required to open it.");
+          await new Promise<void>(resolve => { window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())); });
+          const entered = window.prompt(reason === 2
+            ? "Incorrect password. Enter the correct password for " + file.name + ":"
+            : "PDF fully uploaded. This file is password-protected. Enter its password to use it:", "");
+          if (entered === null) { passwordCancelled = true; void loadingTask.destroy(); return; }
+          updatePassword(entered);
+        };
+        let pdf: any;
+        try { pdf = await loadingTask.promise; }
+        catch (pdfError) {
+          if (passwordCancelled) {
+            setStatus(file.name + " हटाई गई — password नहीं दिया गया, इसलिए कोई page या खाली column नहीं जोड़ा गया.");
+            continue;
+          }
+          throw pdfError;
+        }
         for (let n = 1; n <= pdf.numPages; n++) {
           const page = await pdf.getPage(n), viewport = page.getViewport({ scale: 1.5 });
           const canvas = document.createElement("canvas");
@@ -224,7 +243,6 @@ export default function PrintEditorPage() {
     <p className="intro">एक ही जगह images और PDFs जोड़ें। PDF के हर page का preview layout में आएगा। तय करें कौन-सी photos एक collage में रहेंगी और कौन अलग pages पर जाएँगी।</p>
     <section className="toolbar">
       <label className="btn secondary">Add images / PDFs<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
-      <label className="field">PDF password (if required)<input type="password" value={pdfPassword} onChange={e => setPdfPassword(e.target.value)} placeholder="PDF password" /></label>
       <button className="btn secondary" onClick={addPage}>+ Separate page</button>
       <button className="btn" onClick={print} disabled={!items.length || busy}>Print preview</button>
     </section>
