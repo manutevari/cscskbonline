@@ -147,7 +147,7 @@ export default function PrintEditorPage() {
           throw pdfError;
         }
         for (let n = 1; n <= pdf.numPages; n++) {
-          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: 1.5 });
+          const page = await pdf.getPage(n), viewport = page.getViewport({ scale: 2.5 });
           const canvas = document.createElement("canvas");
           canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
           const ctx = canvas.getContext("2d");
