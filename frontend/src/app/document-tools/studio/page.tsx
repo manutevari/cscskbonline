@@ -220,7 +220,9 @@ export default function SmartPhotoDocumentStudio() {
         }
       }
       const bytes = await pdf.save();
-      download(new Blob([bytes], { type: "application/pdf" }), "cscskb-A4-print-sheet.pdf");
+      const pdfBuffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(pdfBuffer).set(bytes);
+      download(new Blob([pdfBuffer], { type: "application/pdf" }), "cscskb-A4-print-sheet.pdf");
       setStatus("A4 PDF तैयार: " + targets.length + " photos · " + cols + " columns × " + rows + " rows per page · " + Math.ceil(targets.length / perPage) + " page(s).");
     } catch (error) { setStatus(error instanceof Error ? error.message : "A4 PDF export असफल रहा।"); }
     finally { setBusy(false); }
