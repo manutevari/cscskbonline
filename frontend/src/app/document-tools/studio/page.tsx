@@ -59,6 +59,10 @@ export default function SmartPhotoDocumentStudio() {
   const [heightCm, setHeightCm] = useState("4.5");
   const [dpi, setDpi] = useState("300");
   const [maxKb, setMaxKb] = useState("50");
+  const [pixelWidth, setPixelWidth] = useState("");
+  const [pixelHeight, setPixelHeight] = useState("");
+  const [compressionQuality, setCompressionQuality] = useState("0.9");
+  const [chatMessages, setChatMessages] = useState<{ role: "assistant" | "user"; text: string }[]>([{ role: "assistant", text: "बताइए फोटो या document में क्या बदलाव चाहिए। उदाहरण: 3.5 × 4.5 cm, 300 DPI और अधिकतम 50 KB." }]);
   const [marginMm, setMarginMm] = useState("8");
   const [gapMm, setGapMm] = useState("3");
   const [whiteBg, setWhiteBg] = useState(true);
@@ -107,19 +111,39 @@ export default function SmartPhotoDocumentStudio() {
     } finally { setBusy(false); }
   };
 
-  const parseIntent = () => {
-    const kb = intent.match(/(\d+(?:\.\d+)?)\s*kb/i);
-    const dims = intent.match(/(\d+(?:\.\d+)?)\s*[×x*]\s*(\d+(?:\.\d+)?)\s*cm/i);
-    const dpiMatch = intent.match(/(\d{2,4})\s*dpi/i);
-    const wantsWhite = /white\s*background|सफेद\s*बैकग्राउंड|white\s*bg/i.test(intent);
-    if (kb) setMaxKb(kb[1]);
-    if (dims) { setWidthCm(dims[1]); setHeightCm(dims[2]); }
-    if (dpiMatch) setDpi(dpiMatch[1]);
-    if (/no\s*background|transparent|पारदर्शी/i.test(intent)) setWhiteBg(false);
-    else if (wantsWhite) setWhiteBg(true);
-    setStatus(kb || dims || dpiMatch || wantsWhite ? "Intent समझ लिया। नीचे निकली हुई settings जाँचें; फिर Apply/Export करें।" : "कुछ settings नहीं पहचानी गईं। उदाहरण: 50 KB, 3.5 × 4.5 cm, 300 DPI, white background.");
+  const parseIntent = async () => {
+    const instruction = intent.trim();
+    if (!instruction) return;
+    setBusy(true);
+    setChatMessages(prev => [...prev, { role: "user", text: instruction }]);
+    setIntent("");
+    setStatus("AI instruction समझ रहा है…");
+    try {
+      const response = await fetch("/api/ai/intent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "AI request असफल रही।");
+      const s = result.settings || {};
+      if (typeof s.widthCm === "number") setWidthCm(String(s.widthCm));
+      if (typeof s.heightCm === "number") setHeightCm(String(s.heightCm));
+      if (typeof s.dpi === "number") setDpi(String(s.dpi));
+      if (typeof s.maxKb === "number") setMaxKb(String(s.maxKb));
+      if (typeof s.pixelWidth === "number") setPixelWidth(String(s.pixelWidth));
+      if (typeof s.pixelHeight === "number") setPixelHeight(String(s.pixelHeight));
+      if (typeof s.compressionQuality === "number") setCompressionQuality(String(s.compressionQuality));
+      if (typeof s.whiteBg === "boolean") setWhiteBg(s.whiteBg);
+      const explanation = result.explanation || "Instruction के अनुसार settings update कर दी गई हैं।";
+      const note = result.missingInfo?.length ? " स्पष्ट करने की जरूरत: " + result.missingInfo.join(", ") : "";
+      setChatMessages(prev => [...prev, { role: "assistant", text: explanation + note + " Settings panel में values जाँचकर फिर export करें." }]);
+      setStatus("AI ने settings interpret कीं। कोई बदलाव export करने से पहले आप जाँच सकते हैं।");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI request असफल रही।";
+      setChatMessages(prev => [...prev, { role: "assistant", text: "AI से response नहीं मिला: " + message + " API key और deployment environment जाँचें." }]);
+      setStatus(message);
+    } finally { setBusy(false); }
   };
-
   const makeJpeg = useCallback(async (asset: Asset): Promise<Blob> => {
     const image = await loadImage(asset.dataUrl);
     const w = cmToPx(Number(widthCm) || 3.5, Number(dpi) || 300);
@@ -133,7 +157,7 @@ export default function SmartPhotoDocumentStudio() {
     const sx = (image.naturalWidth - sw) / 2, sy = (image.naturalHeight - sh) / 2;
     ctx.drawImage(image, sx, sy, sw, sh, 0, 0, w, h);
     const limit = Math.max(1, Number(maxKb) || 50) * 1024;
-    let low = 0.08, high = 0.95, best: Blob | null = null;
+    let low = 0.08, high = Math.max(0.08, Math.min(0.98, Number(compressionQuality) || 0.9)), best: Blob | null = null;
     for (let i = 0; i < 12; i++) {
       const q = (low + high) / 2;
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", q));
@@ -146,7 +170,7 @@ export default function SmartPhotoDocumentStudio() {
       best = blob;
     }
     return best;
-  }, [widthCm, heightCm, dpi, whiteBg, maxKb]);
+  }, [widthCm, heightCm, dpi, whiteBg, maxKb, pixelWidth, pixelHeight, compressionQuality]);
 
   const exportImages = async () => {
     const targets = selectedAssets.length ? selectedAssets : assets;
@@ -245,7 +269,7 @@ export default function SmartPhotoDocumentStudio() {
           <button className={activeTab === "print" ? "active" : ""} onClick={() => setActiveTab("print")}>Print Studio</button>
         </nav>
         <input ref={inputRef} type="file" accept="image/*,application/pdf,.pdf" multiple hidden onChange={addFiles} />
-        <div className="studio-intent"><input value={intent} onChange={e => setIntent(e.target.value)} onKeyDown={e => { if (e.key === "Enter") parseIntent(); }} placeholder="जैसे: 50 KB, 3.5 × 4.5 cm, 300 DPI, white background" /><button className="studio-btn primary" onClick={parseIntent}>Understand instruction</button></div>
+        
         <div className="studio-grid">
           <aside className="studio-card">
             <h2>Output settings</h2>
@@ -253,6 +277,9 @@ export default function SmartPhotoDocumentStudio() {
             <label className="studio-field">Height (cm)<input type="number" min="0.5" max="28" step="0.1" value={heightCm} onChange={e => setHeightCm(e.target.value)} /></label>
             <label className="studio-field">Resolution (DPI)<input type="number" min="72" max="1200" value={dpi} onChange={e => setDpi(e.target.value)} /></label>
             <label className="studio-field">Maximum file size (KB)<input type="number" min="1" max="10000" value={maxKb} onChange={e => setMaxKb(e.target.value)} /></label>
+            <label className="studio-field">Pixel width (px, optional)<input type="number" min="1" max="10000" value={pixelWidth} onChange={e => setPixelWidth(e.target.value)} placeholder={String(cmToPx(Number(widthCm) || 3.5, Number(dpi) || 300))} /></label>
+            <label className="studio-field">Pixel height (px, optional)<input type="number" min="1" max="10000" value={pixelHeight} onChange={e => setPixelHeight(e.target.value)} placeholder={String(cmToPx(Number(heightCm) || 4.5, Number(dpi) || 300))} /></label>
+            <label className="studio-field">Compression quality (0.08–0.98)<input type="number" min="0.08" max="0.98" step="0.01" value={compressionQuality} onChange={e => setCompressionQuality(e.target.value)} /></label>
             <label className="studio-field">A4 margin (mm)<input type="number" min="0" max="30" value={marginMm} onChange={e => setMarginMm(e.target.value)} /></label>
             <label className="studio-field">Photo gap (mm)<input type="number" min="0" max="20" value={gapMm} onChange={e => setGapMm(e.target.value)} /></label>
             <label className="studio-field"><input type="checkbox" checked={whiteBg} onChange={e => setWhiteBg(e.target.checked)} /> White background</label>
@@ -267,6 +294,17 @@ export default function SmartPhotoDocumentStudio() {
             <p className="studio-help">Shortcuts: Ctrl+A select all · Delete remove selected · Esc clear selection · Ctrl+S export A4 PDF. Files are processed in this browser session; nothing is uploaded to a server by this page.</p>
           </section>
         </div>
+        <section className="studio-card" style={{ marginTop: 18 }} aria-label="AI assistant">
+          <h2>AI Studio Assistant</h2>
+          <div style={{ maxHeight: 190, overflowY: "auto", display: "grid", gap: 8, marginBottom: 12 }} aria-live="polite">
+            {chatMessages.map((message, index) => <div key={index} style={{ justifySelf: message.role === "user" ? "end" : "start", maxWidth: "88%", padding: "9px 12px", borderRadius: 10, background: message.role === "user" ? "#e8f2f8" : "#f1f4f6", fontSize: 13, lineHeight: 1.5 }}>{message.text}</div>)}
+          </div>
+          <div className="studio-intent" style={{ marginBottom: 0 }}>
+            <input aria-label="AI instruction" value={intent} onChange={e => setIntent(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void parseIntent(); } }} placeholder="उदाहरण: फोटो 200 × 230 px और 30 KB से कम करें" />
+            <button className="studio-btn primary" onClick={() => void parseIntent()} disabled={busy || !intent.trim()}>Send instruction</button>
+          </div>
+          <p className="studio-help">Privacy: इस चैट में केवल आपका लिखा हुआ instruction OpenRouter को भेजा जाता है। Uploaded photos और PDFs इसी browser में process होते हैं। AI द्वारा बदली गई settings export से पहले editable रहती हैं।</p>
+        </section>
       </div>
     </main>
   );
