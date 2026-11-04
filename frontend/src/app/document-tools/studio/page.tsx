@@ -146,8 +146,8 @@ export default function SmartPhotoDocumentStudio() {
   };
   const makeJpeg = useCallback(async (asset: Asset): Promise<Blob> => {
     const image = await loadImage(asset.dataUrl);
-    const w = cmToPx(Number(widthCm) || 3.5, Number(dpi) || 300);
-    const h = cmToPx(Number(heightCm) || 4.5, Number(dpi) || 300);
+    const w = Math.max(1, Math.min(10000, Number(pixelWidth) || cmToPx(Number(widthCm) || 3.5, Number(dpi) || 300)));
+    const h = Math.max(1, Math.min(10000, Number(pixelHeight) || cmToPx(Number(heightCm) || 4.5, Number(dpi) || 300)));
     const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Image processor उपलब्ध नहीं है।");
