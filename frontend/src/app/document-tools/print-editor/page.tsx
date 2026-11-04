@@ -411,7 +411,40 @@ export default function PrintEditorPage() {
           <section className="edit-controls">
             <strong className="small">Image editing</strong>
             <div className="edit-grid">
-              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">
+                Crop ratio
+                <select
+                  value={cropRatio}
+                  onChange={e => {
+                    const nextRatio = e.target.value;
+                    setCropRatio(nextRatio);
+                    if (nextRatio === "free") return;
+                    const [ratioWidth, ratioHeight] = nextRatio.split(":").map(Number);
+                    const targetRatio = ratioWidth / ratioHeight;
+                    setCropRect(current => {
+                      const currentWidth = Number(current.width);
+                      const currentHeight = Number(current.height);
+                      if (currentWidth / currentHeight > targetRatio) {
+                        return {
+                          ...current,
+                          width: String(Math.max(1, Math.min(100, currentHeight * targetRatio))),
+                        };
+                      }
+                      return {
+                        ...current,
+                        height: String(Math.max(1, Math.min(100, currentWidth / targetRatio))),
+                      };
+                    });
+                  }}
+                >
+                  <option value="free">Free</option>
+                  <option value="1:1">1:1 Square</option>
+                  <option value="3:4">3:4</option>
+                  <option value="4:5">4:5</option>
+                  <option value="7:9">Passport 35:45</option>
+                  <option value="16:9">16:9</option>
+                </select>
+              </label>
               <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
               <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
               <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
