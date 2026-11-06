@@ -377,9 +377,10 @@ export default function PrintEditorPage() {
       .editor{max-width:1600px;margin:auto;padding:0 0 30px;font-family:Arial,sans-serif;color:#172033;background:#f4f6fb;min-height:100vh}
       .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#071b3b;color:#fff;padding:13px 18px;align-items:center}.back{color:#fff;text-decoration:none;font-weight:700}
       h1{font-size:clamp(20px,2.5vw,28px);margin:0;color:#fff}.intro{color:#dbe6f7;line-height:1.4;margin:0;font-size:12px}
-      .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:10px 12px}
-      .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled{opacity:.45}
-      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:190px minmax(360px,1fr) 250px;gap:9px;align-items:stretch;padding:0 10px;min-height:calc(100vh - 205px)}
+      .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:7px 10px}
+      .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled,.icon-btn:disabled{opacity:.45;cursor:not-allowed}
+      .compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.download-later{color:#718096;background:#f7f8fa}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
+      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:none}.side-details{min-width:0}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
       .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
@@ -389,21 +390,25 @@ export default function PrintEditorPage() {
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
-      @media(max-width:1050px){.workspace{grid-template-columns:155px minmax(0,1fr)}.side{grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:650px){.workspace{grid-template-columns:1fr}.side{grid-column:auto;grid-row:auto;grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:8px}.editor{padding-bottom:18px}}
+      @media(max-width:1050px){.workspace{grid-template-columns:minmax(0,1fr)}.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:650px){.workspace{grid-template-columns:1fr}.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
       @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>A4 · 210 × 297 mm</span></div>
-    <section className="toolbar">
-      <strong style={{color:"#243b60",fontSize:12}}>View</strong>
-      <button className={"btn "+(zoomMode==="fit-page"?"":"secondary")} onClick={()=>setZoomMode("fit-page")}>▣ Fit Page</button>
-      <button className={"btn "+(zoomMode==="fit-width"?"":"secondary")} onClick={()=>setZoomMode("fit-width")}>↔ Fit Width</button>
-      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
+    <section className="toolbar compact-toolbar" aria-label="Editor tools">
+      <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
+      <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
+      <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
+      <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
+      <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
+      <button className="icon-btn" title="Duplicate selected photo" onClick={()=>{if(selected){const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);setSelectedIds([copy.id]);}}} disabled={!selected}>▣ Duplicate</button>
+      <span className="toolbar-spacer" />
+      <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
+      <button className={"icon-btn "+(zoomMode==="fit-width"?"selected":"")} onClick={()=>setZoomMode("fit-width")}>Fit width</button>
+      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
-      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>+</button>
-      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(100);}}>100%</button>
-      <label className="btn secondary">Add images / PDFs<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
-      <button className="btn secondary" onClick={addPage}>+ Separate page</button>
-      <button className="btn" onClick={print} disabled={!items.length || busy}>Print preview</button>
+      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
+      <button className="icon-btn download-later" title="Download formats are planned for the next phase" disabled>↓ Download</button>
+      <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
       <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A4","A3","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
@@ -479,7 +484,9 @@ export default function PrintEditorPage() {
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
       </div>
-      <aside className="side">
+      <details className="side-details">
+        <summary>Editing tools & photo organizer</summary>
+        <aside className="side">
         <h2>Smart edit assistant</h2>
         <p className="small">Selected photo/page के लिए natural-language shortcuts. उदाहरण: “brightness 20% बढ़ाओ” या “इस हिस्से को select करो”.</p>
         <form onSubmit={e=>{e.preventDefault();handleAssistantCommand();}} style={{display:"grid",gap:7}}>
@@ -540,7 +547,8 @@ export default function PrintEditorPage() {
           <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
         </>}
         <p className="small">PDF pages are rendered locally in this browser. Crop/rotate create local image copies; brightness/contrast are applied in preview and print. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
-      </aside>
+        </aside>
+      </details>
     </div>
   </main>;
 }
