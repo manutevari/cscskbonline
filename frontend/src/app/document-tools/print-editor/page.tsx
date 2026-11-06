@@ -230,6 +230,30 @@ export default function PrintEditorPage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : "Crop लागू नहीं हो सका।"); }
   };
 
+  const extractSelectedRegion = async () => {
+    if (!selected) return;
+    const left = Math.max(0, Math.min(99, Number(cropRect.left) || 0));
+    const top = Math.max(0, Math.min(99, Number(cropRect.top) || 0));
+    const width = Math.max(1, Math.min(100 - left, Number(cropRect.width) || 100));
+    const height = Math.max(1, Math.min(100 - top, Number(cropRect.height) || 100));
+    if (width >= 99.5 && height >= 99.5) { setStatus("पहले PDF page/photo के अंदर छोटा region drag करके select करें।"); return; }
+    const image = new Image(); image.src = selected.src;
+    try {
+      await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("Selected page load नहीं हुई।"));});
+      const sx=Math.round(image.naturalWidth*left/100), sy=Math.round(image.naturalHeight*top/100);
+      const sw=Math.max(1,Math.round(image.naturalWidth*width/100)), sh=Math.max(1,Math.round(image.naturalHeight*height/100));
+      const canvas=document.createElement("canvas");canvas.width=sw;canvas.height=sh;
+      const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Region processor उपलब्ध नहीं है।");
+      ctx.drawImage(image,sx,sy,sw,sh,0,0,sw,sh);
+      const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Region export नहीं हो सका।")),"image/png"));
+      const src=URL.createObjectURL(blob);urlsRef.current.push(src);
+      const region:LayoutItem={id:uid(),name:selected.name+" · selected region",src,pageId:selected.pageId,x:selected.x+selected.w*left/100,y:selected.y+selected.h*top/100,w:selected.w*width/100,h:selected.h*height/100,brightness:100,contrast:100,sharpness:0};
+      setItems(old=>[...old,region]);setSelectedId(region.id);setSelectedIds([region.id]);
+      setCropRect({left:"0",top:"0",width:"100",height:"100"});
+      setStatus("Region अलग editable photo layer बन गया। नीचे brightness/contrast बदलें; original PDF page पीछे सुरक्षित है।");
+    } catch(error) { setStatus(error instanceof Error?error.message:"Region extract नहीं हो सका।"); }
+  };
+
   const rotateSelected = async (degrees: number) => {
     if (!selected) return;
     const image = new Image(); image.src = selected.src;
@@ -473,6 +497,7 @@ export default function PrintEditorPage() {
               <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
             </div>
             <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
             <div className="edit-grid">
               <button className="btn secondary" onClick={()=>rotateSelected(-90)}>↶ Rotate 90°</button>
               <button className="btn secondary" onClick={()=>rotateSelected(90)}>↷ Rotate 90°</button>
