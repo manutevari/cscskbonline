@@ -470,7 +470,7 @@ export default function PrintEditorPage() {
           const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
           zip.file(`Page-${id}.${ext}`,blob);
         }
-        saveBlob(await zip.generateAsync({type:"blob"}"),`CSCSKB-Pages-${ext.toUpperCase()}.zip`);
+        saveBlob(await zip.generateAsync({type:"blob"}),`CSCSKB-Pages-${ext.toUpperCase()}.zip`);
         setStatus("सभी pages की images ZIP में download शुरू हो गई।");
       }
     } catch(error) {
