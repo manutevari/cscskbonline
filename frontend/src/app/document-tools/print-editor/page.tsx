@@ -65,6 +65,7 @@ export default function PrintEditorPage() {
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
+  const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -452,7 +453,9 @@ export default function PrintEditorPage() {
     setBusy(true);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
-      const limitBytes=Number(maxFileSizeKb)>0?Number(maxFileSizeKb)*1024:0;
+      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
+      if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
+      const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
       if (kind==="all-pdf") {
         const blob=await createPdf(pageIds,limitBytes); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
         setStatus(`सभी pages की PDF download शुरू हुई। Final file size: ${size}. Downloaded bytes are the same as this verified file.`);
@@ -523,7 +526,7 @@ export default function PrintEditorPage() {
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label><strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
+      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i=>(i+1)*100)).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
