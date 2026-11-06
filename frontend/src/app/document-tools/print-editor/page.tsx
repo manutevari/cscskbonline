@@ -503,6 +503,7 @@ export default function PrintEditorPage() {
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>A4 · 210 × 297 mm</span></div>
     <section className="toolbar compact-toolbar" aria-label="Editor tools">
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
+      <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -659,10 +660,7 @@ export default function PrintEditorPage() {
             <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
             <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
             </>}
-            <div className="edit-grid">
-              <button className="btn secondary" onClick={()=>rotateSelected(-90)}>↶ Rotate 90°</button>
-              <button className="btn secondary" onClick={()=>rotateSelected(90)}>↷ Rotate 90°</button>
-            </div>
+            
             <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
             <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
             <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
