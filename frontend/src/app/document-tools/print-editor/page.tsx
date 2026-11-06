@@ -456,7 +456,7 @@ export default function PrintEditorPage() {
         <button className="btn secondary" onClick={deleteItem} disabled={!selected}>⌫ Remove Selected</button>
         <hr />
         <h2>Page setup</h2>
-        <label className="field">Page margins — MS Word style
+        <label className="field">Page margins
           <select value={marginPreset} onChange={e => {
             const value=e.target.value;
             setMarginPreset(value);
@@ -481,7 +481,7 @@ export default function PrintEditorPage() {
         <div className="margin-grid">
           {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="100" step="0.5" value={pageMargins[side]} onChange={e => {setMarginPreset("custom");setPageMargins(old => ({...old,[side]:e.target.value}));}} /></label>)}
         </div>
-        <p className="small">Margins are set in millimetres. Choose a Word-style preset or enter custom values.</p>
+        <p className="small">Margins are set in millimetres. Choose a preset or enter custom values.</p>
         <p className="small">Original file safe · Editing stays local in this browser.</p>
       </aside>
       <div className="stage-wrap">
