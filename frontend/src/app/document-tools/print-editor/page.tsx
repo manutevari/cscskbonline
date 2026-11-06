@@ -64,6 +64,7 @@ export default function PrintEditorPage() {
   const [regionMode, setRegionMode] = useState(false);
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
+  const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -413,15 +414,25 @@ export default function PrintEditorPage() {
     }
     return canvas;
   };
-  const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") =>
-    new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,type==="image/jpeg"?0.94:undefined));
-  const createPdf = async (pageIds: number[]) => {
+  const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) =>
+    new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
+  const compressJpegToLimit = async (canvas: HTMLCanvasElement, targetBytes: number) => {
+    let low=0.08, high=0.96, best:Blob|null=null;
+    for(let i=0;i<9;i++){
+      const q=(low+high)/2, blob=await canvasBlob(canvas,"image/jpeg",q);
+      if(blob.size<=targetBytes){best=blob;low=q;}else high=q;
+    }
+    if(!best) best=await canvasBlob(canvas,"image/jpeg",0.08);
+    return best;
+  };
+  const createPdf = async (pageIds: number[], targetBytes = 0) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
+    const perPageTarget=targetBytes>0?Math.max(12000,Math.floor(targetBytes/pageIds.length)):0;
     for (const pageId of pageIds) {
       const canvas=await renderPageCanvas(pageId);
-      const png=await canvasBlob(canvas,"image/png");
-      const embedded=await pdf.embedPng(await png.arrayBuffer());
+      const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
+      const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
       const pdfPage=pdf.addPage([widthPt,heightPt]);
       pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
     }
@@ -432,25 +443,33 @@ export default function PrintEditorPage() {
     setBusy(true);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
+      const limitBytes=Number(maxFileSizeKb)>0?Number(maxFileSizeKb)*1024:0;
       if (kind==="all-pdf") {
-        saveBlob(await createPdf(pageIds),"CSCSKB-Smart-Editor.pdf");
+        saveBlob(await createPdf(pageIds,limitBytes),"CSCSKB-Smart-Editor.pdf");
         setStatus("सभी pages की एक PDF download शुरू हो गई।");
       } else if (kind==="current-pdf") {
-        saveBlob(await createPdf([activePage]),`CSCSKB-Page-${activePage}.pdf`);
+        saveBlob(await createPdf([activePage],limitBytes),`CSCSKB-Page-${activePage}.pdf`);
         setStatus("चुने हुए page की PDF download शुरू हो गई।");
       } else if (kind==="separate-pdf") {
         const zip=new JSZip();
-        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id]));
+        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0));
         saveBlob(await zip.generateAsync({type:"blob"}),"CSCSKB-Separate-PDFs.zip");
         setStatus("हर page की अलग PDF ZIP में download शुरू हो गई।");
       } else if (kind==="current-png" || kind==="current-jpg") {
         const type=kind==="current-png"?"image/png":"image/jpeg";
-        saveBlob(await canvasBlob(await renderPageCanvas(activePage,type),type),`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`);
+        const canvas=await renderPageCanvas(activePage,type);
+        const blob=limitBytes>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+        saveBlob(blob,`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`);
         setStatus("चुने हुए page की image download शुरू हो गई।");
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip();
-        for (const id of pageIds) zip.file(`Page-${id}.${ext}`,await canvasBlob(await renderPageCanvas(id,type),type));
+        for (const id of pageIds) {
+          const canvas=await renderPageCanvas(id,type);
+          const target=limitBytes>0?Math.floor(limitBytes/pageIds.length):0;
+          const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+          zip.file(`Page-${id}.${ext}`,blob);
+        }
         saveBlob(await zip.generateAsync({type:"blob"}"),`CSCSKB-Pages-${ext.toUpperCase()}.zip`);
         setStatus("सभी pages की images ZIP में download शुरू हो गई।");
       }
@@ -495,7 +514,7 @@ export default function PrintEditorPage() {
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
+      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}</select></label><strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
