@@ -55,7 +55,7 @@ export default function PrintEditorPage() {
   const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
   const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
   const [cropRatio, setCropRatio] = useState("free");
-  const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
+  const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
@@ -447,10 +447,11 @@ export default function PrintEditorPage() {
           const rect=stageRef.current.getBoundingClientRect(), sx=794/rect.width, sy=1123/rect.height;
           if(resizeState){
             const dx=(e.clientX-resizeState.startX)*sx, dy=(e.clientY-resizeState.startY)*sy;
-            setItems(old=>old.map(i=>{if(i.id!==resizeState.id)return i;let {x,y,w,h}=i;const handle=resizeState.handle;
-              if(handle.includes("e"))w=Math.max(12,resizeState.startW+dx);if(handle.includes("s"))h=Math.max(12,resizeState.startH+dy);
-              if(handle.includes("w")){w=Math.max(12,resizeState.startW-dx);x=i.x+(resizeState.startW-w);}
-              if(handle.includes("n")){h=Math.max(12,resizeState.startH-dy);y=i.y+(resizeState.startH-h);}
+            setItems(old=>old.map(i=>{if(i.id!==resizeState.id)return i;let x=resizeState.startItemX,y=resizeState.startItemY,w=resizeState.startW,h=resizeState.startH;const handle=resizeState.handle;
+              if(handle.includes("e"))w=Math.max(12,Math.min(794-resizeState.startItemX,resizeState.startW+dx));
+              if(handle.includes("s"))h=Math.max(12,Math.min(1123-resizeState.startItemY,resizeState.startH+dy));
+              if(handle.includes("w")){w=Math.max(12,Math.min(resizeState.startItemX+resizeState.startW,resizeState.startW-dx));x=resizeState.startItemX+(resizeState.startW-w);}
+              if(handle.includes("n")){h=Math.max(12,Math.min(resizeState.startItemY+resizeState.startH,resizeState.startH-dy));y=resizeState.startItemY+(resizeState.startH-h);}
               return {...i,x,y,w,h};}));
             return;
           }
@@ -473,7 +474,7 @@ export default function PrintEditorPage() {
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
-            {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
+            {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);stageRef.current?.setPointerCapture(e.pointerId);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h,startItemX:item.x,startItemY:item.y});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
