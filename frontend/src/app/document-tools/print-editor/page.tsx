@@ -517,7 +517,6 @@ export default function PrintEditorPage() {
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
-      <button className="icon-btn" title="Duplicate selected photo" onClick={()=>{if(selected){const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);setSelectedIds([copy.id]);}}} disabled={!selected}>▣ Duplicate</button>
       <span className="toolbar-spacer" />
       <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
       <button className={"icon-btn "+(zoomMode==="fit-width"?"selected":"")} onClick={()=>setZoomMode("fit-width")}>Fit width</button>
@@ -554,10 +553,8 @@ export default function PrintEditorPage() {
         
         <button className="btn secondary" onClick={addPage}>＋ Open / Add Page</button>
         <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
-        <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>▧ Photo Sheet</button>
         <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
         <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
-        <button className="btn secondary" onClick={deleteItem} disabled={!selected}>⌫ Remove Selected</button>
         <hr />
         <h2>Page setup</h2>
         <label className="field">Page margins
