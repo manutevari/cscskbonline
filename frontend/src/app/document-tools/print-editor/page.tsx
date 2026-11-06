@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { PDFDocument } from "pdf-lib";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type RegionStart = { itemId: string; startX: number; startY: number };
@@ -383,6 +384,44 @@ export default function PrintEditorPage() {
     setAssistantCommand("");
   };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
+  const downloadPdf = async () => {
+    if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
+    setBusy(true);
+    try {
+      const pdf = await PDFDocument.create();
+      const widthPt = pageSize.w * 72 / 25.4, heightPt = pageSize.h * 72 / 25.4;
+      for (const page of pages) {
+        const pdfPage = pdf.addPage([widthPt, heightPt]);
+        for (const item of items.filter(entry => entry.pageId === page.id)) {
+          const image = new Image();
+          image.crossOrigin = "anonymous";
+          image.src = item.src;
+          await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, image.naturalWidth); canvas.height = Math.max(1, image.naturalHeight);
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
+          context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
+          context.drawImage(image, 0, 0);
+          const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Image export नहीं हो सकी।")), "image/png"));
+          const embedded = await pdf.embedPng(await png.arrayBuffer());
+          const x = item.x / 794 * widthPt, w = item.w / 794 * widthPt, h = item.h / 1123 * heightPt;
+          const y = heightPt - (item.y / 1123 * heightPt) - h;
+          pdfPage.drawImage(embedded, { x, y, width: w, height: h });
+        }
+      }
+      const bytes = await pdf.save();
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "CSCSKB-Smart-Editor.pdf";
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setStatus("PDF download शुरू हो गया।");
+    } catch (error) {
+      setStatus(error instanceof Error ? "PDF download नहीं हो सका: " + error.message : "PDF download नहीं हो सका।");
+    } finally { setBusy(false); }
+  };
 
   return <main className="editor">
     <svg aria-hidden="true" width="0" height="0" style={{position:"absolute"}}><defs>{[0,1,2,3,4,5].map(level=><filter key={level} id={"sharpness-"+level}><feConvolveMatrix order="3" kernelMatrix={level===0?"0 0 0 0 1 0 0 0 0":`0 -${level} 0 -${level} ${1+4*level} -${level} 0 -${level} 0`} divisor="1" preserveAlpha="true" /></filter>)}</defs></svg>
@@ -392,7 +431,7 @@ export default function PrintEditorPage() {
       h1{font-size:clamp(20px,2.5vw,28px);margin:0;color:#fff}.intro{color:#dbe6f7;line-height:1.4;margin:0;font-size:12px}
       .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:7px 10px}
       .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled,.icon-btn:disabled{opacity:.45;cursor:not-allowed}
-      .compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.download-later{color:#718096;background:#f7f8fa}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
+      .compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
       .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
       .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
@@ -420,7 +459,7 @@ export default function PrintEditorPage() {
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <button className="icon-btn download-later" title="Download formats are planned for the next phase" disabled>↓ Download</button>
+      <button className="icon-btn" onClick={downloadPdf} disabled={!items.length || busy} title="Download all pages as PDF">↓ Download PDF</button>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
