@@ -431,7 +431,7 @@ export default function PrintEditorPage() {
         <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button type="button" className="btn secondary" onClick={cancelPdfPassword}>Cancel</button><button type="submit" className="btn">Unlock PDF</button></div>
         <p className="small" style={{margin:0}}>Password is used locally to open this file and is not saved by this editor.</p>
       </form></div>}
-    <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
+    <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id} style={{padding:`${Number(pageMargins.top)||0}mm ${Number(pageMargins.right)||0}mm ${Number(pageMargins.bottom)||0}mm ${Number(pageMargins.left)||0}mm`,boxSizing:"border-box"}}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
     <div className="workspace">
       <aside className="side">
         <h2>▣ Document Actions</h2>
@@ -513,7 +513,7 @@ export default function PrintEditorPage() {
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
       </div>
-      <details className="side-details">
+      <details className="side-details" open>
         <summary>Editing tools & photo organizer</summary>
         <aside className="side">
         <h2>Smart edit assistant</h2>
