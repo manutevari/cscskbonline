@@ -62,6 +62,7 @@ export default function PrintEditorPage() {
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
+  const [cropMode, setCropMode] = useState(false);
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
@@ -516,6 +517,7 @@ export default function PrintEditorPage() {
     <section className="toolbar compact-toolbar" aria-label="Editor tools">
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
+      <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop selected photo: drag to select area" aria-label="Crop selected photo" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode बंद हुआ।":"Crop mode चालू है: photo पर mouse से drag करके area चुनें, फिर Apply Crop दबाएँ।");}} disabled={!selected}>✂</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -591,7 +593,7 @@ export default function PrintEditorPage() {
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
         <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
-          onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);}}
+          onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
           onPointerMove={e => {
           if (!stageRef.current) return;
           const rect=stageRef.current.getBoundingClientRect(), sx=794/rect.width, sy=1123/rect.height;
@@ -620,8 +622,8 @@ export default function PrintEditorPage() {
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); }}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);stageRef.current?.setPointerCapture(e.pointerId);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h,startItemX:item.x,startItemY:item.y});}} />)}
@@ -638,7 +640,6 @@ export default function PrintEditorPage() {
           <input aria-label="Edit instruction" value={assistantCommand} onChange={e=>setAssistantCommand(e.target.value)} placeholder="Tell me what to edit…" style={{width:"100%",boxSizing:"border-box",padding:9,border:"1px solid #cbd9ce",borderRadius:7}} />
           <button className="btn" type="submit" disabled={!selected || !assistantCommand.trim()}>Apply instruction</button>
         </form>
-        <button className="btn secondary" onClick={()=>{setRegionMode(true);setStatus("PDF page/photo के अंदर जिस photo या हिस्से को edit करना है, उस पर drag करके select करें।");}} disabled={!selected}>Select photo / region inside page</button>
         <hr />
         <h2>Photo / page organizer</h2>
         <p className="small">हर thumbnail के checkbox से selection करें। Ctrl/⌘+Click या Shift+Click भी supported है। Ctrl+A से current page की सभी photos select होंगी।</p>
@@ -667,6 +668,7 @@ export default function PrintEditorPage() {
               <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
             </div>
             <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <button className="btn" onClick={()=>{setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(false);setStatus("Crop selection cancel कर दी गई।");}}>Cancel crop</button>
             <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
             </>}
             
