@@ -42,6 +42,8 @@ export default function PrintEditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"manual" | "grid" | "photo">("manual");
   const [preset, setPreset] = useState<PagePreset>("A4");
+  const [zoomMode, setZoomMode] = useState<"fit-page" | "fit-width" | "custom">("fit-page");
+  const [zoomPercent, setZoomPercent] = useState(100);
   const [customW, setCustomW] = useState("210");
   const [customH, setCustomH] = useState("297");
   const [photoCopies, setPhotoCopies] = useState("8");
@@ -377,8 +379,8 @@ export default function PrintEditorPage() {
       h1{font-size:clamp(20px,2.5vw,28px);margin:0;color:#fff}.intro{color:#dbe6f7;line-height:1.4;margin:0;font-size:12px}
       .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:10px 12px}
       .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled{opacity:.45}
-      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:190px minmax(360px,1fr) 250px;gap:9px;align-items:start;padding:0 10px}
-      .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0}.stage{position:relative;width:min(100%,620px);margin:0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
+      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:190px minmax(360px,1fr) 250px;gap:9px;align-items:stretch;padding:0 10px;min-height:calc(100vh - 205px)}
+      .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
       .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
@@ -392,6 +394,13 @@ export default function PrintEditorPage() {
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>A4 · 210 × 297 mm</span></div>
     <section className="toolbar">
+      <strong style={{color:"#243b60",fontSize:12}}>View</strong>
+      <button className={"btn "+(zoomMode==="fit-page"?"":"secondary")} onClick={()=>setZoomMode("fit-page")}>▣ Fit Page</button>
+      <button className={"btn "+(zoomMode==="fit-width"?"":"secondary")} onClick={()=>setZoomMode("fit-width")}>↔ Fit Width</button>
+      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
+      <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
+      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>+</button>
+      <button className="btn secondary" onClick={()=>{setZoomMode("custom");setZoomPercent(100);}}>100%</button>
       <label className="btn secondary">Add images / PDFs<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button className="btn secondary" onClick={addPage}>+ Separate page</button>
       <button className="btn" onClick={print} disabled={!items.length || busy}>Print preview</button>
@@ -431,7 +440,7 @@ export default function PrintEditorPage() {
       </aside>
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
-        <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
+        <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
           onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);}}
           onPointerMove={e => {
           if (!stageRef.current) return;
@@ -460,7 +469,7 @@ export default function PrintEditorPage() {
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}} onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);}}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
