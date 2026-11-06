@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument } from "pdf-lib";
+import JSZip from "jszip";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type RegionStart = { itemId: string; startX: number; startY: number };
@@ -384,42 +385,77 @@ export default function PrintEditorPage() {
     setAssistantCommand("");
   };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
-  const downloadPdf = async () => {
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = filename;
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+  const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = 794 * scale; canvas.height = 1123 * scale;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
+    context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
+    for (const item of items.filter(entry => entry.pageId === pageId)) {
+      const image = new Image(); image.crossOrigin = "anonymous"; image.src = item.src;
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
+      context.save();
+      context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
+      const x=item.x*scale, y=item.y*scale, w=item.w*scale, h=item.h*scale;
+      if (item.rotation) {
+        context.translate(x+w/2,y+h/2); context.rotate((item.rotation*Math.PI)/180);
+        context.drawImage(image,-w/2,-h/2,w,h);
+      } else context.drawImage(image,x,y,w,h);
+      context.restore();
+    }
+    return canvas;
+  };
+  const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") =>
+    new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,type==="image/jpeg"?0.94:undefined));
+  const createPdf = async (pageIds: number[]) => {
+    const pdf=await PDFDocument.create();
+    const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
+    for (const pageId of pageIds) {
+      const canvas=await renderPageCanvas(pageId);
+      const png=await canvasBlob(canvas,"image/png");
+      const embedded=await pdf.embedPng(await png.arrayBuffer());
+      const pdfPage=pdf.addPage([widthPt,heightPt]);
+      pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
+    }
+    return new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
+  };
+  const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
     if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
     setBusy(true);
     try {
-      const pdf = await PDFDocument.create();
-      const widthPt = pageSize.w * 72 / 25.4, heightPt = pageSize.h * 72 / 25.4;
-      for (const page of pages) {
-        const pdfPage = pdf.addPage([widthPt, heightPt]);
-        for (const item of items.filter(entry => entry.pageId === page.id)) {
-          const image = new Image();
-          image.crossOrigin = "anonymous";
-          image.src = item.src;
-          await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, image.naturalWidth); canvas.height = Math.max(1, image.naturalHeight);
-          const context = canvas.getContext("2d");
-          if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
-          context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
-          context.drawImage(image, 0, 0);
-          const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Image export नहीं हो सकी।")), "image/png"));
-          const embedded = await pdf.embedPng(await png.arrayBuffer());
-          const x = item.x / 794 * widthPt, w = item.w / 794 * widthPt, h = item.h / 1123 * heightPt;
-          const y = heightPt - (item.y / 1123 * heightPt) - h;
-          pdfPage.drawImage(embedded, { x, y, width: w, height: h });
-        }
+      const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
+      if (kind==="all-pdf") {
+        saveBlob(await createPdf(pageIds),"CSCSKB-Smart-Editor.pdf");
+        setStatus("सभी pages की एक PDF download शुरू हो गई।");
+      } else if (kind==="current-pdf") {
+        saveBlob(await createPdf([activePage]),`CSCSKB-Page-${activePage}.pdf`);
+        setStatus("चुने हुए page की PDF download शुरू हो गई।");
+      } else if (kind==="separate-pdf") {
+        const zip=new JSZip();
+        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id]));
+        saveBlob(await zip.generateAsync({type:"blob"}),"CSCSKB-Separate-PDFs.zip");
+        setStatus("हर page की अलग PDF ZIP में download शुरू हो गई।");
+      } else if (kind==="current-png" || kind==="current-jpg") {
+        const type=kind==="current-png"?"image/png":"image/jpeg";
+        saveBlob(await canvasBlob(await renderPageCanvas(activePage,type),type),`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`);
+        setStatus("चुने हुए page की image download शुरू हो गई।");
+      } else {
+        const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
+        const zip=new JSZip();
+        for (const id of pageIds) zip.file(`Page-${id}.${ext}`,await canvasBlob(await renderPageCanvas(id,type),type));
+        saveBlob(await zip.generateAsync({type:"blob"}"),`CSCSKB-Pages-${ext.toUpperCase()}.zip`);
+        setStatus("सभी pages की images ZIP में download शुरू हो गई।");
       }
-      const bytes = await pdf.save();
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = "CSCSKB-Smart-Editor.pdf";
-      document.body.appendChild(anchor); anchor.click(); anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      setStatus("PDF download शुरू हो गया।");
-    } catch (error) {
-      setStatus(error instanceof Error ? "PDF download नहीं हो सका: " + error.message : "PDF download नहीं हो सका।");
+    } catch(error) {
+      setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
     } finally { setBusy(false); }
   };
 
@@ -431,7 +467,7 @@ export default function PrintEditorPage() {
       h1{font-size:clamp(20px,2.5vw,28px);margin:0;color:#fff}.intro{color:#dbe6f7;line-height:1.4;margin:0;font-size:12px}
       .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:7px 10px}
       .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled,.icon-btn:disabled{opacity:.45;cursor:not-allowed}
-      .compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
+      .download-menu{position:relative}.download-menu>summary{list-style:none}.download-menu>summary::-webkit-details-marker{display:none}.download-options{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:grid;gap:5px;min-width:210px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 24px #17203322}.download-options strong{font-size:11px;color:#64748b;padding:4px 5px 0}.download-options button{border:0;border-radius:6px;background:#f3f6fb;color:#243b60;text-align:left;padding:8px;font-size:12px;cursor:pointer}.download-options button:disabled{opacity:.45;cursor:not-allowed}.compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
       .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
       .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
@@ -459,7 +495,7 @@ export default function PrintEditorPage() {
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <button className="icon-btn" onClick={downloadPdf} disabled={!items.length || busy} title="Download all pages as PDF">↓ Download PDF</button>
+      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
