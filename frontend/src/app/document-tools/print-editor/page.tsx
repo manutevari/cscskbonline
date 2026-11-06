@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
+type RegionStart = { itemId: string; startX: number; startY: number };
 type LayoutPage = { id: number; label: string };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
@@ -54,6 +55,9 @@ export default function PrintEditorPage() {
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
+  const [assistantCommand, setAssistantCommand] = useState("");
+  const [regionMode, setRegionMode] = useState(false);
+  const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
@@ -309,6 +313,36 @@ export default function PrintEditorPage() {
     }));
     setMode("grid"); setStatus("इस page के photos automatic grid में arrange किए गए।");
   };
+  const handleAssistantCommand = () => {
+    if (!selected) { setStatus("पहले canvas या thumbnail से photo/PDF page select करें।"); return; }
+    const command = assistantCommand.trim().toLowerCase();
+    if (!command) return;
+    const amountMatch = command.match(/(\d+(?:\.\d+)?)/);
+    const amount = amountMatch ? Number(amountMatch[1]) : 10;
+    const decrease = /decrease|reduce|lower|कम|घटा|घटाओ|कम करो/.test(command);
+    if (/brightness|bright|रोशनी|उजाला|चमक/.test(command)) {
+      updateImageFilter("brightness", Math.max(0, Math.min(300, (selected.brightness ?? 100) + (decrease ? -amount : amount))));
+      setStatus("Selected photo की brightness " + (decrease ? "कम" : "बढ़ा") + " दी गई। Original upload सुरक्षित है।");
+    } else if (/contrast/.test(command)) {
+      updateImageFilter("contrast", Math.max(0, Math.min(300, (selected.contrast ?? 100) + (decrease ? -amount : amount))));
+      setStatus("Selected photo का contrast update कर दिया गया।");
+    } else if (/sharp|शार्प/.test(command)) {
+      updateImageFilter("sharpness", Math.max(0, Math.min(5, (selected.sharpness ?? 0) + (decrease ? -1 : 1))));
+      setStatus("Selected photo की sharpness update कर दी गई।");
+    } else if (/select|choose|crop|region|area|हिस्सा|भाग|चुन/.test(command)) {
+      setRegionMode(true);
+      setStatus("अब PDF page/photo के अंदर जिस हिस्से को अलग edit करना है, उस पर drag करें। फिर Apply crop या brightness/contrast इस्तेमाल करें।");
+    } else if (/rotate|घुमा/.test(command)) {
+      void rotateSelected(/left|anticlockwise|बाएं|बाएँ/.test(command) ? -90 : 90);
+    } else if (/reset|original|मूल|रीसेट/.test(command)) {
+      resetSelected();
+    } else if (/undo|वापस/.test(command)) {
+      undoEdit();
+    } else {
+      setStatus("Command समझ नहीं आया। उदाहरण: “brightness 20% बढ़ाओ”, “contrast 10 कम करो”, “इस हिस्से को select करो”, “rotate right” या “reset photo”.");
+    }
+    setAssistantCommand("");
+  };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
 
   return <main className="editor">
@@ -330,7 +364,7 @@ export default function PrintEditorPage() {
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
       @media(max-width:780px){.workspace{grid-template-columns:1fr}.side{order:-1}}
-      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.workspace{display:none!important}.print-pages{display:block!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
+      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Tools</a><span className="small">Multi-file · PDF pages · Custom print size</span></div>
     <h1>Print Layout Editor</h1>
@@ -376,18 +410,39 @@ export default function PrintEditorPage() {
               return {...i,x,y,w,h};}));
             return;
           }
+          if(regionStart){
+            const item=items.find(candidate=>candidate.id===regionStart.itemId);
+            if(!item)return;
+            const px=(e.clientX-rect.left)*sx, py=(e.clientY-rect.top)*sy;
+            const startLeft=Math.max(0,Math.min(100,(regionStart.startX-item.x)/item.w*100));
+            const startTop=Math.max(0,Math.min(100,(regionStart.startY-item.y)/item.h*100));
+            const endLeft=Math.max(0,Math.min(100,(px-item.x)/item.w*100));
+            const endTop=Math.max(0,Math.min(100,(py-item.y)/item.h*100));
+            const left=Math.min(startLeft,endLeft), top=Math.min(startTop,endTop);
+            setCropRect({left:String(left),top:String(top),width:String(Math.max(1,Math.abs(endLeft-startLeft))),height:String(Math.max(1,Math.abs(endTop-startTop)))});
+            return;
+          }
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);setRegionMode(false);setStatus("Region select हो गया। अब brightness/contrast या Apply crop करें।");}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);setRegionMode(false);}}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(regionMode){const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
+            {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
       </div>
       <aside className="side">
+        <h2>Smart edit assistant</h2>
+        <p className="small">Selected photo/page के लिए natural-language shortcuts. उदाहरण: “brightness 20% बढ़ाओ” या “इस हिस्से को select करो”.</p>
+        <form onSubmit={e=>{e.preventDefault();handleAssistantCommand();}} style={{display:"grid",gap:7}}>
+          <input aria-label="Edit instruction" value={assistantCommand} onChange={e=>setAssistantCommand(e.target.value)} placeholder="Tell me what to edit…" style={{width:"100%",boxSizing:"border-box",padding:9,border:"1px solid #cbd9ce",borderRadius:7}} />
+          <button className="btn" type="submit" disabled={!selected || !assistantCommand.trim()}>Apply instruction</button>
+        </form>
+        <button className="btn secondary" onClick={()=>{setRegionMode(true);setStatus("PDF page/photo के अंदर जिस photo या हिस्से को edit करना है, उस पर drag करके select करें।");}} disabled={!selected}>Select photo / region inside page</button>
+        <hr />
         <h2>Photo / page organizer</h2>
         <p className="small">हर thumbnail के checkbox से selection करें। Ctrl/⌘+Click या Shift+Click भी supported है। Ctrl+A से current page की सभी photos select होंगी।</p>
         <button className="btn secondary" onClick={()=>{setSelectedIds(pageItems.map(i=>i.id));setStatus("Current page की सभी photos select हुईं।")}}>Select all on this page</button>
