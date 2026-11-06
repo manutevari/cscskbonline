@@ -81,6 +81,18 @@ export default function PrintEditorPage() {
       const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
       if (typing) return;
       const command = event.ctrlKey || event.metaKey;
+      // Delete/Backspace removes the selected photo(s), but never while typing in a field.
+      if (!command && (event.key === "Delete" || event.key === "Backspace")) {
+        const idsToDelete = selectedIds.length ? selectedIds : selected ? [selected.id] : [];
+        if (idsToDelete.length) {
+          event.preventDefault();
+          setItems(old => old.filter(item => !idsToDelete.includes(item.id)));
+          setSelectedId(null);
+          setSelectedIds([]);
+          setStatus(idsToDelete.length === 1 ? "Selected photo delete कर दी गई।" : idsToDelete.length + " selected photos delete कर दी गईं।");
+          return;
+        }
+      }
       if (command && event.key.toLowerCase() === "a") {
         event.preventDefault(); setSelectedIds(pageItems.map(i => i.id)); setStatus("इस page की सभी photos select हुईं। Resize fields केवल active photo को बदलते हैं।"); return;
       }
