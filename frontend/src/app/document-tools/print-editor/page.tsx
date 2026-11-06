@@ -50,6 +50,7 @@ export default function PrintEditorPage() {
   const [photoWidthMm, setPhotoWidthMm] = useState("35");
   const [photoHeightMm, setPhotoHeightMm] = useState("45");
   const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
+  const [marginPreset, setMarginPreset] = useState("narrow");
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
@@ -380,7 +381,7 @@ export default function PrintEditorPage() {
       .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:7px 10px}
       .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled,.icon-btn:disabled{opacity:.45;cursor:not-allowed}
       .compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.download-later{color:#718096;background:#f7f8fa}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
-      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:none}.side-details{min-width:0}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-height:0}.pages{margin-bottom:6px}
+      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
       .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
@@ -390,7 +391,7 @@ export default function PrintEditorPage() {
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
-      @media(max-width:1050px){.workspace{grid-template-columns:minmax(0,1fr)}.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:650px){.workspace{grid-template-columns:1fr}.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
+      @media(max-width:1180px){.workspace{grid-template-columns:minmax(190px,220px) minmax(0,1fr)}.side-details{grid-column:1/-1;position:static;max-height:none}.side-details>.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:760px){.workspace{grid-template-columns:1fr}.workspace>.side:first-child{grid-template-columns:1fr 1fr}.side-details{grid-column:auto}.side-details>.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
       @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>A4 · 210 × 297 mm</span></div>
@@ -441,6 +442,34 @@ export default function PrintEditorPage() {
         <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
         <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
         <button className="btn secondary" onClick={deleteItem} disabled={!selected}>⌫ Remove Selected</button>
+        <hr />
+        <h2>Page setup</h2>
+        <label className="field">Page margins — MS Word style
+          <select value={marginPreset} onChange={e => {
+            const value=e.target.value;
+            setMarginPreset(value);
+            const presets:Record<string,{top:string;right:string;bottom:string;left:string}> = {
+              normal:{top:"25.4",right:"25.4",bottom:"25.4",left:"25.4"},
+              narrow:{top:"12.7",right:"12.7",bottom:"12.7",left:"12.7"},
+              moderate:{top:"25.4",right:"19.05",bottom:"25.4",left:"19.05"},
+              wide:{top:"25.4",right:"50.8",bottom:"25.4",left:"50.8"},
+              mirrored:{top:"25.4",right:"25.4",bottom:"25.4",left:"31.75"}
+            };
+            if(presets[value]) setPageMargins(presets[value]);
+          }}>
+            <option value="normal">Normal — 1″ (25.4 mm)</option>
+            <option value="narrow">Narrow — 0.5″ (12.7 mm)</option>
+            <option value="moderate">Moderate</option>
+            <option value="wide">Wide</option>
+            <option value="mirrored">Mirrored / binding</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <strong className="small">Custom margins (mm)</strong>
+        <div className="margin-grid">
+          {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="100" step="0.5" value={pageMargins[side]} onChange={e => {setMarginPreset("custom");setPageMargins(old => ({...old,[side]:e.target.value}));}} /></label>)}
+        </div>
+        <p className="small">Margins are set in millimetres. Choose a Word-style preset or enter custom values.</p>
         <p className="small">Original file safe · Editing stays local in this browser.</p>
       </aside>
       <div className="stage-wrap">
@@ -499,10 +528,6 @@ export default function PrintEditorPage() {
         <p className="small">हर thumbnail के checkbox से selection करें। Ctrl/⌘+Click या Shift+Click भी supported है। Ctrl+A से current page की सभी photos select होंगी।</p>
         <button className="btn secondary" onClick={()=>{setSelectedIds(pageItems.map(i=>i.id));setStatus("Current page की सभी photos select हुईं।")}}>Select all on this page</button>
         <button className="btn secondary" onClick={()=>{setSelectedIds([]);setStatus("Selection clear कर दी गई।")}}>Clear selection</button>
-        <strong className="small">Page margins (mm)</strong>
-        <div className="margin-grid">
-          {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="50" step="0.5" value={pageMargins[side]} onChange={e => setPageMargins(old => ({...old,[side]:e.target.value}))} /></label>)}
-        </div>
         <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
         <div className="thumbs">{items.map(item => <div key={item.id} className={"thumb "+(selectedIds.includes(item.id)?"chosen":"")} onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
           <input type="checkbox" aria-label={"Select "+item.name} checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={e=>{setActivePage(item.pageId);if(e.target.checked){setSelectedIds(old=>old.includes(item.id)?old:[...old,item.id]);setSelectedId(item.id);}else{setSelectedIds(old=>old.filter(id=>id!==item.id));if(selectedId===item.id){const next=selectedIds.find(id=>id!==item.id);setSelectedId(next||null);}}}} />
