@@ -387,6 +387,7 @@ export default function PrintEditorPage() {
   };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
   const saveBlob = (blob: Blob, filename: string) => {
+    // The displayed size and downloaded file both use this exact finalized Blob.
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = filename;
@@ -416,6 +417,14 @@ export default function PrintEditorPage() {
   };
   const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) =>
     new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
+  const formatFileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  const verifyAndDownload = (blob: Blob, filename: string, limitBytes: number) => {
+    if (limitBytes > 0 && blob.size > limitBytes) {
+      throw new Error(`Final ${filename} size ${formatFileSize(blob.size)} है, जो चुनी गई ${formatFileSize(limitBytes)} maximum सीमा से अधिक है। File download नहीं की गई; बड़ा limit चुनें या JPEG format इस्तेमाल करें।`);
+    }
+    saveBlob(blob, filename);
+    return formatFileSize(blob.size);
+  };
   const compressJpegToLimit = async (canvas: HTMLCanvasElement, targetBytes: number) => {
     let low=0.08, high=0.96, best:Blob|null=null;
     for(let i=0;i<9;i++){
@@ -445,22 +454,22 @@ export default function PrintEditorPage() {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
       const limitBytes=Number(maxFileSizeKb)>0?Number(maxFileSizeKb)*1024:0;
       if (kind==="all-pdf") {
-        saveBlob(await createPdf(pageIds,limitBytes),"CSCSKB-Smart-Editor.pdf");
-        setStatus("सभी pages की एक PDF download शुरू हो गई।");
+        const blob=await createPdf(pageIds,limitBytes); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
+        setStatus(`सभी pages की PDF download शुरू हुई। Final file size: ${size}. Downloaded bytes are the same as this verified file.`);
       } else if (kind==="current-pdf") {
-        saveBlob(await createPdf([activePage],limitBytes),`CSCSKB-Page-${activePage}.pdf`);
-        setStatus("चुने हुए page की PDF download शुरू हो गई।");
+        const blob=await createPdf([activePage],limitBytes); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
+        setStatus(`चुने हुए page की PDF download शुरू हुई। Final file size: ${size}.`);
       } else if (kind==="separate-pdf") {
         const zip=new JSZip();
         for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0));
-        saveBlob(await zip.generateAsync({type:"blob"}),"CSCSKB-Separate-PDFs.zip");
-        setStatus("हर page की अलग PDF ZIP में download शुरू हो गई।");
+        const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",limitBytes);
+        setStatus(`हर page की अलग PDF ZIP में download हुई। Final ZIP size: ${size}.`);
       } else if (kind==="current-png" || kind==="current-jpg") {
         const type=kind==="current-png"?"image/png":"image/jpeg";
         const canvas=await renderPageCanvas(activePage,type);
         const blob=limitBytes>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-        saveBlob(blob,`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`);
-        setStatus("चुने हुए page की image download शुरू हो गई।");
+        const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`; const size=verifyAndDownload(blob,filename,limitBytes);
+        setStatus(`चुने हुए page की image download हुई। Final file size: ${size}.`);
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip();
@@ -470,8 +479,8 @@ export default function PrintEditorPage() {
           const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
           zip.file(`Page-${id}.${ext}`,blob);
         }
-        saveBlob(await zip.generateAsync({type:"blob"}),`CSCSKB-Pages-${ext.toUpperCase()}.zip`);
-        setStatus("सभी pages की images ZIP में download शुरू हो गई।");
+        const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`; const size=verifyAndDownload(blob,filename,limitBytes);
+        setStatus(`सभी pages की images ZIP में download हुई। Final ZIP size: ${size}.`);
       }
     } catch(error) {
       setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
