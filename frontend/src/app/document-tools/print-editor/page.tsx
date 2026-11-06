@@ -541,7 +541,7 @@ export default function PrintEditorPage() {
     <div className="workspace">
       <aside className="side">
         <h2>▣ Document Actions</h2>
-        <label className="btn secondary">⇧ Upload File<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
+        
         <button className="btn secondary" onClick={addPage}>＋ Open / Add Page</button>
         <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
         <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>▧ Photo Sheet</button>
