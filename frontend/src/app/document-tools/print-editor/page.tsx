@@ -442,7 +442,7 @@ export default function PrintEditorPage() {
       setStatus("Selected photo की sharpness update कर दी गई।");
     } else if (/select|choose|crop|region|area|हिस्सा|भाग|चुन/.test(command)) {
       setRegionMode(true);
-      setStatus("अब PDF page/photo के अंदर जिस हिस्से को अलग edit करना है, उस पर drag करें। फिर Apply crop या brightness/contrast इस्तेमाल करें।");
+      setStatus("Select Region चालू है: selected/cropped photo के अंदर जिस हिस्से को अलग edit करना है, उस पर drag करें। चुना हुआ हिस्सा अलग editable layer बनेगा।");
     } else if (/rotate|घुमा/.test(command)) {
       void rotateSelected(/left|anticlockwise|बाएं|बाएँ/.test(command) ? -90 : 90);
     } else if (/reset|original|मूल|रीसेट/.test(command)) {
@@ -587,6 +587,8 @@ export default function PrintEditorPage() {
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
       <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop: drag directly on an uploaded image or PDF page" aria-label="Crop selected page" onClick={()=>{const target=selected || items.find(item=>item.pageId===activePage) || items[0];if(!target){setStatus("Upload an image or PDF first.");return;}if(!selected){setSelectedId(target.id);setSelectedIds([target.id]);setActivePage(target.pageId);}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode off.":"Crop mode on: drag over the page to crop instantly.");}} disabled={!items.length}>✂ Crop</button>
+      <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Select a rectangular region inside the selected/cropped photo" aria-label="Select region inside image" onClick={()=>{if(!selected){setStatus("पहले crop की हुई photo पर click करके उसे select करें।");return;}setCropMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Region selection बंद।":"Select Region चालू: crop की हुई photo के अंदर mouse/touch से drag करके हिस्सा चुनें। चुना हुआ हिस्सा अलग editable layer बनेगा; original crop सुरक्षित रहेगा।");}} disabled={!selected}>▧ Select Region</button>
+      {regionMode && <button type="button" className="icon-btn" title="Cancel region selection" onClick={()=>{setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setStatus("Region selection cancel कर दी गई।");}}>Cancel selection</button>}
       <button type="button" className="icon-btn" title="Delete selected image(s)" onClick={deleteItem} disabled={!selected && !selectedIds.length}>✕ Delete selected</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
@@ -758,23 +760,3 @@ export default function PrintEditorPage() {
         <hr />
         <h2>Photo / page organizer</h2>
         <p className="small">हर thumbnail के checkbox से selection करें। Ctrl/⌘+Click या Shift+Click भी supported है। Ctrl+A से current page की सभी photos select होंगी।</p>
-        <button className="btn secondary" onClick={()=>{setSelectedIds(pageItems.map(i=>i.id));setStatus("Current page की सभी photos select हुईं।")}}>Select all on this page</button>
-        <button className="btn secondary" onClick={()=>{setSelectedIds([]);setStatus("Selection clear कर दी गई।")}}>Clear selection</button>
-        <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
-        <div className="thumbs">{items.map(item => <div key={item.id} className={"thumb "+(selectedIds.includes(item.id)?"chosen":"")} onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
-          <input type="checkbox" aria-label={"Select "+item.name} checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={e=>{setActivePage(item.pageId);if(e.target.checked){setSelectedIds(old=>old.includes(item.id)?old:[...old,item.id]);setSelectedId(item.id);}else{setSelectedIds(old=>old.filter(id=>id!==item.id));if(selectedId===item.id){const next=selectedIds.find(id=>id!==item.id);setSelectedId(next||null);}}}} />
-          <img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
-        </div>)}</div>
-        {selected && <><hr /><strong className="small">{selected.name}</strong>
-          <p className="small">Crop replaces this layer; the cropped photo remains movable on the page.</p>
-          <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
-          <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
-          <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
-          <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
-        </>}
-        <p className="small">PDF pages are rendered locally in this browser. Crop/rotate create local image copies; brightness/contrast are applied in preview and print. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
-        </aside>
-      </details>
-    </div>
-  </main>;
-}
