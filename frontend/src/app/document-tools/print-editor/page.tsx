@@ -71,6 +71,7 @@ export default function PrintEditorPage() {
   const [busy, setBusy] = useState(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
+  const [precisionEstimate, setPrecisionEstimate] = useState<{width:number;height:number;sourceKb:number;outputKb:number;quality:number;note:string} | null>(null);
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -83,6 +84,44 @@ export default function PrintEditorPage() {
   const pageItems = items.filter(i => i.pageId === activePage);
 
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selected?.src) { setPrecisionEstimate(null); return; }
+    const image = new Image();
+    image.onload = async () => {
+      try {
+        const sourceBlob = await fetch(selected.src).then(response => {
+          if (!response.ok) throw new Error("Image source unavailable");
+          return response.blob();
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.drawImage(image, 0, 0);
+        const targetKb = maxFileSizeKb === "custom" ? Number(customFileSizeKb) : Number(maxFileSizeKb);
+        const targetBytes = Number.isFinite(targetKb) && targetKb > 0 ? Math.floor(targetKb * 1024) : 0;
+        let low = 0.08, high = 0.96, best: Blob | null = null, qualityUsed = 0.08;
+        for (let pass = 0; pass < 10; pass++) {
+          const quality = (low + high) / 2;
+          const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Estimate failed")), "image/jpeg", quality));
+          if (!targetBytes || blob.size <= targetBytes) { best = blob; qualityUsed = quality; low = quality; }
+          else high = quality;
+        }
+        if (!best) best = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Estimate failed")), "image/jpeg", 0.08));
+        if (!cancelled) setPrecisionEstimate({
+          width: image.naturalWidth, height: image.naturalHeight, sourceKb: sourceBlob.size / 1024,
+          outputKb: best.size / 1024, quality: Math.round(qualityUsed * 100),
+          note: targetBytes > 0 && best.size > targetBytes ? "चुनी हुई सीमा इस image के लिए संभव नहीं लगती; dimensions कम करने की जरूरत हो सकती है।" : "JPEG quality simulation पर आधारित अनुमान; वास्तविक export में थोड़ा अंतर हो सकता है।"
+        });
+      } catch { if (!cancelled) setPrecisionEstimate(null); }
+    };
+    image.onerror = () => { if (!cancelled) setPrecisionEstimate(null); };
+    image.src = selected.src;
+    return () => { cancelled = true; image.onload = null; image.onerror = null; };
+  }, [selected?.src, selected?.id, maxFileSizeKb, customFileSizeKb]);
+
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -611,6 +650,22 @@ export default function PrintEditorPage() {
             <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
           </div>
         </section>}
+        <section className="edit-controls" aria-live="polite">
+          <h3>Precision Matrix · Predictive Compression</h3>
+          {selected && precisionEstimate ? <>
+            <div className="edit-grid">
+              <div><span className="small">Image dimensions</span><strong>{precisionEstimate.width} × {precisionEstimate.height} px</strong></div>
+              <div><span className="small">DPI (export setting)</span><strong>{dpi}</strong></div>
+              <div><span className="small">Original size</span><strong>{precisionEstimate.sourceKb.toFixed(1)} KB</strong></div>
+              <div><span className="small">Target maximum</span><strong>{(maxFileSizeKb === "custom" ? Number(customFileSizeKb) : Number(maxFileSizeKb)) > 0 ? (maxFileSizeKb === "custom" ? customFileSizeKb : maxFileSizeKb) + " KB" : "No limit"}</strong></div>
+              <div><span className="small">Predicted JPEG size</span><strong>{precisionEstimate.outputKb.toFixed(1)} KB</strong></div>
+              <div><span className="small">Estimated quality</span><strong>{precisionEstimate.quality}%</strong></div>
+              <div><span className="small">Estimated reduction</span><strong>{Math.max(0,(1-precisionEstimate.outputKb/Math.max(0.01,precisionEstimate.sourceKb))*100).toFixed(1)}%</strong></div>
+            </div>
+            <p className="small">{precisionEstimate.note}</p>
+          </> : <p className="small">{selected ? "Predictive estimate तैयार हो रहा है…" : "Estimate देखने के लिए पहले image select करें।"}</p>}
+          <p className="small">यह estimate है, guaranteed file size नहीं। यह अपने-आप download नहीं करता; export पर final file size verify होगा।</p>
+        </section>
         <hr />
         <h2>Page setup</h2>
         <details className="margin-details"><summary>Page Margin & Custom Margin</summary>
