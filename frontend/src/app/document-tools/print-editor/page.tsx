@@ -381,9 +381,14 @@ export default function PrintEditorPage() {
     setMode("grid"); setStatus("इस page के photos automatic grid में arrange किए गए।");
   };
   const handleAssistantCommand = () => {
+    const rawCommand = assistantCommand.trim();
+    if (!rawCommand) return;
+    const command = rawCommand.toLowerCase();
+    if (/upsc|up government|certificate photo|passport photo|signature resize|custom image resize/.test(command)) {
+      setStatus("Please provide the exact exam/department and current notification or upload its specification screenshot. Confirm photo/signature dimensions, format and maximum file size. I will verify those requirements before applying any resize; no guessed preset will be applied.");
+      return;
+    }
     if (!selected) { setStatus("पहले canvas या thumbnail से photo/PDF page select करें।"); return; }
-    const command = assistantCommand.trim().toLowerCase();
-    if (!command) return;
     const amountMatch = command.match(/(\d+(?:\.\d+)?)/);
     const amount = amountMatch ? Number(amountMatch[1]) : 10;
     const decrease = /decrease|reduce|lower|कम|घटा|घटाओ|कम करो/.test(command);
@@ -593,6 +598,19 @@ export default function PrintEditorPage() {
           <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
           <div className="edit-grid"><button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button><button className="btn secondary" onClick={resetSelected}>Reset image</button></div>
         </section>}
+        {selected && <section className="edit-controls"><strong className="small">Position & output size</strong>
+          <div className="edit-grid">
+            <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
+            <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Resize unit<select value={resizeUnit} onChange={e=>setResizeUnit(e.target.value as "px"|"mm"|"cm")}><option value="px">Pixels (px)</option><option value="mm">Millimeters (mm)</option><option value="cm">Centimeters (cm)</option></select></label>
+            <label className="field" style={{display:"flex",alignItems:"center",gap:6}}><span>Lock aspect ratio</span><input type="checkbox" checked={keepAspectRatio} onChange={e=>setKeepAspectRatio(e.target.checked)} style={{width:18}} /></label>
+            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.w/794*pageSize.w/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
+            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.h/1123*pageSize.h/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
+            <label className="field">Output DPI<input type="number" min="72" max="600" list="dpi-presets" value={dpi} onChange={e=>setDpi(e.target.value)} /><datalist id="dpi-presets">{[72,96,150,200,300,600].map(value=><option key={value} value={value}/>)}</datalist><span className="small">Presets: 72 · 96 · 150 · 200 · 300 · 600. Custom values: 72–600.</span></label>
+            <label className="field">Scale (%)<input type="number" min="1" max="500" value={resizePercent} onChange={e=>setResizePercent(e.target.value)} /></label>
+            <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
+          </div>
+        </section>}
         <hr />
         <h2>Page setup</h2>
         <details className="margin-details"><summary>Page Margin & Custom Margin</summary>
@@ -669,11 +687,18 @@ export default function PrintEditorPage() {
       <details className="side-details" open>
         <summary>Editing tools & photo organizer</summary>
         <aside className="side">
-        <h2>Smart edit assistant</h2>
-        <p className="small">Selected photo/page के लिए natural-language shortcuts. उदाहरण: “brightness 20% बढ़ाओ” या “इस हिस्से को select करो”.</p>
+        <h2>Smart Edit Assistant</h2>
+        <p className="small">Choose a task to start. I’ll ask for the missing details before changing your image.</p>
+        <div className="edit-grid" style={{marginBottom:9}}>
+          {["UPSC Form Photo","UP Government Form","Certificate Photo","Passport Photo","Signature Resize","Custom Image Resize"].map(label=><button key={label} type="button" className="btn secondary" onClick={()=>{setAssistantCommand(label);setStatus(label+" selected. Tell me the exact exam/form or required dimensions and file-size limit. I will not assume official specifications.");}}>{label}</button>)}
+        </div>
+        <div style={{border:"1px solid #dce5de",borderRadius:8,padding:10,background:"#f8fbf8",marginBottom:8}}>
+          <strong className="small">Assistant</strong>
+          <p className="small" style={{margin:"5px 0 0"}}>For government forms: share the exact exam/notification name and its official photo/signature requirements (or upload a screenshot). For custom resizing: provide width, height, unit and any file-size limit.</p>
+        </div>
         <form onSubmit={e=>{e.preventDefault();handleAssistantCommand();}} style={{display:"grid",gap:7}}>
-          <input aria-label="Edit instruction" value={assistantCommand} onChange={e=>setAssistantCommand(e.target.value)} placeholder="Tell me what to edit…" style={{width:"100%",boxSizing:"border-box",padding:9,border:"1px solid #cbd9ce",borderRadius:7}} />
-          <button className="btn" type="submit" disabled={!selected || !assistantCommand.trim()}>Apply instruction</button>
+          <input aria-label="Edit instruction" value={assistantCommand} onChange={e=>setAssistantCommand(e.target.value)} placeholder="Describe your edit or answer the assistant…" style={{width:"100%",boxSizing:"border-box",padding:9,border:"1px solid #cbd9ce",borderRadius:7}} />
+          <button className="btn" type="submit" disabled={!assistantCommand.trim()}>Send to assistant</button>
         </form>
         <hr />
         <h2>Photo / page organizer</h2>
@@ -686,18 +711,7 @@ export default function PrintEditorPage() {
           <img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
         </div>)}</div>
         {selected && <><hr /><strong className="small">{selected.name}</strong>
-          <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
-            <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Resize unit<select value={resizeUnit} onChange={e=>setResizeUnit(e.target.value as "px"|"mm"|"cm")}><option value="px">Pixels (px)</option><option value="mm">Millimeters (mm)</option><option value="cm">Centimeters (cm)</option></select></label>
-            <label className="field" style={{display:"flex",alignItems:"center",gap:6}}><span>Lock aspect ratio</span><input type="checkbox" checked={keepAspectRatio} onChange={e=>setKeepAspectRatio(e.target.checked)} style={{width:18}} /></label>
-            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.w/794*pageSize.w/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
-            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.h/1123*pageSize.h/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
-            <label className="field">Output DPI<input type="number" min="72" max="600" list="dpi-presets" value={dpi} onChange={e=>setDpi(e.target.value)} /><datalist id="dpi-presets">{[72,96,150,200,300,600].map(value=><option key={value} value={value}/>)}</datalist><span className="small">Presets: 72 · 96 · 150 · 200 · 300 · 600. Custom values: 72–600.</span></label>
-            <label className="field">Scale (%)<input type="number" min="1" max="500" value={resizePercent} onChange={e=>setResizePercent(e.target.value)} /></label>
-            <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
-          </div>
-          <p className="small">Crop replaces the selected layer with the cropped result. Brightness, contrast and sharpness filters are applied to preview and print output.</p>
+          <p className="small">Crop replaces this layer; the cropped photo remains movable on the page.</p>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
