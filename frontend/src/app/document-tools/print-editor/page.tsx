@@ -59,6 +59,7 @@ export default function PrintEditorPage() {
   const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeUnit, setResizeUnit] = useState<"px" | "mm" | "cm">("mm");
+  const [dpi, setDpi] = useState("300");
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [resizePercent, setResizePercent] = useState("100");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
@@ -219,8 +220,11 @@ export default function PrintEditorPage() {
   };
   const moveToPage = (id: string, pageId: number) => setItems(old => old.map(i => i.id === id ? { ...i, pageId } : i));
   const deleteItem = () => {
-    if (!selected) return;
-    setItems(old => old.filter(i => i.id !== selected.id)); setSelectedId(null);
+    const ids = selectedIds.length ? selectedIds : selected ? [selected.id] : [];
+    if (!ids.length) return;
+    setItems(old => old.filter(item => !ids.includes(item.id)));
+    setSelectedId(null); setSelectedIds([]);
+    setStatus(ids.length === 1 ? "Selected image deleted." : `${ids.length} selected images deleted.`);
   };
   const updateSelected = (key: "x" | "y" | "w" | "h", value: string) => {
     if (!selected || value.trim() === "") return;
@@ -231,7 +235,7 @@ export default function PrintEditorPage() {
     if (!selected || value.trim() === "") return;
     const entered = Number(value);
     if (!Number.isFinite(entered) || entered <= 0) return;
-    const mm = resizeUnit === "px" ? entered / (key === "w" ? 794 / pageSize.w : 1123 / pageSize.h) : resizeUnit === "cm" ? entered * 10 : entered;
+    const mm = resizeUnit === "px" ? entered * 25.4 / Math.max(1, Number(dpi) || 300) : resizeUnit === "cm" ? entered * 10 : entered;
     const next = mm * (key === "w" ? 794 / pageSize.w : 1123 / pageSize.h);
     setItems(old => old.map(item => item.id === selected.id ? { ...item, [key]: Math.max(12, next), ...(keepAspectRatio ? key === "w" ? { h: Math.max(12, next / Math.max(0.0001, selected.w / selected.h)) } : { w: Math.max(12, next * selected.w / Math.max(0.0001, selected.h)) } : {}) } : item));
   };
@@ -416,9 +420,11 @@ export default function PrintEditorPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
-    const scale = 2;
+    const outputDpi = Math.max(72, Math.min(600, Number(dpi) || 300));
     const canvas = document.createElement("canvas");
-    canvas.width = 794 * scale; canvas.height = 1123 * scale;
+    canvas.width = Math.round(pageSize.w / 25.4 * outputDpi);
+    canvas.height = Math.round(pageSize.h / 25.4 * outputDpi);
+    const scaleX = canvas.width / 794, scaleY = canvas.height / 1123;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
     context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
@@ -427,7 +433,7 @@ export default function PrintEditorPage() {
       await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
       context.save();
       context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
-      const x=item.x*scale, y=item.y*scale, w=item.w*scale, h=item.h*scale;
+      const x=item.x*scaleX, y=item.y*scaleY, w=item.w*scaleX, h=item.h*scaleY;
       if (item.rotation) {
         context.translate(x+w/2,y+h/2); context.rotate((item.rotation*Math.PI)/180);
         context.drawImage(image,-w/2,-h/2,w,h);
@@ -521,7 +527,7 @@ export default function PrintEditorPage() {
       .download-menu{position:relative}.download-menu>summary{list-style:none}.download-menu>summary::-webkit-details-marker{display:none}.download-options{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:grid;gap:5px;min-width:210px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 24px #17203322}.download-options strong{font-size:11px;color:#64748b;padding:4px 5px 0}.download-options button{border:0;border-radius:6px;background:#f3f6fb;color:#243b60;text-align:left;padding:8px;font-size:12px;cursor:pointer}.download-options button:disabled{opacity:.45;cursor:not-allowed}.compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
       .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
-      .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+      .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.margin-details{border:1px solid #dce5de;border-radius:8px;padding:8px}.margin-details>summary{cursor:pointer;font-size:13px;font-weight:700;color:#243b60}.margin-details[open]{display:grid;gap:8px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
@@ -537,6 +543,7 @@ export default function PrintEditorPage() {
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
       <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop: drag directly on an uploaded image or PDF page" aria-label="Crop selected page" onClick={()=>{const target=selected || items.find(item=>item.pageId===activePage) || items[0];if(!target){setStatus("Upload an image or PDF first.");return;}if(!selected){setSelectedId(target.id);setSelectedIds([target.id]);setActivePage(target.pageId);}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode off.":"Crop mode on: drag over the page to crop instantly.");}} disabled={!items.length}>✂ Crop</button>
+      <button type="button" className="icon-btn" title="Delete selected image(s)" onClick={deleteItem} disabled={!selected && !selectedIds.length}>✕ Delete selected</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -579,8 +586,16 @@ export default function PrintEditorPage() {
         <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
         <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
         <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
+        <button className="btn secondary" onClick={deleteItem} disabled={!selected && !selectedIds.length}>✕ Delete selected</button>
+        {selected && <section className="edit-controls"><strong className="small">Image adjustments</strong>
+          <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
+          <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
+          <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
+          <div className="edit-grid"><button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button><button className="btn secondary" onClick={resetSelected}>Reset image</button></div>
+        </section>}
         <hr />
         <h2>Page setup</h2>
+        <details className="margin-details"><summary>Page Margin & Custom Margin</summary>
         <label className="field">Page margins
           <select value={marginPreset} onChange={e => {
             const value=e.target.value;
@@ -607,11 +622,12 @@ export default function PrintEditorPage() {
           {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="100" step="0.5" value={pageMargins[side]} onChange={e => {setMarginPreset("custom");setPageMargins(old => ({...old,[side]:e.target.value}));}} /></label>)}
         </div>
         <p className="small">Margins are set in millimetres. Choose a preset or enter custom values.</p>
+        </details>
         <p className="small">Original file safe · Editing stays local in this browser.</p>
       </aside>
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
-        <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
+        <div className="stage" ref={stageRef} onPointerDown={e=>{if(e.target===e.currentTarget && !cropMode && !regionMode){setSelectedId(null);setSelectedIds([]);setStatus("Selection cleared.");}}} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
           onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
           onPointerMove={e => {
           if (!stageRef.current) return;
@@ -675,22 +691,13 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Resize unit<select value={resizeUnit} onChange={e=>setResizeUnit(e.target.value as "px"|"mm"|"cm")}><option value="px">Pixels (px)</option><option value="mm">Millimeters (mm)</option><option value="cm">Centimeters (cm)</option></select></label>
             <label className="field" style={{display:"flex",alignItems:"center",gap:6}}><span>Lock aspect ratio</span><input type="checkbox" checked={keepAspectRatio} onChange={e=>setKeepAspectRatio(e.target.checked)} style={{width:18}} /></label>
-            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?selected.w:resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
-            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?selected.h:resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
+            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.w/794*pageSize.w/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
+            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.h/1123*pageSize.h/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
+            <label className="field">Output DPI<input type="number" min="72" max="600" list="dpi-presets" value={dpi} onChange={e=>setDpi(e.target.value)} /><datalist id="dpi-presets">{[72,96,150,200,300,600].map(value=><option key={value} value={value}/>)}</datalist><span className="small">Presets: 72 · 96 · 150 · 200 · 300 · 600. Custom values: 72–600.</span></label>
             <label className="field">Scale (%)<input type="number" min="1" max="500" value={resizePercent} onChange={e=>setResizePercent(e.target.value)} /></label>
             <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
           </div>
-          <section className="edit-controls">
-            <strong className="small">Image adjustments</strong>
-            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
-            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
-            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
-            <div className="edit-grid">
-              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
-              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
-            </div>
-            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
-          </section>
+          <p className="small">Crop replaces the selected layer with the cropped result. Brightness, contrast and sharpness filters are applied to preview and print output.</p>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
