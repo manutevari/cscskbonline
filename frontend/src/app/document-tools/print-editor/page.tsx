@@ -7,9 +7,9 @@ import JSZip from "jszip";
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type RegionStart = { itemId: string; startX: number; startY: number };
 type LayoutPage = { id: number; label: string };
-type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
+type PagePreset = "A1" | "A2" | "A3" | "A4" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
-  A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
+  A1: { w: 594, h: 841 }, A2: { w: 420, h: 594 }, A3: { w: 297, h: 420 }, A4: { w: 210, h: 297 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
 };
 const uid = () => "item-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
 let pdfJsPromise: Promise<any> | null = null;
@@ -58,6 +58,9 @@ export default function PrintEditorPage() {
   const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
   const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
   const [cropRatio, setCropRatio] = useState("free");
+  const [resizeUnit, setResizeUnit] = useState<"px" | "mm" | "cm">("mm");
+  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const [resizePercent, setResizePercent] = useState("100");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [assistantCommand, setAssistantCommand] = useState("");
@@ -223,6 +226,22 @@ export default function PrintEditorPage() {
     if (!selected || value.trim() === "") return;
     const n = Number(value); if (!Number.isFinite(n)) return;
     setItems(old => old.map(i => i.id === selected.id ? { ...i, [key]: Math.max(key === "w" || key === "h" ? 12 : 0, n) } : i));
+  };
+  const updateResizeDimension = (key: "w" | "h", value: string) => {
+    if (!selected || value.trim() === "") return;
+    const entered = Number(value);
+    if (!Number.isFinite(entered) || entered <= 0) return;
+    const mm = resizeUnit === "px" ? entered / (key === "w" ? 794 / pageSize.w : 1123 / pageSize.h) : resizeUnit === "cm" ? entered * 10 : entered;
+    const next = mm * (key === "w" ? 794 / pageSize.w : 1123 / pageSize.h);
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, [key]: Math.max(12, next), ...(keepAspectRatio ? key === "w" ? { h: Math.max(12, next / Math.max(0.0001, selected.w / selected.h)) } : { w: Math.max(12, next * selected.w / Math.max(0.0001, selected.h)) } : {}) } : item));
+  };
+  const applyResizePercent = () => {
+    if (!selected) return;
+    const percent = Number(resizePercent);
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 500) { setStatus("Resize percentage must be between 1% and 500%."); return; }
+    const factor = percent / 100;
+    setItems(old => old.map(item => item.id === selected.id ? { ...item, w: Math.max(12, selected.w * factor), h: Math.max(12, selected.h * factor) } : item));
+    setStatus("Selected image resized to " + percent + "%.");
   };
   const saveEditSnapshot = () => setEditHistory(old => [...old.slice(-19), items.map(item => ({ ...item }))]);
 
@@ -517,7 +536,7 @@ export default function PrintEditorPage() {
     <section className="toolbar compact-toolbar" aria-label="Editor tools">
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
-      <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop selected photo: drag to select area" aria-label="Crop selected photo" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode बंद हुआ।":"Crop mode चालू है: photo पर mouse से drag करके area चुनें, फिर Apply Crop दबाएँ।");}} disabled={!selected}>✂</button>
+      <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop: drag directly on an uploaded image or PDF page" aria-label="Crop selected page" onClick={()=>{const target=selected || items.find(item=>item.pageId===activePage) || items[0];if(!target){setStatus("Upload an image or PDF first.");return;}if(!selected){setSelectedId(target.id);setSelectedIds([target.id]);setActivePage(target.pageId);}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode off.":"Crop mode on: drag over the page to crop instantly.");}} disabled={!items.length}>✂ Crop</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -528,11 +547,11 @@ export default function PrintEditorPage() {
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
+      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-pdf");}}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-pdf");}}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("separate-pdf");}}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-png");}}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-jpg");}}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-png");}}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-jpg");}}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
     <section className="panel">
-      <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A4","A3","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
+      <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A1","A2","A3","A4","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
       <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
@@ -622,7 +641,7 @@ export default function PrintEditorPage() {
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Applying crop…");void cropSelected();}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
           {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
@@ -654,24 +673,15 @@ export default function PrintEditorPage() {
           <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
-            <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Resize unit<select value={resizeUnit} onChange={e=>setResizeUnit(e.target.value as "px"|"mm"|"cm")}><option value="px">Pixels (px)</option><option value="mm">Millimeters (mm)</option><option value="cm">Centimeters (cm)</option></select></label>
+            <label className="field" style={{display:"flex",alignItems:"center",gap:6}}><span>Lock aspect ratio</span><input type="checkbox" checked={keepAspectRatio} onChange={e=>setKeepAspectRatio(e.target.checked)} style={{width:18}} /></label>
+            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?selected.w:resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
+            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?selected.h:resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
+            <label className="field">Scale (%)<input type="number" min="1" max="500" value={resizePercent} onChange={e=>setResizePercent(e.target.value)} /></label>
+            <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
           </div>
           <section className="edit-controls">
-            <strong className="small">Image editing</strong>
-            {!selected.name.includes("· selected region") && <>
-            <div className="edit-grid">
-              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
-              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
-              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
-              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
-              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
-            </div>
-            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
-            <button className="btn" onClick={()=>{setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(false);setStatus("Crop selection cancel कर दी गई।");}}>Cancel crop</button>
-            <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
-            </>}
-            
+            <strong className="small">Image adjustments</strong>
             <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
             <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
             <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
