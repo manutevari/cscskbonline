@@ -55,6 +55,11 @@ create index if not exists marketing_activities_created_idx on public.marketing_
 alter table public.marketing_leads enable row level security;
 alter table public.marketing_campaigns enable row level security;
 alter table public.marketing_activities enable row level security;
--- No anon/authenticated policies: all privileged reads/writes go through server routes
--- using SUPABASE_SERVICE_ROLE_KEY. Never expose that key in client-side code.
+-- No anon/authenticated policies: all privileged reads/writes go through server routes.
+-- Explicitly remove inherited/default client grants; the backend uses service_role only.
+revoke all on public.marketing_leads, public.marketing_campaigns, public.marketing_activities from public, anon, authenticated;
+grant select, insert, update on public.marketing_leads to service_role;
+grant select, insert, update on public.marketing_campaigns to service_role;
+grant select, insert on public.marketing_activities to service_role;
+-- Never expose SUPABASE_SERVICE_ROLE_KEY in client-side code.
 
