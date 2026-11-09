@@ -37,7 +37,7 @@ export async function POST(req:NextRequest){
    const c=await campaign(id);if(!["DRAFT","REJECTED"].includes(c.status))return NextResponse.json({error:"Campaign must be a draft or revised rejected campaign."},{status:409});
    const policies=await db("approval_policies?select=*&active=eq.true");
    const policy=policies.filter((p:any)=>(!p.vertical||p.vertical===c.vertical)&&(!p.channel||p.channel===c.channel))
-    .sort((a:any,b:any)=>(b.risk_level==="CRITICAL"?4:b.risk_level==="HIGH"?3:b.risk_level==="MEDIUM"?2:1)-(a.risk_level==="CRITICAL"?4:a.risk_level==="HIGH"?3:a.risk_level==="MEDIUM"?2:1))[0];
+    .sort((a:any,b:any)=>((b.vertical?2:0)+(b.channel?1:0))-((a.vertical?2:0)+(a.channel?1:0)) || ((b.risk_level==="CRITICAL"?4:b.risk_level==="HIGH"?3:b.risk_level==="MEDIUM"?2:1)-(a.risk_level==="CRITICAL"?4:a.risk_level==="HIGH"?3:a.risk_level==="MEDIUM"?2:1)))[0];
    if(!policy)throw new Error("No active approval policy matches this campaign.");
    const created=await db("approval_requests",{method:"POST",body:JSON.stringify({
     resource_type:"campaign",resource_id:id,action:"PUBLISH_CAMPAIGN",risk_level:policy.risk_level,
