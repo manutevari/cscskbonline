@@ -21,7 +21,7 @@ export async function GET(req:NextRequest){
  try{
   const now=new Date().toISOString();
   const expired=await db(`approval_requests?select=id,resource_type,resource_id&status=eq.PENDING&expires_at=lt.${encodeURIComponent(now)}`);
-  if(expired.length){await db(`approval_requests?status=eq.PENDING&expires_at=lt.${encodeURIComponent(now)}`,{method:"PATCH",body:JSON.stringify({status:"EXPIRED",updated_at:now})});await db("approval_events",{method:"POST",body:JSON.stringify(expired.map((x:any)=>({approval_request_id:x.id,resource_type:x.resource_type,resource_id:x.resource_id,event_type:"EXPIRED",actor_id:"system",actor_role:"system",details:{reason:"ttl_elapsed"}})))});}
+  if(expired.length){await db(`approval_requests?status=eq.PENDING&expires_at=lt.${encodeURIComponent(now)}`,{method:"PATCH",body:JSON.stringify({status:"EXPIRED",updated_at:now})});for(const x of expired){if(x.resource_type==="campaign")await db(`marketing_campaigns?id=eq.${encodeURIComponent(x.resource_id)}`,{method:"PATCH",body:JSON.stringify({status:"DRAFT"})});}await db("approval_events",{method:"POST",body:JSON.stringify(expired.map((x:any)=>({approval_request_id:x.id,resource_type:x.resource_type,resource_id:x.resource_id,event_type:"EXPIRED",actor_id:"system",actor_role:"system",details:{reason:"ttl_elapsed"}})))});}
   const status=req.nextUrl.searchParams.get("status")||"PENDING";
   const [approvals,events]=await Promise.all([
    db(`approval_requests?select=*&status=eq.${encodeURIComponent(status)}&order=created_at.desc&limit=100`),
@@ -57,7 +57,7 @@ export async function POST(req:NextRequest){
    const id=String(b.approval_id||""),decision=String(b.decision||"").toUpperCase();
    if(!/^[0-9a-f-]{36}$/i.test(id)||!["APPROVE","REJECT","REQUEST_CHANGES"].includes(decision))return NextResponse.json({error:"Invalid approval id or decision."},{status:400});
    const result=await db("rpc/decide_marketing_approval",{method:"POST",body:JSON.stringify({p_approval_id:id,p_actor_id:actor.id,p_actor_role:actor.role,p_decision:decision,p_comment:String(b.comment||"").slice(0,1000)})});
-   return NextResponse.json({approval:result,message:result.status==="APPROVED"?"Approved for a separate execution step. Publishing is not automatic.":"Decision recorded."});
+   if(["EXPIRED","CANCELLED"].includes(result.status))await db(`marketing_campaigns?id=eq.${encodeURIComponent((await db(`approval_requests?id=eq.${encodeURIComponent(id)}&select=resource_id`))[0].resource_id)}`,{method:"PATCH",body:JSON.stringify({status:"DRAFT"})});\n   return NextResponse.json({approval:result,message:result.status==="APPROVED"?"Approved for a separate execution step. Publishing is not automatic.":result.status==="EXPIRED"?"Approval expired; submit a fresh request.":result.status==="CANCELLED"?"Campaign content changed; submit a fresh request.":"Decision recorded."});
   }
   if(action==="pause_execution"||action==="resume_execution"){
    if(actor.role!=="owner_admin")return NextResponse.json({error:"Only Owner / Administrator can control the execution kill switch."},{status:403});
