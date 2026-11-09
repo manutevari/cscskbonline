@@ -96,13 +96,13 @@ for each row execute function public.prevent_approval_event_mutation();
 
 create table if not exists public.marketing_execution_controls (
  id boolean primary key default true check(id=true),
- paused boolean not null default false,
+ paused boolean not null default true,
  paused_by text,
  paused_at timestamptz,
  reason text,
  updated_at timestamptz not null default now()
 );
-insert into public.marketing_execution_controls(id) values(true) on conflict(id) do nothing;
+insert into public.marketing_execution_controls(id,paused,reason) values(true,true,'Execution remains disabled until explicitly enabled by Owner/Admin') on conflict(id) do nothing;
 
 create table if not exists public.agent_execution_logs (
  id uuid primary key default gen_random_uuid(),
@@ -116,6 +116,7 @@ create table if not exists public.agent_execution_logs (
  completed_at timestamptz,
  result jsonb not null default '{}'::jsonb
 );
+create unique index if not exists agent_execution_one_per_approval_idx on public.agent_execution_logs(approval_request_id);
 
 create or replace function public.decide_marketing_approval(
  p_approval_id uuid,p_actor_id text,p_actor_role text,p_decision text,p_comment text
@@ -142,7 +143,7 @@ begin
  if not (p_actor_role=any(r.required_roles)) then raise exception 'Role is not authorized for this approval'; end if;
  if p_actor_id=r.requested_by then raise exception 'Requester cannot approve their own request'; end if;
  if p_decision not in ('APPROVE','REJECT','REQUEST_CHANGES') then raise exception 'Invalid decision'; end if;
- if exists(select 1 from jsonb_array_elements(r.approvals) x where x->>'actor_id'=p_actor_id) then raise exception 'Approver already acted'; end if;
+ if exists(select 1 from jsonb_array_elements(r.approvals) x where x->>'actor_id'=p_actor_id or (x->>'role'=p_actor_role and x->>'decision'='APPROVE')) then raise exception 'This approver or role has already acted'; end if;
  a:=r.approvals || jsonb_build_array(jsonb_build_object('actor_id',p_actor_id,'role',p_actor_role,'decision',p_decision,'comment',left(coalesce(p_comment,''),1000),'at',now()));
  select count(*) into approvals_count from jsonb_array_elements(a) x where x->>'decision'='APPROVE';
  next_status:=case when p_decision='REJECT' then 'REJECTED' when p_decision='REQUEST_CHANGES' then 'CHANGES_REQUESTED'
