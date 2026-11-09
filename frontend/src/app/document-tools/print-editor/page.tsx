@@ -500,7 +500,7 @@ export default function PrintEditorPage() {
   const compressJpegToLimit = async (sourceCanvas: HTMLCanvasElement, targetBytes: number) => {
     if (!Number.isFinite(targetBytes) || targetBytes < 1) throw new Error("JPG target size कम से कम 1 byte होना चाहिए।");
     let width=sourceCanvas.width, height=sourceCanvas.height;
-    for (let resizePass=0; resizePass<14; resizePass++) {
+    for (let resizePass=0; resizePass<24; resizePass++) {
       const working=document.createElement("canvas");
       working.width=Math.max(1,Math.round(width)); working.height=Math.max(1,Math.round(height));
       const context=working.getContext("2d");
@@ -508,31 +508,58 @@ export default function PrintEditorPage() {
       context.fillStyle="#fff"; context.fillRect(0,0,working.width,working.height);
       context.drawImage(sourceCanvas,0,0,working.width,working.height);
       let low=0.08, high=0.96, best:Blob|null=null;
-      for(let i=0;i<12;i++){
+      for(let i=0;i<14;i++){
         const quality=(low+high)/2, blob=await canvasBlob(working,"image/jpeg",quality);
         if(blob.size<=targetBytes){best=blob;low=quality;}else high=quality;
       }
       if(best && best.size<=targetBytes && best.type==="image/jpeg") return best;
-      // If quality alone is insufficient, reduce pixel dimensions while preserving aspect ratio.
-      const ratio=Math.min(0.82,Math.sqrt(targetBytes/Math.max(1,(best?.size ?? (await canvasBlob(working,"image/jpeg",0.08)).size)))*0.9);
-      const nextWidth=Math.floor(width*ratio), nextHeight=Math.floor(height*ratio);
-      if(nextWidth<240 || nextHeight<240 || (nextWidth===width && nextHeight===height)) break;
+      // Use the lowest tested quality as the baseline when no quality fits, then
+      // shrink dimensions proportionally. This avoids the previous null-best fallback bug.
+      const lowestQualityBlob=await canvasBlob(working,"image/jpeg",0.08);
+      const ratio=Math.min(0.82,Math.sqrt(targetBytes/Math.max(1,lowestQualityBlob.size))*0.9);
+      const nextWidth=Math.max(1,Math.floor(width*ratio)), nextHeight=Math.max(1,Math.floor(height*ratio));
+      if((nextWidth===width && nextHeight===height) || (width===1 && height===1)) break;
       width=nextWidth; height=nextHeight;
     }
-    throw new Error(`इस image को ${formatFileSize(targetBytes)} के अंदर valid JPG बनाना संभव नहीं हुआ। थोड़ा बड़ा size चुनें या image dimensions कम करें।`);
+    throw new Error(`इस image को ${formatFileSize(targetBytes)} के अंदर valid JPG बनाना संभव नहीं हुआ। चुनी गई सीमा बहुत कम है; थोड़ा बड़ा size चुनें।`);
+  };
+  const compressPngToLimit = async (sourceCanvas: HTMLCanvasElement, targetBytes: number) => {
+    if (!Number.isFinite(targetBytes) || targetBytes < 1) throw new Error("PNG target size कम से कम 1 byte होना चाहिए।");
+    let width=sourceCanvas.width, height=sourceCanvas.height;
+    for(let pass=0;pass<24;pass++){
+      const working=document.createElement("canvas");
+      working.width=Math.max(1,Math.round(width)); working.height=Math.max(1,Math.round(height));
+      const context=working.getContext("2d");
+      if(!context) throw new Error("PNG resize canvas उपलब्ध नहीं है।");
+      context.drawImage(sourceCanvas,0,0,working.width,working.height);
+      const blob=await canvasBlob(working,"image/png");
+      if(blob.type==="image/png" && blob.size<=targetBytes) return blob;
+      const ratio=Math.min(0.82,Math.sqrt(targetBytes/Math.max(1,blob.size))*0.9);
+      const nextWidth=Math.max(1,Math.floor(width*ratio)), nextHeight=Math.max(1,Math.floor(height*ratio));
+      if((nextWidth===width && nextHeight===height) || (width===1 && height===1)) break;
+      width=nextWidth;height=nextHeight;
+    }
+    throw new Error(`इस PNG को ${formatFileSize(targetBytes)} के अंदर बनाना संभव नहीं हुआ। चुनी गई सीमा बहुत कम है; थोड़ा बड़ा size चुनें।`);
   };
   const createPdf = async (pageIds: number[], targetBytes = 0) => {
-    const pdf=await PDFDocument.create();
+    const canvases=await Promise.all(pageIds.map(pageId=>renderPageCanvas(pageId)));
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
-    const perPageTarget=targetBytes>0?Math.max(12000,Math.floor(targetBytes/pageIds.length)):0;
-    for (const pageId of pageIds) {
-      const canvas=await renderPageCanvas(pageId);
-      const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
-      const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
-      const pdfPage=pdf.addPage([widthPt,heightPt]);
-      pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
+    let budgetFactor=targetBytes>0?0.82:1;
+    for(let attempt=0;attempt<(targetBytes>0?10:1);attempt++){
+      const pdf=await PDFDocument.create();
+      const perPageTarget=targetBytes>0?Math.max(1,Math.floor(targetBytes/pageIds.length*budgetFactor)):0;
+      for(let index=0;index<pageIds.length;index++){
+        const canvas=canvases[index];
+        const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
+        const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
+        const pdfPage=pdf.addPage([widthPt,heightPt]);
+        pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
+      }
+      const blob=new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
+      if(!targetBytes || blob.size<=targetBytes) return blob;
+      budgetFactor*=Math.max(0.25,Math.sqrt(targetBytes/blob.size)*0.88);
     }
-    return new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
+    throw new Error(`Combined PDF को ${formatFileSize(targetBytes)} की कुल सीमा में fit नहीं किया जा सका। बड़ा size चुनें या pages कम करें।`);
   };
   const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
     if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
@@ -549,32 +576,39 @@ export default function PrintEditorPage() {
         const blob=await createPdf([activePage],limitBytes); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
         setStatus(`चुने हुए page की PDF download शुरू हुई। Final file size: ${size}.`);
       } else if (kind==="separate-pdf") {
-        const zip=new JSZip();
-        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0));
-        const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",limitBytes);
-        setStatus(`हर page की अलग PDF ZIP में download हुई। Final ZIP size: ${size}.`);
+        const zip=new JSZip(), pageSizes:string[]=[];
+        for (const id of pageIds) {
+          const pdfBlob=await createPdf([id],limitBytes);
+          zip.file(`Page-${id}.pdf`,pdfBlob);
+          pageSizes.push(`Page ${id}: ${formatFileSize(pdfBlob.size)}`);
+        }
+        const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",0);
+        setStatus(`हर page की अलग PDF ZIP में download हुई। हर PDF size: ${pageSizes.join(" · ")}. Total ZIP: ${size}.`);
       } else if (kind==="current-png" || kind==="current-jpg") {
         const type=kind==="current-png"?"image/png":"image/jpeg";
         const canvas=await renderPageCanvas(activePage,type);
-        const blob=limitBytes>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-        const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`; const size=verifyAndDownload(blob,filename,limitBytes);
+        const blob=limitBytes>0
+          ?(type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await compressPngToLimit(canvas,limitBytes))
+          :await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+        const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`;
+        const size=verifyAndDownload(blob,filename,limitBytes);
         setStatus(`चुने हुए page की image download हुई। Final file size: ${size}.`);
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip(), pageSizes:string[]=[];
         for (const id of pageIds) {
           const canvas=await renderPageCanvas(id,type);
-          // For JPG ZIP, the selected maximum applies to EACH JPG, not to the ZIP archive.
-          const target=limitBytes>0?(type==="image/jpeg"?limitBytes:Math.floor(limitBytes/pageIds.length)):0;
-          const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-          if(type==="image/jpeg" && target>0 && (blob.size>target || blob.type!=="image/jpeg")) throw new Error(`Page ${id} JPG target से बड़ी या invalid है; download रोक दिया गया।`);
+          // The selected maximum applies to EACH page image. The ZIP may be larger.
+          const blob=limitBytes>0
+            ?(type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await compressPngToLimit(canvas,limitBytes))
+            :await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+          if(limitBytes>0 && (blob.size>limitBytes || blob.type!==type)) throw new Error(`Page ${id} ${ext.toUpperCase()} चुनी गई per-image सीमा में नहीं बनी; ZIP download रोक दिया गया।`);
           zip.file(`Page-${id}.${ext}`,blob);
           pageSizes.push(`Page ${id}: ${formatFileSize(blob.size)}`);
         }
         const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`;
-        // ZIP metadata makes the archive larger than its individual images; don't compare ZIP size to per-image target.
-        const size=verifyAndDownload(blob,filename,type==="image/jpeg"?0:limitBytes);
-        setStatus(`सभी pages की JPG files ZIP में download हुई। हर JPG की size: ${pageSizes.join(" · ")}. Total ZIP: ${size}.`);
+        const size=verifyAndDownload(blob,filename,0);
+        setStatus(`सभी pages की ${ext.toUpperCase()} files ZIP में download हुईं। हर image की size: ${pageSizes.join(" · ")}. Total ZIP: ${size}.`);
       }
     } catch(error) {
       setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
