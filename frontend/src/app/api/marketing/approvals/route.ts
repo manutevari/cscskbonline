@@ -19,6 +19,9 @@ async function campaign(id:string){
 export async function GET(req:NextRequest){
  const actor=authenticateMarketingActor(req);if(!actor)return unauthorized();
  try{
+  const now=new Date().toISOString();
+  const expired=await db(`approval_requests?select=id,resource_type,resource_id&status=eq.PENDING&expires_at=lt.${encodeURIComponent(now)}`);
+  if(expired.length){await db(`approval_requests?status=eq.PENDING&expires_at=lt.${encodeURIComponent(now)}`,{method:"PATCH",body:JSON.stringify({status:"EXPIRED",updated_at:now})});await db("approval_events",{method:"POST",body:JSON.stringify(expired.map((x:any)=>({approval_request_id:x.id,resource_type:x.resource_type,resource_id:x.resource_id,event_type:"EXPIRED",actor_id:"system",actor_role:"system",details:{reason:"ttl_elapsed"}})))});}
   const status=req.nextUrl.searchParams.get("status")||"PENDING";
   const [approvals,events]=await Promise.all([
    db(`approval_requests?select=*&status=eq.${encodeURIComponent(status)}&order=created_at.desc&limit=100`),
