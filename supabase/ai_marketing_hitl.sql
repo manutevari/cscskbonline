@@ -192,7 +192,8 @@ revoke all on public.approval_policies,public.approval_requests,public.approval_
 grant select,insert,update on public.approval_requests to service_role;
 grant select,insert on public.approval_events to service_role;
 grant select,insert,update on public.agent_execution_logs to service_role;
-grant select on public.approval_policies to service_role;\ngrant select,update on public.marketing_execution_controls to service_role;
+grant select on public.approval_policies to service_role;
+grant select,update on public.marketing_execution_controls to service_role;
 revoke all on function public.decide_marketing_approval(uuid,text,text,text,text) from public,anon,authenticated;
 revoke all on function public.claim_approved_marketing_execution(uuid,text,integer,text) from public,anon,authenticated;
 grant execute on function public.decide_marketing_approval(uuid,text,text,text,text) to service_role;
