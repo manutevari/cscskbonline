@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Vertical = "csc_services" | "tata_water" | "food_safety" | "insurance_banking";
 type Lead = { id:string; vertical:Vertical; full_name:string; phone:string; service_interest:string|null; city:string|null; status:string; lead_score:number; created_at:string };
-type Campaign = { id:string; vertical:Vertical; name:string; channel:string; audience:string; objective:string; draft_content:string; status:string; created_at:string };\ntype Approval = {id:string;resource_id:string;action:string;risk_level:string;content_version:number;content_snapshot:string;status:string;expires_at:string;required_approvals:number;approvals:any[]};
+type Campaign = { id:string; vertical:Vertical; name:string; channel:string; audience:string; objective:string; draft_content:string; status:string; created_at:string };
+type Approval = {id:string;resource_id:string;action:string;risk_level:string;content_version:number;content_snapshot:string;status:string;expires_at:string;required_approvals:number;approvals:any[]};
 const verticals: {id:Vertical;label:string;desc:string}[] = [
   {id:"csc_services",label:"CSC Services",desc:"PAN, certificates, Aadhaar assistance and citizen services"},
   {id:"tata_water",label:"Tata Water",desc:"Distribution, retail enquiries and bottle delivery"},
