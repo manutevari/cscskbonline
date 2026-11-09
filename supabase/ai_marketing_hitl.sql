@@ -130,14 +130,14 @@ begin
    update public.approval_requests set status='EXPIRED',updated_at=now() where id=r.id;
    insert into public.approval_events(approval_request_id,resource_type,resource_id,event_type,actor_id,actor_role,details)
    values(r.id,r.resource_type,r.resource_id,'EXPIRED','system','system','{"reason":"ttl_elapsed"}');
-   raise exception 'Approval request has expired';
+   return jsonb_build_object('id',r.id,'status','EXPIRED');
  end if;
  select * into c from public.marketing_campaigns where id=r.resource_id for update;
  if not found or c.content_version<>r.content_version or c.content_hash<>r.content_hash then
    update public.approval_requests set status='CANCELLED',updated_at=now() where id=r.id;
    insert into public.approval_events(approval_request_id,resource_type,resource_id,event_type,actor_id,actor_role,details)
    values(r.id,r.resource_type,r.resource_id,'CANCELLED','system','system','{"reason":"version_or_hash_mismatch"}');
-   raise exception 'Content changed; a new approval request is required';
+   return jsonb_build_object('id',r.id,'status','CANCELLED');
  end if;
  if not (p_actor_role=any(r.required_roles)) then raise exception 'Role is not authorized for this approval'; end if;
  if p_actor_id=r.requested_by then raise exception 'Requester cannot approve their own request'; end if;
@@ -192,7 +192,7 @@ revoke all on public.approval_policies,public.approval_requests,public.approval_
 grant select,insert,update on public.approval_requests to service_role;
 grant select,insert on public.approval_events to service_role;
 grant select,insert,update on public.agent_execution_logs to service_role;
-grant select on public.approval_policies,public.marketing_execution_controls to service_role;
+grant select on public.approval_policies to service_role;\ngrant select,update on public.marketing_execution_controls to service_role;
 revoke all on function public.decide_marketing_approval(uuid,text,text,text,text) from public,anon,authenticated;
 revoke all on function public.claim_approved_marketing_execution(uuid,text,integer,text) from public,anon,authenticated;
 grant execute on function public.decide_marketing_approval(uuid,text,text,text,text) to service_role;
