@@ -118,6 +118,34 @@ async function draftWithAI(input: {
   return templateDraft(input);
 }
 
+function confidenceThreshold() {
+  const value = Number(process.env.CSCSKB_MARKETING_CONFIDENCE_THRESHOLD || 80);
+  if (!Number.isInteger(value) || value < 1 || value > 100) throw new Error("CSCSKB_MARKETING_CONFIDENCE_THRESHOLD must be an integer from 1 to 100.");
+  return value;
+}
+
+function assessDraft(text: string, context: string) {
+  let score = 100;
+  const reasons: string[] = [];
+  if (text.trim().length < 100) { score -= 25; reasons.push("Draft is unusually short."); }
+  if (/(guaranteed|100% assured| निश्चित लाभ|गारंटीड|पक्का मुनाफा|सरकारी गारंटी)/i.test(text)) {
+    score -= 50; reasons.push("Potential guarantee or unsupported promise detected.");
+  }
+  if (/(₹|rs\\.?\\s?\\d|\\bprice\\b|discount|छूट)/i.test(text)) {
+    score -= 15; reasons.push("Price or offer needs source verification.");
+  }
+  const sensitivePatterns = [
+    /\\b\\d{12}\\b/, /\\b[A-Z]{5}\\d{4}[A-Z]\\b/i,
+    /\\b(?:aadhaar|आधार|pan number|पैन नंबर|bank account|account number|ifsc|cvv|otp|password|पासवर्ड|medical record|health condition)\\b/i,
+    /\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/i,
+    /(?:\\+?91[- ]?)?[6-9]\\d{9}\\b/,
+  ];
+  const sensitive = sensitivePatterns.some((p) => p.test(context + "\\n" + text));
+  if (sensitive) { score = Math.min(score, 79); reasons.push("Possible personal, financial, health or credential data detected; human review required."); }
+  score = Math.max(0, Math.min(100, score));
+  return { score, sensitive, reason: reasons.join(" ") || "Passed deterministic content-quality and policy checks." };
+}
+
 export async function GET(req: NextRequest) {
   const actor = authenticateMarketingActor(req);
   if (!actor) return unauthorized();
@@ -159,6 +187,11 @@ export async function POST(req: NextRequest) {
     }
 
     const draft_content = await draftWithAI({ vertical, channel, audience, objective, language });
+    const threshold = confidenceThreshold();
+    const assessment = assessDraft(draft_content, [audience, objective].join("\\n"));
+    const confidence_decision = assessment.score < threshold ? "AUTO_REJECT" : "PASS";
+    const human_review_required = assessment.sensitive;
+
     const content_hash = createHash("sha256").update([vertical, channel, draft_content].join("\n"), "utf8").digest("hex");
     const rows = await db("marketing_campaigns", {
       method: "POST",
@@ -172,20 +205,29 @@ export async function POST(req: NextRequest) {
         draft_content,
         content_hash,
         created_by: actor.id,
-        status: "DRAFT",
+        status: confidence_decision === "AUTO_REJECT" ? "REJECTED" : "DRAFT",
       }),
     });
     const campaign = rows[0];
+    await db("marketing_ai_assessments", {
+      method: "POST",
+      body: JSON.stringify({
+        campaign_id: campaign.id, confidence_score: assessment.score,
+        confidence_threshold: threshold, confidence_decision,
+        confidence_reason: assessment.reason, assessment_source: "deterministic_policy_checks",
+        sensitive_data_detected: assessment.sensitive, human_review_required, assessed_by: actor.id,
+      }),
+    });
     await db("marketing_activities", {
       method: "POST",
       body: JSON.stringify({
         campaign_id: campaign.id,
         activity_type: "campaign_drafted",
-        details: { vertical, channel, content_hash },
+        details: { vertical, channel, content_hash, confidence_score: assessment.score, confidence_threshold: threshold, confidence_decision, sensitive_data_detected: assessment.sensitive, human_review_required },
         actor: actor.id,
       }),
     });
-    return NextResponse.json({ campaign }, { status: 201 });
+    return NextResponse.json({ campaign, assessment: { confidence_score: assessment.score, confidence_threshold: threshold, confidence_decision, confidence_reason: assessment.reason, sensitive_data_detected: assessment.sensitive, human_review_required, next_step: confidence_decision === "AUTO_REJECT" ? "AUTO_REJECTED" : human_review_required ? "HUMAN_REVIEW_REQUIRED" : "PASS_TO_APPROVAL_QUEUE" } }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unable to create campaign" },
