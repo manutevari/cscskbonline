@@ -38,6 +38,14 @@ export async function POST(req:NextRequest){
    if(!["owner_admin","marketing_manager","operations_manager"].includes(actor.role))return NextResponse.json({error:"Service Expert cannot submit campaign requests."},{status:403});
    const id=String(b.resource_id||"");if(!/^[0-9a-f-]{36}$/i.test(id))return NextResponse.json({error:"Valid campaign id required."},{status:400});
    const c=await campaign(id);if(!["DRAFT","REJECTED"].includes(c.status))return NextResponse.json({error:"Campaign must be a draft or revised rejected campaign."},{status:409});
+   const assessments=await db(`marketing_ai_assessments?select=confidence_score,confidence_threshold,confidence_decision,sensitive_data_detected,human_review_required&campaign_id=eq.${encodeURIComponent(id)}&order=created_at.desc&limit=1`);
+   const assessment=assessments[0];
+   if(!assessment)return NextResponse.json({error:"A recorded confidence assessment is required before approval."},{status:409});
+   if(assessment.confidence_decision!=="PASS" || assessment.confidence_score<assessment.confidence_threshold)
+    return NextResponse.json({error:"Automatically rejected: confidence score is below the configured threshold. Revise the campaign and create a fresh assessment before requesting approval.",assessment},{status:422});
+   if(assessment.sensitive_data_detected && !assessment.human_review_required)
+    return NextResponse.json({error:"Sensitive data was detected but human review is not flagged. Approval request blocked."},{status:409});
+
    const policies=await db("approval_policies?select=*&active=eq.true");
    const policy=policies.filter((p:any)=>(!p.vertical||p.vertical===c.vertical)&&(!p.channel||p.channel===c.channel))
     .sort((a:any,b:any)=>((b.risk_level==="CRITICAL"?4:b.risk_level==="HIGH"?3:b.risk_level==="MEDIUM"?2:1)-(a.risk_level==="CRITICAL"?4:a.risk_level==="HIGH"?3:a.risk_level==="MEDIUM"?2:1)) || ((b.vertical?2:0)+(b.channel?1:0))-((a.vertical?2:0)+(a.channel?1:0)))[0];
