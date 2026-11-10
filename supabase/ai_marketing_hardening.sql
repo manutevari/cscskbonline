@@ -7,8 +7,8 @@ alter table public.marketing_campaigns
   check (channel in ('whatsapp','facebook','instagram','google_business','email','website','paid_ads'));
 
 update public.marketing_campaigns
-set content_hash = encode(digest(convert_to(vertical || E'\\n' || channel || E'\\n' || draft_content,'UTF8'),'sha256'),'hex')
-where content_hash is distinct from encode(digest(convert_to(vertical || E'\\n' || channel || E'\\n' || draft_content,'UTF8'),'sha256'),'hex');
+set content_hash = encode(digest(convert_to(vertical || E'\n' || channel || E'\n' || draft_content,'UTF8'),'sha256'),'hex')
+where content_hash is distinct from encode(digest(convert_to(vertical || E'\n' || channel || E'\n' || draft_content,'UTF8'),'sha256'),'hex');
 
 create or replace function public.marketing_campaign_content_guard()
 returns trigger language plpgsql as $$
@@ -17,7 +17,7 @@ begin
      or new.vertical is distinct from old.vertical
      or new.channel is distinct from old.channel then
     new.content_version := old.content_version + 1;
-    new.content_hash := encode(digest(convert_to(new.vertical || E'\\n' || new.channel || E'\\n' || new.draft_content,'UTF8'),'sha256'),'hex');
+    new.content_hash := encode(digest(convert_to(new.vertical || E'\n' || new.channel || E'\n' || new.draft_content,'UTF8'),'sha256'),'hex');
     if old.status in ('PENDING_APPROVAL','APPROVED') then
       new.status := 'DRAFT';
       new.approved_by := null;
