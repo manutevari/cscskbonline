@@ -12,7 +12,7 @@ const sha=(s:string)=>createHash("sha256").update(s,"utf8").digest("hex");
 async function campaign(id:string){
  const rows=await db(`marketing_campaigns?id=eq.${encodeURIComponent(id)}&select=id,vertical,channel,draft_content,status,content_version,content_hash`);
  const c=rows[0];if(!c)throw new Error("Campaign not found");
- const actual=sha(c.draft_content);
+ const actual=sha([c.vertical,c.channel,c.draft_content].join("\n"));
  if(c.content_hash!==actual)throw new Error("Campaign content hash mismatch; run the HITL migration and verify campaign data.");
  return c;
 }
@@ -40,7 +40,7 @@ export async function POST(req:NextRequest){
    const c=await campaign(id);if(!["DRAFT","REJECTED"].includes(c.status))return NextResponse.json({error:"Campaign must be a draft or revised rejected campaign."},{status:409});
    const policies=await db("approval_policies?select=*&active=eq.true");
    const policy=policies.filter((p:any)=>(!p.vertical||p.vertical===c.vertical)&&(!p.channel||p.channel===c.channel))
-    .sort((a:any,b:any)=>((b.vertical?2:0)+(b.channel?1:0))-((a.vertical?2:0)+(a.channel?1:0)) || ((b.risk_level==="CRITICAL"?4:b.risk_level==="HIGH"?3:b.risk_level==="MEDIUM"?2:1)-(a.risk_level==="CRITICAL"?4:a.risk_level==="HIGH"?3:a.risk_level==="MEDIUM"?2:1)))[0];
+    .sort((a:any,b:any)=>((b.risk_level==="CRITICAL"?4:b.risk_level==="HIGH"?3:b.risk_level==="MEDIUM"?2:1)-(a.risk_level==="CRITICAL"?4:a.risk_level==="HIGH"?3:a.risk_level==="MEDIUM"?2:1)) || ((b.vertical?2:0)+(b.channel?1:0))-((a.vertical?2:0)+(a.channel?1:0)))[0];
    if(!policy)throw new Error("No active approval policy matches this campaign.");
    const created=await db("approval_requests",{method:"POST",body:JSON.stringify({
     resource_type:"campaign",resource_id:id,action:"PUBLISH_CAMPAIGN",risk_level:policy.risk_level,
