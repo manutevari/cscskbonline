@@ -33,7 +33,7 @@ export async function syncZohoLead(input: ZohoLeadInput): Promise<{ id: string |
   if (!input.consent_to_contact) throw new Error("Contact consent is required before Zoho sync.");
 
   const accountsDomain = (process.env.ZOHO_ACCOUNTS_DOMAIN || "https://accounts.zoho.in").replace(/\/$/, "");
-  const apiDomain = (process.env.ZOHO_API_DOMAIN || "https://www.zohoapis.in").replace(/\/$/, "");
+  const configuredApiDomain = (process.env.ZOHO_API_DOMAIN || "https://www.zohoapis.in").replace(/\/$/, "");
   const tokenResponse = await fetch(`${accountsDomain}/oauth/v2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -76,7 +76,8 @@ export async function syncZohoLead(input: ZohoLeadInput): Promise<{ id: string |
   };
   if (input.email) lead.Email = input.email;
 
-  const response = await fetch(`${apiDomain}/crm/v7/Leads/upsert`, {
+  const apiDomain = typeof tokenBody.api_domain === "string" ? tokenBody.api_domain.replace(/\/$/, "") : configuredApiDomain;
+  const response = await fetch(`${apiDomain}/crm/v8/Leads/upsert`, {
     method: "POST",
     headers: {
       Authorization: `Zoho-oauthtoken ${tokenBody.access_token}`,
@@ -84,7 +85,7 @@ export async function syncZohoLead(input: ZohoLeadInput): Promise<{ id: string |
     },
     body: JSON.stringify({
       data: [lead],
-      duplicate_check_fields: ["Phone", "Email"],
+      ...(input.email ? { duplicate_check_fields: ["Email"] } : {}),
     }),
     cache: "no-store",
   });
