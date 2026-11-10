@@ -6,15 +6,17 @@ alter table public.marketing_campaigns
   add column if not exists content_hash text;
 
 update public.marketing_campaigns
-set content_hash = encode(digest(convert_to(draft_content,'UTF8'),'sha256'),'hex')
+set content_hash = encode(digest(convert_to(vertical || E'\\n' || channel || E'\\n' || draft_content,'UTF8'),'sha256'),'hex')
 where content_hash is null;
 
 create or replace function public.marketing_campaign_content_guard()
 returns trigger language plpgsql as $$
 begin
-  if new.draft_content is distinct from old.draft_content then
+  if new.draft_content is distinct from old.draft_content
+     or new.vertical is distinct from old.vertical
+     or new.channel is distinct from old.channel then
     new.content_version := old.content_version + 1;
-    new.content_hash := encode(digest(convert_to(new.draft_content,'UTF8'),'sha256'),'hex');
+    new.content_hash := encode(digest(convert_to(new.vertical || E'\\n' || new.channel || E'\\n' || new.draft_content,'UTF8'),'sha256'),'hex');
     if old.status = 'PENDING_APPROVAL' or old.status = 'APPROVED' then
       new.status := 'DRAFT';
       new.approved_by := null;
@@ -27,6 +29,10 @@ end $$;
 drop trigger if exists marketing_campaign_content_guard on public.marketing_campaigns;
 create trigger marketing_campaign_content_guard before update on public.marketing_campaigns
 for each row execute function public.marketing_campaign_content_guard();
+
+alter table public.marketing_campaigns drop constraint if exists marketing_campaigns_channel_check;
+alter table public.marketing_campaigns add constraint marketing_campaigns_channel_check
+  check (channel in ('whatsapp','facebook','instagram','google_business','email','website','paid_ads'));
 
 create table if not exists public.approval_policies (
  id uuid primary key default gen_random_uuid(),
