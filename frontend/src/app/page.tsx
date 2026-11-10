@@ -165,7 +165,6 @@ export default function Home() {
             { icon: "🗂️", label: "CSC Services", href: "#services" },
             { icon: "💼", label: "Jobs & Exams", href: "/jobs-exams" },
             { icon: "💧", label: "Tata Water", href: "/tata-water" },
-            { icon: "💧", label: "Tata Water", href: "/tata-water" },
             { icon: "📞", label: "Contact Us", href: "#footer" },
           ].map((link) => (
             <a key={link.label} href={link.href} className="nav-link" target={link.href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer">
