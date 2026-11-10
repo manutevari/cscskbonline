@@ -186,6 +186,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Fail closed before any third-party AI call: sensitive input must be reviewed/redacted by a human first.
+    const sensitiveInputPatterns = [
+      /\\b\\d{12}\\b/, /\\b[A-Z]{5}\\d{4}[A-Z]\\b/i,
+      /\\b(?:aadhaar|आधार|pan number|पैन नंबर|bank account|account number|ifsc|cvv|otp|password|पासवर्ड|medical record|health condition)\\b/i,
+      /\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/i,
+      /(?:\\+?91[- ]?)?[6-9]\\d{9}\\b/,
+    ];
+    if (sensitiveInputPatterns.some((pattern) => pattern.test([audience, objective].join("\\n")))) {
+      return NextResponse.json({
+        error: "Potentially sensitive personal, financial, health or credential data detected. The input was not sent to the AI provider or saved. A human must review and redact it before resubmission.",
+        human_review_required: true,
+        external_ai_call_made: false,
+      }, { status: 422 });
+    }
+
     const draft_content = await draftWithAI({ vertical, channel, audience, objective, language });
     const threshold = confidenceThreshold();
     const assessment = assessDraft(draft_content, [audience, objective].join("\\n"));
