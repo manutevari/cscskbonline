@@ -14,7 +14,8 @@
     "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",
     "tesseract.js": "^6.0.1",
-    "pdfjs-dist": "^5.4.149"
+    "pdfjs-dist": "^5.4.149",
+    "js-tiktoken": "^1.0.20"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
