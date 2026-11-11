@@ -160,12 +160,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const actor = authenticateMarketingActor(req);
   if (!actor) return unauthorized();
-  if (actor.role === "service_expert") {
-    return NextResponse.json(
-      { error: "Service Expert role is for domain review, not campaign authoring." },
-      { status: 403 },
-    );
-  }
   try {
     const b = await req.json();
     const vertical = String(b.vertical || "");
