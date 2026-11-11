@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateMarketingActor, unauthorized } from "@/lib/marketing-auth";
 
 const VERTICALS = ["csc_services", "tata_water", "food_safety", "insurance_banking"];
-const CHANNELS = ["whatsapp", "facebook", "instagram", "google_business", "email", "website", "paid_ads"];
+const CHANNELS = ["whatsapp", "facebook", "google_business", "email", "website", "paid_ads"];
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_COPY_MODEL = "google/gemma-4-26b-a4b-it:free";
 const FALLBACK_COPY_MODEL = "nvidia/nemotron-3-ultra:free";
