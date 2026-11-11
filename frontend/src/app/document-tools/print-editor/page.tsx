@@ -1,15 +1,12 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { PDFDocument } from "pdf-lib";
-import JSZip from "jszip";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
-type RegionStart = { itemId: string; startX: number; startY: number };
 type LayoutPage = { id: number; label: string };
-type PagePreset = "A1" | "A2" | "A3" | "A4" | "A5" | "Legal" | "Custom";
+type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
-  A1: { w: 594, h: 841 }, A2: { w: 420, h: 594 }, A3: { w: 297, h: 420 }, A4: { w: 210, h: 297 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
+  A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
 };
 const uid = () => "item-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
 let pdfJsPromise: Promise<any> | null = null;
@@ -44,34 +41,20 @@ export default function PrintEditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"manual" | "grid" | "photo">("manual");
   const [preset, setPreset] = useState<PagePreset>("A4");
-  const [zoomMode, setZoomMode] = useState<"fit-page" | "fit-width" | "custom">("fit-page");
-  const [zoomPercent, setZoomPercent] = useState(100);
   const [customW, setCustomW] = useState("210");
   const [customH, setCustomH] = useState("297");
   const [photoCopies, setPhotoCopies] = useState("8");
   const [photoWidthMm, setPhotoWidthMm] = useState("35");
   const [photoHeightMm, setPhotoHeightMm] = useState("45");
   const [pageMargins, setPageMargins] = useState({ top: "5", right: "5", bottom: "5", left: "5" });
-  const [marginPreset, setMarginPreset] = useState("narrow");
   const [clipboardItem, setClipboardItem] = useState<LayoutItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editHistory, setEditHistory] = useState<LayoutItem[][]>([]);
   const [cropRect, setCropRect] = useState({ left: "0", top: "0", width: "100", height: "100" });
   const [cropRatio, setCropRatio] = useState("free");
-  const [resizeUnit, setResizeUnit] = useState<"px" | "mm" | "cm">("mm");
-  const [dpi, setDpi] = useState("300");
-  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
-  const [resizePercent, setResizePercent] = useState("100");
-  const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
+  const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
-  const [assistantCommand, setAssistantCommand] = useState("");
-  const [regionMode, setRegionMode] = useState(false);
-  const [cropMode, setCropMode] = useState(false);
-  const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
-  const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
-  const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
-  const [precisionEstimate, setPrecisionEstimate] = useState<{width:number;height:number;sourceKb:number;outputKb:number;quality:number;note:string} | null>(null);
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -86,61 +69,11 @@ export default function PrintEditorPage() {
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!selected?.src) { setPrecisionEstimate(null); return; }
-    const image = new Image();
-    image.onload = async () => {
-      try {
-        const sourceBlob = await fetch(selected.src).then(response => {
-          if (!response.ok) throw new Error("Image source unavailable");
-          return response.blob();
-        });
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Canvas unavailable");
-        context.drawImage(image, 0, 0);
-        const targetKb = maxFileSizeKb === "custom" ? Number(customFileSizeKb) : Number(maxFileSizeKb);
-        const targetBytes = Number.isFinite(targetKb) && targetKb > 0 ? Math.floor(targetKb * 1024) : 0;
-        let low = 0.08, high = 0.96, best: Blob | null = null, qualityUsed = 0.08;
-        for (let pass = 0; pass < 10; pass++) {
-          const quality = (low + high) / 2;
-          const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Estimate failed")), "image/jpeg", quality));
-          if (!targetBytes || blob.size <= targetBytes) { best = blob; qualityUsed = quality; low = quality; }
-          else high = quality;
-        }
-        if (!best) best = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Estimate failed")), "image/jpeg", 0.08));
-        if (!cancelled) setPrecisionEstimate({
-          width: image.naturalWidth, height: image.naturalHeight, sourceKb: sourceBlob.size / 1024,
-          outputKb: best.size / 1024, quality: Math.round(qualityUsed * 100),
-          note: targetBytes > 0 && best.size > targetBytes ? "चुनी हुई सीमा इस image के लिए संभव नहीं लगती; dimensions कम करने की जरूरत हो सकती है।" : "JPEG quality simulation पर आधारित अनुमान; वास्तविक export में थोड़ा अंतर हो सकता है।"
-        });
-      } catch { if (!cancelled) setPrecisionEstimate(null); }
-    };
-    image.onerror = () => { if (!cancelled) setPrecisionEstimate(null); };
-    image.src = selected.src;
-    return () => { cancelled = true; image.onload = null; image.onerror = null; };
-  }, [selected?.src, selected?.id, maxFileSizeKb, customFileSizeKb]);
-
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
       if (typing) return;
       const command = event.ctrlKey || event.metaKey;
-      // Delete/Backspace removes the selected photo(s), but never while typing in a field.
-      if (!command && (event.key === "Delete" || event.key === "Backspace")) {
-        const idsToDelete = selectedIds.length ? selectedIds : selected ? [selected.id] : [];
-        if (idsToDelete.length) {
-          event.preventDefault();
-          setItems(old => old.filter(item => !idsToDelete.includes(item.id)));
-          setSelectedId(null);
-          setSelectedIds([]);
-          setStatus(idsToDelete.length === 1 ? "Selected photo delete कर दी गई।" : idsToDelete.length + " selected photos delete कर दी गईं।");
-          return;
-        }
-      }
       if (command && event.key.toLowerCase() === "a") {
         event.preventDefault(); setSelectedIds(pageItems.map(i => i.id)); setStatus("इस page की सभी photos select हुईं। Resize fields केवल active photo को बदलते हैं।"); return;
       }
@@ -259,32 +192,13 @@ export default function PrintEditorPage() {
   };
   const moveToPage = (id: string, pageId: number) => setItems(old => old.map(i => i.id === id ? { ...i, pageId } : i));
   const deleteItem = () => {
-    const ids = selectedIds.length ? selectedIds : selected ? [selected.id] : [];
-    if (!ids.length) return;
-    setItems(old => old.filter(item => !ids.includes(item.id)));
-    setSelectedId(null); setSelectedIds([]);
-    setStatus(ids.length === 1 ? "Selected image deleted." : `${ids.length} selected images deleted.`);
+    if (!selected) return;
+    setItems(old => old.filter(i => i.id !== selected.id)); setSelectedId(null);
   };
   const updateSelected = (key: "x" | "y" | "w" | "h", value: string) => {
     if (!selected || value.trim() === "") return;
     const n = Number(value); if (!Number.isFinite(n)) return;
     setItems(old => old.map(i => i.id === selected.id ? { ...i, [key]: Math.max(key === "w" || key === "h" ? 12 : 0, n) } : i));
-  };
-  const updateResizeDimension = (key: "w" | "h", value: string) => {
-    if (!selected || value.trim() === "") return;
-    const entered = Number(value);
-    if (!Number.isFinite(entered) || entered <= 0) return;
-    const mm = resizeUnit === "px" ? entered * 25.4 / Math.max(1, Number(dpi) || 300) : resizeUnit === "cm" ? entered * 10 : entered;
-    const next = mm * (key === "w" ? 794 / pageSize.w : 1123 / pageSize.h);
-    setItems(old => old.map(item => item.id === selected.id ? { ...item, [key]: Math.max(12, next), ...(keepAspectRatio ? key === "w" ? { h: Math.max(12, next / Math.max(0.0001, selected.w / selected.h)) } : { w: Math.max(12, next * selected.w / Math.max(0.0001, selected.h)) } : {}) } : item));
-  };
-  const applyResizePercent = () => {
-    if (!selected) return;
-    const percent = Number(resizePercent);
-    if (!Number.isFinite(percent) || percent <= 0 || percent > 500) { setStatus("Resize percentage must be between 1% and 500%."); return; }
-    const factor = percent / 100;
-    setItems(old => old.map(item => item.id === selected.id ? { ...item, w: Math.max(12, selected.w * factor), h: Math.max(12, selected.h * factor) } : item));
-    setStatus("Selected image resized to " + percent + "%.");
   };
   const saveEditSnapshot = () => setEditHistory(old => [...old.slice(-19), items.map(item => ({ ...item }))]);
 
@@ -310,30 +224,6 @@ export default function PrintEditorPage() {
       setCropRect({ left: "0", top: "0", width: "100", height: "100" });
       setStatus("Crop लागू हो गया। Original file अलग रहती है; layout में cropped copy इस्तेमाल होगी।");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Crop लागू नहीं हो सका।"); }
-  };
-
-  const extractSelectedRegion = async () => {
-    if (!selected) return;
-    const left = Math.max(0, Math.min(99, Number(cropRect.left) || 0));
-    const top = Math.max(0, Math.min(99, Number(cropRect.top) || 0));
-    const width = Math.max(1, Math.min(100 - left, Number(cropRect.width) || 100));
-    const height = Math.max(1, Math.min(100 - top, Number(cropRect.height) || 100));
-    if (width >= 99.5 && height >= 99.5) { setStatus("पहले PDF page/photo के अंदर छोटा region drag करके select करें।"); return; }
-    const image = new Image(); image.src = selected.src;
-    try {
-      await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("Selected page load नहीं हुई।"));});
-      const sx=Math.round(image.naturalWidth*left/100), sy=Math.round(image.naturalHeight*top/100);
-      const sw=Math.max(1,Math.round(image.naturalWidth*width/100)), sh=Math.max(1,Math.round(image.naturalHeight*height/100));
-      const canvas=document.createElement("canvas");canvas.width=sw;canvas.height=sh;
-      const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Region processor उपलब्ध नहीं है।");
-      ctx.drawImage(image,sx,sy,sw,sh,0,0,sw,sh);
-      const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Region export नहीं हो सका।")),"image/png"));
-      const src=URL.createObjectURL(blob);urlsRef.current.push(src);
-      const region:LayoutItem={id:uid(),name:selected.name+" · selected region",src,pageId:selected.pageId,x:selected.x+selected.w*left/100,y:selected.y+selected.h*top/100,w:selected.w*width/100,h:selected.h*height/100,brightness:100,contrast:100,sharpness:0};
-      setItems(old=>[...old,region]);setSelectedId(region.id);setSelectedIds([region.id]);
-      setCropRect({left:"0",top:"0",width:"100",height:"100"});
-      setStatus("चुना हुआ हिस्सा अलग editable layer बन गया है। अब brightness, contrast और sharpness केवल इसी हिस्से पर लागू होंगे; बाकी page और original file सुरक्षित हैं।");
-    } catch(error) { setStatus(error instanceof Error?error.message:"Region extract नहीं हो सका।"); }
   };
 
   const rotateSelected = async (degrees: number) => {
@@ -419,247 +309,39 @@ export default function PrintEditorPage() {
     }));
     setMode("grid"); setStatus("इस page के photos automatic grid में arrange किए गए।");
   };
-  const handleAssistantCommand = () => {
-    const rawCommand = assistantCommand.trim();
-    if (!rawCommand) return;
-    const command = rawCommand.toLowerCase();
-    if (/upsc|up government|certificate photo|passport photo|signature resize|custom image resize/.test(command)) {
-      setStatus("Please provide the exact exam/department and current notification or upload its specification screenshot. Confirm photo/signature dimensions, format and maximum file size. I will verify those requirements before applying any resize; no guessed preset will be applied.");
-      return;
-    }
-    if (!selected) { setStatus("पहले canvas या thumbnail से photo/PDF page select करें।"); return; }
-    const amountMatch = command.match(/(\d+(?:\.\d+)?)/);
-    const amount = amountMatch ? Number(amountMatch[1]) : 10;
-    const decrease = /decrease|reduce|lower|कम|घटा|घटाओ|कम करो/.test(command);
-    if (/brightness|bright|रोशनी|उजाला|चमक/.test(command)) {
-      updateImageFilter("brightness", Math.max(0, Math.min(300, (selected.brightness ?? 100) + (decrease ? -amount : amount))));
-      setStatus("Selected photo की brightness " + (decrease ? "कम" : "बढ़ा") + " दी गई। Original upload सुरक्षित है।");
-    } else if (/contrast/.test(command)) {
-      updateImageFilter("contrast", Math.max(0, Math.min(300, (selected.contrast ?? 100) + (decrease ? -amount : amount))));
-      setStatus("Selected photo का contrast update कर दिया गया।");
-    } else if (/sharp|शार्प/.test(command)) {
-      updateImageFilter("sharpness", Math.max(0, Math.min(5, (selected.sharpness ?? 0) + (decrease ? -1 : 1))));
-      setStatus("Selected photo की sharpness update कर दी गई।");
-    } else if (/select|choose|crop|region|area|हिस्सा|भाग|चुन/.test(command)) {
-      setRegionMode(true);
-      setStatus("अब PDF page/photo के अंदर जिस हिस्से को अलग edit करना है, उस पर drag करें। फिर Apply crop या brightness/contrast इस्तेमाल करें।");
-    } else if (/rotate|घुमा/.test(command)) {
-      void rotateSelected(/left|anticlockwise|बाएं|बाएँ/.test(command) ? -90 : 90);
-    } else if (/reset|original|मूल|रीसेट/.test(command)) {
-      resetSelected();
-    } else if (/undo|वापस/.test(command)) {
-      undoEdit();
-    } else {
-      setStatus("Command समझ नहीं आया। उदाहरण: “brightness 20% बढ़ाओ”, “contrast 10 कम करो”, “इस हिस्से को select करो”, “rotate right” या “reset photo”.");
-    }
-    setAssistantCommand("");
-  };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
-  const saveBlob = (blob: Blob, filename: string) => {
-    // The displayed size and downloaded file both use this exact finalized Blob.
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = filename;
-    document.body.appendChild(anchor); anchor.click(); anchor.remove();
-    // Keep the object URL alive long enough for mobile browsers to begin the download.
-    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-  };
-  const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
-    const outputDpi = Math.max(72, Math.min(600, Number(dpi) || 300));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(pageSize.w / 25.4 * outputDpi);
-    canvas.height = Math.round(pageSize.h / 25.4 * outputDpi);
-    const scaleX = canvas.width / 794, scaleY = canvas.height / 1123;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
-    context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
-    for (const item of items.filter(entry => entry.pageId === pageId)) {
-      const image = new Image(); image.crossOrigin = "anonymous"; image.src = item.src;
-      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
-      context.save();
-      context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
-      const x=item.x*scaleX, y=item.y*scaleY, w=item.w*scaleX, h=item.h*scaleY;
-      if (item.rotation) {
-        context.translate(x+w/2,y+h/2); context.rotate((item.rotation*Math.PI)/180);
-        context.drawImage(image,-w/2,-h/2,w,h);
-      } else context.drawImage(image,x,y,w,h);
-      context.restore();
-    }
-    return canvas;
-  };
-  const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) =>
-    new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
-  const formatFileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
-  const verifyAndDownload = (blob: Blob, filename: string, limitBytes: number) => {
-    if (limitBytes > 0 && blob.size > limitBytes) {
-      throw new Error(`Final ${filename} size ${formatFileSize(blob.size)} है, जो चुनी गई ${formatFileSize(limitBytes)} maximum सीमा से अधिक है। File download नहीं की गई; बड़ा limit चुनें या JPEG format इस्तेमाल करें।`);
-    }
-    saveBlob(blob, filename);
-    return formatFileSize(blob.size);
-  };
-  const compressJpegToLimit = async (sourceCanvas: HTMLCanvasElement, targetBytes: number) => {
-    if (!Number.isFinite(targetBytes) || targetBytes < 1) throw new Error("JPG target size कम से कम 1 byte होना चाहिए।");
-    let width=sourceCanvas.width, height=sourceCanvas.height;
-    for (let resizePass=0; resizePass<24; resizePass++) {
-      const working=document.createElement("canvas");
-      working.width=Math.max(1,Math.round(width)); working.height=Math.max(1,Math.round(height));
-      const context=working.getContext("2d");
-      if(!context) throw new Error("JPG resize canvas उपलब्ध नहीं है।");
-      context.fillStyle="#fff"; context.fillRect(0,0,working.width,working.height);
-      context.drawImage(sourceCanvas,0,0,working.width,working.height);
-      let low=0.08, high=0.96, best:Blob|null=null;
-      for(let i=0;i<14;i++){
-        const quality=(low+high)/2, blob=await canvasBlob(working,"image/jpeg",quality);
-        if(blob.size<=targetBytes){best=blob;low=quality;}else high=quality;
-      }
-      if(best && best.size<=targetBytes && best.type==="image/jpeg") return best;
-      // Use the lowest tested quality as the baseline when no quality fits, then
-      // shrink dimensions proportionally. This avoids the previous null-best fallback bug.
-      const lowestQualityBlob=await canvasBlob(working,"image/jpeg",0.08);
-      const ratio=Math.min(0.82,Math.sqrt(targetBytes/Math.max(1,lowestQualityBlob.size))*0.9);
-      const nextWidth=Math.max(1,Math.floor(width*ratio)), nextHeight=Math.max(1,Math.floor(height*ratio));
-      if((nextWidth===width && nextHeight===height) || (width===1 && height===1)) break;
-      width=nextWidth; height=nextHeight;
-    }
-    throw new Error(`इस image को ${formatFileSize(targetBytes)} के अंदर valid JPG बनाना संभव नहीं हुआ। चुनी गई सीमा बहुत कम है; थोड़ा बड़ा size चुनें।`);
-  };
-  const compressPngToLimit = async (sourceCanvas: HTMLCanvasElement, targetBytes: number) => {
-    if (!Number.isFinite(targetBytes) || targetBytes < 1) throw new Error("PNG target size कम से कम 1 byte होना चाहिए।");
-    let width=sourceCanvas.width, height=sourceCanvas.height;
-    for(let pass=0;pass<24;pass++){
-      const working=document.createElement("canvas");
-      working.width=Math.max(1,Math.round(width)); working.height=Math.max(1,Math.round(height));
-      const context=working.getContext("2d");
-      if(!context) throw new Error("PNG resize canvas उपलब्ध नहीं है।");
-      context.drawImage(sourceCanvas,0,0,working.width,working.height);
-      const blob=await canvasBlob(working,"image/png");
-      if(blob.type==="image/png" && blob.size<=targetBytes) return blob;
-      const ratio=Math.min(0.82,Math.sqrt(targetBytes/Math.max(1,blob.size))*0.9);
-      const nextWidth=Math.max(1,Math.floor(width*ratio)), nextHeight=Math.max(1,Math.floor(height*ratio));
-      if((nextWidth===width && nextHeight===height) || (width===1 && height===1)) break;
-      width=nextWidth;height=nextHeight;
-    }
-    throw new Error(`इस PNG को ${formatFileSize(targetBytes)} के अंदर बनाना संभव नहीं हुआ। चुनी गई सीमा बहुत कम है; थोड़ा बड़ा size चुनें।`);
-  };
-  const createPdf = async (pageIds: number[], targetBytes = 0) => {
-    const canvases=await Promise.all(pageIds.map(pageId=>renderPageCanvas(pageId)));
-    const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
-    let budgetFactor=targetBytes>0?0.82:1;
-    for(let attempt=0;attempt<(targetBytes>0?10:1);attempt++){
-      const pdf=await PDFDocument.create();
-      const perPageTarget=targetBytes>0?Math.max(1,Math.floor(targetBytes/pageIds.length*budgetFactor)):0;
-      for(let index=0;index<pageIds.length;index++){
-        const canvas=canvases[index];
-        const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
-        const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
-        const pdfPage=pdf.addPage([widthPt,heightPt]);
-        pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
-      }
-      const blob=new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
-      if(!targetBytes || blob.size<=targetBytes) return blob;
-      budgetFactor*=Math.max(0.25,Math.sqrt(targetBytes/blob.size)*0.88);
-    }
-    throw new Error(`Combined PDF को ${formatFileSize(targetBytes)} की कुल सीमा में fit नहीं किया जा सका। बड़ा size चुनें या pages कम करें।`);
-  };
-  const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
-    if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
-    setBusy(true);
-    try {
-      const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
-      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
-      if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
-      const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
-      if (kind==="all-pdf") {
-        const blob=await createPdf(pageIds,limitBytes); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
-        setStatus(`सभी pages की PDF download शुरू हुई। Final file size: ${size}. Downloaded bytes are the same as this verified file.`);
-      } else if (kind==="current-pdf") {
-        const blob=await createPdf([activePage],limitBytes); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
-        setStatus(`चुने हुए page की PDF download शुरू हुई। Final file size: ${size}.`);
-      } else if (kind==="separate-pdf") {
-        const zip=new JSZip(), pageSizes:string[]=[];
-        for (const id of pageIds) {
-          const pdfBlob=await createPdf([id],limitBytes);
-          zip.file(`Page-${id}.pdf`,pdfBlob);
-          pageSizes.push(`Page ${id}: ${formatFileSize(pdfBlob.size)}`);
-        }
-        const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",0);
-        setStatus(`हर page की अलग PDF ZIP में download हुई। हर PDF size: ${pageSizes.join(" · ")}. Total ZIP: ${size}.`);
-      } else if (kind==="current-png" || kind==="current-jpg") {
-        const type=kind==="current-png"?"image/png":"image/jpeg";
-        const canvas=await renderPageCanvas(activePage,type);
-        const blob=limitBytes>0
-          ?(type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await compressPngToLimit(canvas,limitBytes))
-          :await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-        const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`;
-        const size=verifyAndDownload(blob,filename,limitBytes);
-        setStatus(`चुने हुए page की image download हुई। Final file size: ${size}.`);
-      } else {
-        const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
-        const zip=new JSZip(), pageSizes:string[]=[];
-        for (const id of pageIds) {
-          const canvas=await renderPageCanvas(id,type);
-          // The selected maximum applies to EACH page image. The ZIP may be larger.
-          const blob=limitBytes>0
-            ?(type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await compressPngToLimit(canvas,limitBytes))
-            :await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-          if(limitBytes>0 && (blob.size>limitBytes || blob.type!==type)) throw new Error(`Page ${id} ${ext.toUpperCase()} चुनी गई per-image सीमा में नहीं बनी; ZIP download रोक दिया गया।`);
-          zip.file(`Page-${id}.${ext}`,blob);
-          pageSizes.push(`Page ${id}: ${formatFileSize(blob.size)}`);
-        }
-        const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`;
-        const size=verifyAndDownload(blob,filename,0);
-        setStatus(`सभी pages की ${ext.toUpperCase()} files ZIP में download हुईं। हर image की size: ${pageSizes.join(" · ")}. Total ZIP: ${size}.`);
-      }
-    } catch(error) {
-      setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
-    } finally { setBusy(false); }
-  };
 
   return <main className="editor">
     <svg aria-hidden="true" width="0" height="0" style={{position:"absolute"}}><defs>{[0,1,2,3,4,5].map(level=><filter key={level} id={"sharpness-"+level}><feConvolveMatrix order="3" kernelMatrix={level===0?"0 0 0 0 1 0 0 0 0":`0 -${level} 0 -${level} ${1+4*level} -${level} 0 -${level} 0`} divisor="1" preserveAlpha="true" /></filter>)}</defs></svg>
     <style jsx>{`
-      .editor{max-width:1600px;margin:auto;padding:0 0 30px;font-family:Arial,sans-serif;color:#172033;background:#f4f6fb;min-height:100vh}
-      .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#071b3b;color:#fff;padding:13px 18px;align-items:center}.back{color:#fff;text-decoration:none;font-weight:700}
-      h1{font-size:clamp(20px,2.5vw,28px);margin:0;color:#fff}.intro{color:#dbe6f7;line-height:1.4;margin:0;font-size:12px}
-      .toolbar,.panel{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fff;border:1px solid #dce3ef;border-radius:10px;margin:7px 10px}
-      .btn{border:0;border-radius:7px;padding:8px 10px;background:#1769d2;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#243b60;border:1px solid #cbd5e1}.btn:disabled,.icon-btn:disabled{opacity:.45;cursor:not-allowed}
-      .download-menu{position:relative}.download-menu>summary{list-style:none}.download-menu>summary::-webkit-details-marker{display:none}.download-options{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:grid;gap:5px;min-width:210px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 24px #17203322}.download-options strong{font-size:11px;color:#64748b;padding:4px 5px 0}.download-options button{border:0;border-radius:6px;background:#f3f6fb;color:#243b60;text-align:left;padding:8px;font-size:12px;cursor:pointer}.download-options button:disabled{opacity:.45;cursor:not-allowed}.compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
-      .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
-      .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
-      .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.margin-details{border:1px solid #dce5de;border-radius:8px;padding:8px}.margin-details>summary{cursor:pointer;font-size:13px;font-weight:700;color:#243b60}.margin-details[open]{display:grid;gap:8px}
+      .editor{max-width:1200px;margin:auto;padding:22px 16px 40px;font-family:Arial,sans-serif;color:#17251f}
+      .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.back{color:#176b4d;text-decoration:none;font-weight:700}
+      h1{font-size:clamp(25px,4vw,34px);margin:18px 0 8px}.intro{color:#58685e;line-height:1.5;max-width:850px}
+      .toolbar,.panel{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:12px;background:#f2f7f3;border:1px solid #dce8df;border-radius:12px;margin:14px 0}
+      .btn{border:0;border-radius:8px;padding:9px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#24533d;border:1px solid #cbd9ce}.btn:disabled{opacity:.45}
+      .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px;align-items:start}
+      .stage-wrap{padding:12px;background:#e9eeeb;border-radius:12px;min-width:0}.stage{position:relative;width:100%;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:none}
+      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
-      .side{background:white;border:1px solid #dce3ef;border-radius:9px;padding:10px;display:grid;gap:9px;min-width:0}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
+      .side{background:white;border:1px solid #dce5de;border-radius:12px;padding:13px;display:grid;gap:10px}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
-      @media(max-width:1180px){.workspace{grid-template-columns:minmax(190px,220px) minmax(0,1fr)}.side-details{grid-column:1/-1;position:static;max-height:none}.side-details>.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:760px){.workspace{grid-template-columns:1fr}.workspace>.side:first-child{grid-template-columns:1fr 1fr}.side-details{grid-column:auto}.side-details>.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
-      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
+      @media(max-width:780px){.workspace{grid-template-columns:1fr}.side{order:-1}}
+      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.workspace{display:none!important}.print-pages{display:block!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
-    <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>A4 · 210 × 297 mm</span></div>
-    <section className="toolbar compact-toolbar" aria-label="Editor tools">
-      <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
-      <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
-      <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop: drag directly on an uploaded image or PDF page" aria-label="Crop selected page" onClick={()=>{const target=selected || items.find(item=>item.pageId===activePage) || items[0];if(!target){setStatus("Upload an image or PDF first.");return;}if(!selected){setSelectedId(target.id);setSelectedIds([target.id]);setActivePage(target.pageId);}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode off.":"Crop mode on: drag over the page to crop instantly.");}} disabled={!items.length}>✂ Crop</button>
-      <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Select a rectangular region inside the selected/cropped photo" aria-label="Select region inside image" onClick={()=>{if(!selected){setStatus("पहले crop की हुई photo पर click करके उसे select करें।");return;}setCropMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Region selection बंद।":"Select Region चालू: crop की हुई photo के अंदर mouse/touch से drag करके हिस्सा चुनें। चुना हुआ हिस्सा अलग editable layer बनेगा; original crop सुरक्षित रहेगा।");}} disabled={!selected}>▧ Select Region</button>
-      {regionMode && <button type="button" className="icon-btn" title="Cancel region selection" onClick={()=>{setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setStatus("Region selection cancel कर दी गई।");}}>Cancel selection</button>}
-      <button type="button" className="icon-btn" title="Delete selected image(s)" onClick={deleteItem} disabled={!selected && !selectedIds.length}>✕ Delete selected</button>
-      <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
-      <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
-      <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
-      <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
-      <span className="toolbar-spacer" />
-      <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
-      <button className={"icon-btn "+(zoomMode==="fit-width"?"selected":"")} onClick={()=>setZoomMode("fit-width")}>Fit width</button>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
-      <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
-      <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-pdf");}}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-pdf");}}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("separate-pdf");}}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-png");}}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("current-jpg");}}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-png");}}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={e=>{e.currentTarget.closest("details")?.removeAttribute("open");void runDownload("all-jpg");}}>All pages — JPG ZIP</button></div></details>
-      <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
+    <div className="top"><a className="back" href="/document-tools">← Document Tools</a><span className="small">Multi-file · PDF pages · Custom print size</span></div>
+    <h1>Print Layout Editor</h1>
+    <p className="intro">एक ही जगह images और PDFs जोड़ें। PDF के हर page का preview layout में आएगा। तय करें कौन-सी photos एक collage में रहेंगी और कौन अलग pages पर जाएँगी।</p>
+    <section className="toolbar">
+      <label className="btn secondary">Add images / PDFs<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
+      <button className="btn secondary" onClick={addPage}>+ Separate page</button>
+      <button className="btn" onClick={print} disabled={!items.length || busy}>Print preview</button>
     </section>
     <section className="panel">
-      <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A1","A2","A3","A4","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
+      <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A4","A3","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
       <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
@@ -678,160 +360,84 @@ export default function PrintEditorPage() {
         <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button type="button" className="btn secondary" onClick={cancelPdfPassword}>Cancel</button><button type="submit" className="btn">Unlock PDF</button></div>
         <p className="small" style={{margin:0}}>Password is used locally to open this file and is not saved by this editor.</p>
       </form></div>}
-    <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id} style={{padding:`${Number(pageMargins.top)||0}mm ${Number(pageMargins.right)||0}mm ${Number(pageMargins.bottom)||0}mm ${Number(pageMargins.left)||0}mm`,boxSizing:"border-box"}}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
+    <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
     <div className="workspace">
-      <aside className="side">
-        <h2>▣ Document Actions</h2>
-        
-        <button className="btn secondary" onClick={addPage}>＋ Open / Add Page</button>
-        <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
-        <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
-        <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
-        <button className="btn secondary" onClick={deleteItem} disabled={!selected && !selectedIds.length}>✕ Delete selected</button>
-        {selected && <section className="edit-controls"><strong className="small">Image adjustments</strong>
-          <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
-          <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
-          <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
-          <div className="edit-grid"><button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button><button className="btn secondary" onClick={resetSelected}>Reset image</button></div>
-        </section>}
-        {selected && <section className="edit-controls"><strong className="small">Position & output size</strong>
-          <div className="edit-grid">
-            <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
-            <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Resize unit<select value={resizeUnit} onChange={e=>setResizeUnit(e.target.value as "px"|"mm"|"cm")}><option value="px">Pixels (px)</option><option value="mm">Millimeters (mm)</option><option value="cm">Centimeters (cm)</option></select></label>
-            <label className="field" style={{display:"flex",alignItems:"center",gap:6}}><span>Lock aspect ratio</span><input type="checkbox" checked={keepAspectRatio} onChange={e=>setKeepAspectRatio(e.target.checked)} style={{width:18}} /></label>
-            <label className="field">Width ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.w/794*pageSize.w/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.w/794*pageSize.w)/10:selected.w/794*pageSize.w).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("w",e.target.value)} /></label>
-            <label className="field">Height ({resizeUnit})<input type="number" min="1" step={resizeUnit==="px"?"1":"0.1"} value={(resizeUnit==="px"?(selected.h/1123*pageSize.h/25.4*(Number(dpi)||300)):resizeUnit==="cm"?(selected.h/1123*pageSize.h)/10:selected.h/1123*pageSize.h).toFixed(resizeUnit==="px"?0:1)} onChange={e=>updateResizeDimension("h",e.target.value)} /></label>
-            <label className="field">Output DPI<input type="number" min="72" max="600" list="dpi-presets" value={dpi} onChange={e=>setDpi(e.target.value)} /><datalist id="dpi-presets">{[72,96,150,200,300,600].map(value=><option key={value} value={value}/>)}</datalist><span className="small">Presets: 72 · 96 · 150 · 200 · 300 · 600. Custom values: 72–600.</span></label>
-            <label className="field">Scale (%)<input type="number" min="1" max="500" value={resizePercent} onChange={e=>setResizePercent(e.target.value)} /></label>
-            <button className="btn secondary" type="button" onClick={applyResizePercent}>Apply resize</button>
-          </div>
-        </section>}
-        <section className="edit-controls" aria-live="polite">
-          <h3>Precision Matrix · Predictive Compression</h3>
-          {selected && precisionEstimate ? <>
-            <div className="edit-grid">
-              <div><span className="small">Image dimensions</span><strong>{precisionEstimate.width} × {precisionEstimate.height} px</strong></div>
-              <div><span className="small">DPI (export setting)</span><strong>{dpi}</strong></div>
-              <div><span className="small">Original size</span><strong>{precisionEstimate.sourceKb.toFixed(1)} KB</strong></div>
-              <div><span className="small">Target maximum</span><strong>{(maxFileSizeKb === "custom" ? Number(customFileSizeKb) : Number(maxFileSizeKb)) > 0 ? (maxFileSizeKb === "custom" ? customFileSizeKb : maxFileSizeKb) + " KB" : "No limit"}</strong></div>
-              <div><span className="small">Predicted JPEG size</span><strong>{precisionEstimate.outputKb.toFixed(1)} KB</strong></div>
-              <div><span className="small">Estimated quality</span><strong>{precisionEstimate.quality}%</strong></div>
-              <div><span className="small">Estimated reduction</span><strong>{Math.max(0,(1-precisionEstimate.outputKb/Math.max(0.01,precisionEstimate.sourceKb))*100).toFixed(1)}%</strong></div>
-            </div>
-            <p className="small">{precisionEstimate.note}</p>
-          </> : <p className="small">{selected ? "Predictive estimate तैयार हो रहा है…" : "Estimate देखने के लिए पहले image select करें।"}</p>}
-          <p className="small">यह estimate है, guaranteed file size नहीं। यह अपने-आप download नहीं करता; export पर final file size verify होगा।</p>
-        </section>
-        <hr />
-        <h2>Page setup</h2>
-        <details className="margin-details"><summary>Page Margin & Custom Margin</summary>
-        <label className="field">Page margins
-          <select value={marginPreset} onChange={e => {
-            const value=e.target.value;
-            setMarginPreset(value);
-            const presets:Record<string,{top:string;right:string;bottom:string;left:string}> = {
-              normal:{top:"25.4",right:"25.4",bottom:"25.4",left:"25.4"},
-              narrow:{top:"12.7",right:"12.7",bottom:"12.7",left:"12.7"},
-              moderate:{top:"25.4",right:"19.05",bottom:"25.4",left:"19.05"},
-              wide:{top:"25.4",right:"50.8",bottom:"25.4",left:"50.8"},
-              mirrored:{top:"25.4",right:"25.4",bottom:"25.4",left:"31.75"}
-            };
-            if(presets[value]) setPageMargins(presets[value]);
-          }}>
-            <option value="normal">Normal — 1″ (25.4 mm)</option>
-            <option value="narrow">Narrow — 0.5″ (12.7 mm)</option>
-            <option value="moderate">Moderate</option>
-            <option value="wide">Wide</option>
-            <option value="mirrored">Mirrored / binding</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        <strong className="small">Custom margins (mm)</strong>
-        <div className="margin-grid">
-          {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="100" step="0.5" value={pageMargins[side]} onChange={e => {setMarginPreset("custom");setPageMargins(old => ({...old,[side]:e.target.value}));}} /></label>)}
-        </div>
-        <p className="small">Margins are set in millimetres. Choose a preset or enter custom values.</p>
-        </details>
-        <p className="small">Original file safe · Editing stays local in this browser.</p>
-      </aside>
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
-        <div className="stage" ref={stageRef} onPointerDown={e=>{if(e.target===e.currentTarget && !cropMode && !regionMode){setSelectedId(null);setSelectedIds([]);setStatus("Selection cleared.");}}} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
-          onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
-          onPointerMove={e => {
+        <div className="stage" ref={stageRef} style={{ aspectRatio: pageSize.w + "/" + pageSize.h }} onPointerMove={e => {
           if (!stageRef.current) return;
           const rect=stageRef.current.getBoundingClientRect(), sx=794/rect.width, sy=1123/rect.height;
           if(resizeState){
             const dx=(e.clientX-resizeState.startX)*sx, dy=(e.clientY-resizeState.startY)*sy;
-            setItems(old=>old.map(i=>{if(i.id!==resizeState.id)return i;let x=resizeState.startItemX,y=resizeState.startItemY,w=resizeState.startW,h=resizeState.startH;const handle=resizeState.handle;
-              if(handle.includes("e"))w=Math.max(12,Math.min(794-resizeState.startItemX,resizeState.startW+dx));
-              if(handle.includes("s"))h=Math.max(12,Math.min(1123-resizeState.startItemY,resizeState.startH+dy));
-              if(handle.includes("w")){w=Math.max(12,Math.min(resizeState.startItemX+resizeState.startW,resizeState.startW-dx));x=resizeState.startItemX+(resizeState.startW-w);}
-              if(handle.includes("n")){h=Math.max(12,Math.min(resizeState.startItemY+resizeState.startH,resizeState.startH-dy));y=resizeState.startItemY+(resizeState.startH-h);}
+            setItems(old=>old.map(i=>{if(i.id!==resizeState.id)return i;let {x,y,w,h}=i;const handle=resizeState.handle;
+              if(handle.includes("e"))w=Math.max(12,resizeState.startW+dx);if(handle.includes("s"))h=Math.max(12,resizeState.startH+dy);
+              if(handle.includes("w")){w=Math.max(12,resizeState.startW-dx);x=i.x+(resizeState.startW-w);}
+              if(handle.includes("n")){h=Math.max(12,resizeState.startH-dy);y=i.y+(resizeState.startH-h);}
               return {...i,x,y,w,h};}));
-            return;
-          }
-          if(regionStart){
-            const item=items.find(candidate=>candidate.id===regionStart.itemId);
-            if(!item)return;
-            const px=(e.clientX-rect.left)*sx, py=(e.clientY-rect.top)*sy;
-            const startLeft=Math.max(0,Math.min(100,(regionStart.startX-item.x)/item.w*100));
-            const startTop=Math.max(0,Math.min(100,(regionStart.startY-item.y)/item.h*100));
-            const endLeft=Math.max(0,Math.min(100,(px-item.x)/item.w*100));
-            const endTop=Math.max(0,Math.min(100,(py-item.y)/item.h*100));
-            const left=Math.min(startLeft,endLeft), top=Math.min(startTop,endTop);
-            setCropRect({left:String(left),top:String(top),width:String(Math.max(1,Math.abs(endLeft-startLeft))),height:String(Math.max(1,Math.abs(endTop-startTop)))});
             return;
           }
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Applying crop…");void cropSelected();}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;dragOffsetRef.current={x:px-item.x,y:py-item.y};setDragId(item.id);e.currentTarget.setPointerCapture(e.pointerId);} }}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { e.preventDefault(); if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); if(rect){dragOffsetRef.current={x:(e.clientX-rect.left)*794/rect.width-item.x,y:(e.clientY-rect.top)*1123/rect.height-item.y};} setSelectedId(item.id); setSelectedIds([item.id]); setDragId(item.id); }}>
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
-            {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
-            {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);stageRef.current?.setPointerCapture(e.pointerId);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h,startItemX:item.x,startItemY:item.y});}} />)}
+            {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h});}} />)}
           </div>)}
           {!pageItems.length && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#829087"}}>इस page पर photos जोड़ें या organizer से move करें</div>}
         </div>
       </div>
-      <details className="side-details" open>
-        <summary>Editing tools & photo organizer</summary>
-        <aside className="side">
-        <h2>Smart Edit Assistant</h2>
-        <p className="small">Choose a task to start. I’ll ask for the missing details before changing your image.</p>
-        <div className="edit-grid" style={{marginBottom:9}}>
-          {["UPSC Form Photo","UP Government Form","Certificate Photo","Passport Photo","Signature Resize","Custom Image Resize"].map(label=><button key={label} type="button" className="btn secondary" onClick={()=>{setAssistantCommand(label);setStatus(label+" selected. Tell me the exact exam/form or required dimensions and file-size limit. I will not assume official specifications.");}}>{label}</button>)}
-        </div>
-        <div style={{border:"1px solid #dce5de",borderRadius:8,padding:10,background:"#f8fbf8",marginBottom:8}}>
-          <strong className="small">Assistant</strong>
-          <p className="small" style={{margin:"5px 0 0"}}>For government forms: share the exact exam/notification name and its official photo/signature requirements (or upload a screenshot). For custom resizing: provide width, height, unit and any file-size limit.</p>
-        </div>
-        <form onSubmit={e=>{e.preventDefault();handleAssistantCommand();}} style={{display:"grid",gap:7}}>
-          <input aria-label="Edit instruction" value={assistantCommand} onChange={e=>setAssistantCommand(e.target.value)} placeholder="Describe your edit or answer the assistant…" style={{width:"100%",boxSizing:"border-box",padding:9,border:"1px solid #cbd9ce",borderRadius:7}} />
-          <button className="btn" type="submit" disabled={!assistantCommand.trim()}>Send to assistant</button>
-        </form>
-        <hr />
+      <aside className="side">
         <h2>Photo / page organizer</h2>
         <p className="small">हर thumbnail के checkbox से selection करें। Ctrl/⌘+Click या Shift+Click भी supported है। Ctrl+A से current page की सभी photos select होंगी।</p>
         <button className="btn secondary" onClick={()=>{setSelectedIds(pageItems.map(i=>i.id));setStatus("Current page की सभी photos select हुईं।")}}>Select all on this page</button>
         <button className="btn secondary" onClick={()=>{setSelectedIds([]);setStatus("Selection clear कर दी गई।")}}>Clear selection</button>
+        <strong className="small">Page margins (mm)</strong>
+        <div className="margin-grid">
+          {(["top","right","bottom","left"] as const).map(side => <label className="field" key={side}>{side[0].toUpperCase()+side.slice(1)}<input type="number" min="0" max="50" step="0.5" value={pageMargins[side]} onChange={e => setPageMargins(old => ({...old,[side]:e.target.value}))} /></label>)}
+        </div>
         <p className="small">Ctrl+C copy · Ctrl+V paste · Drag photo to position</p>
         <div className="thumbs">{items.map(item => <div key={item.id} className={"thumb "+(selectedIds.includes(item.id)?"chosen":"")} onClick={() => {setSelectedId(item.id);setActivePage(item.pageId);}}>
           <input type="checkbox" aria-label={"Select "+item.name} checked={selectedIds.includes(item.id)} onClick={e=>e.stopPropagation()} onChange={e=>{setActivePage(item.pageId);if(e.target.checked){setSelectedIds(old=>old.includes(item.id)?old:[...old,item.id]);setSelectedId(item.id);}else{setSelectedIds(old=>old.filter(id=>id!==item.id));if(selectedId===item.id){const next=selectedIds.find(id=>id!==item.id);setSelectedId(next||null);}}}} />
           <img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`}} /><div><strong className="small">{item.name}</strong><div className="small">Page {item.pageId}</div><select aria-label="Assign page" value={item.pageId} onClick={e => e.stopPropagation()} onChange={e => moveToPage(item.id, Number(e.target.value))}>{pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
         </div>)}</div>
         {selected && <><hr /><strong className="small">{selected.name}</strong>
-          <p className="small">Crop replaces this layer; the cropped photo remains movable. Crop के बाद इसी photo पर Select Region दबाएँ, फिर photo के अंदर drag करें। चुना हुआ हिस्सा अलग editable layer बनेगा और उस पर brightness/contrast अलग से लगा सकते हैं।</p>
+          <div className="position-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <label className="field">X (mm)<input type="number" step="0.1" value={(selected.x / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("x",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
+            <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
+            <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+          </div>
+          <section className="edit-controls">
+            <strong className="small">Image editing</strong>
+            <div className="edit-grid">
+              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
+              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
+              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
+              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
+            </div>
+            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={()=>rotateSelected(-90)}>↶ Rotate 90°</button>
+              <button className="btn secondary" onClick={()=>rotateSelected(90)}>↷ Rotate 90°</button>
+            </div>
+            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
+            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
+            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
+              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
+            </div>
+            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
+          </section>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
           <button className="btn secondary" onClick={deleteItem}>Remove selected</button>
         </>}
         <p className="small">PDF pages are rendered locally in this browser. Crop/rotate create local image copies; brightness/contrast are applied in preview and print. Password-protected PDFs require the correct password. Official passport/visa/PAN photo specifications must be verified against the relevant current form before printing.</p>
-        </aside>
-      </details>
+      </aside>
     </div>
   </main>;
 }
