@@ -50,7 +50,59 @@ Verify eligibility, documents, charges and availability with our team before pro
 Draft for review — not published.`;
 }
 
-async function draftWithAI(input: {
+async function draftWithGemini(input: {
+  vertical: string;
+  channel: string;
+  audience: string;
+  objective: string;
+  language: string;
+}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini API key is not configured.");
+  const model = process.env.CSCSKB_MARKETING_GEMINI_MODEL || "gemini-2.5-flash";
+  const prompt = [
+    "You are the CSCSKB marketing copilot.",
+    "Draft accurate, ethical, locally relevant marketing copy for customers in India.",
+    "Never invent prices, offers, guarantees, government affiliation, product availability, regulatory approvals, insurance returns or eligibility.",
+    "For FSSAI, insurance and banking topics, avoid legal or financial guarantees and use cautious factual wording.",
+    "Use a clear call to action. Return only the campaign copy. Do not publish or send.",
+    `Business vertical: ${input.vertical}`,
+    `Channel: ${input.channel}`,
+    `Audience: ${input.audience}`,
+    `Objective: ${input.objective}`,
+    `Language: ${input.language}`,
+  ].join("\\n\\n");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.5, maxOutputTokens: 900 },
+      }),
+      signal: AbortSignal.timeout(45000),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Gemini API returned HTTP ${response.status}: ${detail}`);
+  }
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts
+    ?.map((part: { text?: string }) => part.text || "")
+    .join("")
+    .trim();
+  if (!text) throw new Error("Gemini returned an empty or blocked response.");
+  return text;
+}
+
+async function draftWithOpenRouter(input: {
   vertical: string;
   channel: string;
   audience: string;
@@ -58,28 +110,23 @@ async function draftWithAI(input: {
   language: string;
 }) {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return templateDraft(input);
-
-  // Only accept explicitly free model variants. Never route to a paid model.
+  if (!apiKey) throw new Error("OpenRouter fallback is not configured.");
   const configuredPrimary = process.env.CSCSKB_MARKETING_MODEL_COPY || DEFAULT_COPY_MODEL;
   const configuredFallback = process.env.CSCSKB_MARKETING_MODEL_FALLBACK || FALLBACK_COPY_MODEL;
   const models = [...new Set([configuredPrimary, configuredFallback])];
   if (models.some((model) => model !== "openrouter/free" && !model.endsWith(":free"))) {
-    throw new Error("OpenRouter model configuration must use free-only model IDs ending in :free (or openrouter/free).");
+    throw new Error("OpenRouter fallback models must be free-only model IDs ending in :free (or openrouter/free).");
   }
-
   const messages = [
     {
       role: "system",
-      content:
-        "You are the CSCSKB marketing copilot. Draft accurate, ethical, locally relevant marketing copy. Never invent prices, offers, guarantees, government affiliation, product availability, regulatory approvals, insurance returns or eligibility. For FSSAI, insurance and banking topics, avoid legal or financial guarantees and use cautious factual wording. Use a clear call to action. Return only campaign copy.",
+      content: "You are the CSCSKB marketing copilot. Draft accurate, ethical, locally relevant marketing copy. Never invent prices, offers, guarantees, government affiliation, product availability, regulatory approvals, insurance returns or eligibility. For FSSAI, insurance and banking topics, avoid legal or financial guarantees and use cautious factual wording. Use a clear call to action. Return only campaign copy.",
     },
     {
       role: "user",
       content: `Business vertical: ${input.vertical}. Channel: ${input.channel}. Audience: ${input.audience}. Objective: ${input.objective}. Language: ${input.language}. Draft concise, natural copy suitable for customers in India. Do not publish or send.`,
     },
   ];
-
   let lastError = "No free OpenRouter model was available.";
   for (const model of models) {
     try {
@@ -91,12 +138,7 @@ async function draftWithAI(input: {
           "HTTP-Referer": "https://www.cscskb.online",
           "X-Title": "CSCSKB AI Marketing Agent",
         },
-        body: JSON.stringify({
-          model,
-          temperature: 0.5,
-          max_tokens: 700,
-          messages,
-        }),
+        body: JSON.stringify({ model, temperature: 0.5, max_tokens: 700, messages }),
         signal: AbortSignal.timeout(45000),
         cache: "no-store",
       });
@@ -112,10 +154,27 @@ async function draftWithAI(input: {
       lastError = error instanceof Error ? error.message : "OpenRouter request failed.";
     }
   }
+  throw new Error(lastError);
+}
 
-  // Keep the dashboard usable when free-provider capacity is exhausted.
-  console.error("[marketing] Free OpenRouter models unavailable; using deterministic template.", lastError);
-  return templateDraft(input);
+async function draftWithAI(input: {
+  vertical: string;
+  channel: string;
+  audience: string;
+  objective: string;
+  language: string;
+}) {
+  try {
+    return await draftWithGemini(input);
+  } catch (geminiError) {
+    console.error("[marketing] Gemini generation failed; trying configured OpenRouter fallback.", geminiError);
+    try {
+      return await draftWithOpenRouter(input);
+    } catch (fallbackError) {
+      console.error("[marketing] All configured AI providers failed.", fallbackError);
+      throw new Error("AI generation is unavailable. Check GEMINI_API_KEY and, if enabled, OPENROUTER_API_KEY. No simulated draft was saved.");
+    }
+  }
 }
 
 function confidenceThreshold() {
