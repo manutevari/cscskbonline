@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 
 type Appointment = {
   id: string;
-  name: string;
   service: string;
   date: string;
   time: string;
@@ -64,7 +63,6 @@ export default function AppointmentVerificationPage() {
 
             <div className="csc-verify-details">
               <div><span>Appointment ID</span><strong>{appointment.id}</strong></div>
-              <div><span>Applicant</span><strong>{appointment.name}</strong></div>
               <div><span>Service</span><strong>{appointment.service}</strong></div>
               <div><span>Date</span><strong>{appointment.date}</strong></div>
               <div><span>Time</span><strong>{appointment.time}</strong></div>
