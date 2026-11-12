@@ -7,7 +7,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return NextResponse.json({ error: "Verification service is not configured" }, { status: 503 });
     const response = await fetch(
-      `${url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}&select=id,name,service,date,time,status,created_at`,
+      `${url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}&select=id,service,date,time,status`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" }
     );
     if (!response.ok) return NextResponse.json({ error: "Verification lookup failed" }, { status: 502 });
