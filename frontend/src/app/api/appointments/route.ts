@@ -34,6 +34,12 @@ function todayIST() {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+function isValidISODate(value: string) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function addDaysISO(iso: string, days: number) {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
