@@ -61,7 +61,7 @@ const SLOTS = makeSlots();
 
 function makeId() {
   const d = todayIST().replaceAll("-", "");
-  return `CSC-${d}-${crypto.randomUUID().replaceAll("-", "").slice(0, 5).toUpperCase()}`;
+  return `CSC-${d}-${crypto.randomUUID().replaceAll("-", "").toUpperCase()}`;
 }
 
 async function supabase(path: string, init: RequestInit = {}) {
