@@ -44,6 +44,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const url = new URL(origin);
+      const allowed = ["cscskb.online", "www.cscskb.online", "localhost:3000", "127.0.0.1:3000"].includes(url.host)
+        || (url.hostname.endsWith(".vercel.app") && url.protocol === "https:");
+      if (!allowed) return NextResponse.json({ error: "Origin not allowed." }, { status: 403 });
+    } catch {
+      return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
+    }
+  }
+
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   const history = Array.isArray(body?.history)
     ? body.history
