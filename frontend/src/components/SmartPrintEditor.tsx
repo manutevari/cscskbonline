@@ -592,6 +592,32 @@ export default function PrintEditorPage() {
         </div>
         <p className="small">Margins are set in millimetres. Choose a preset or enter custom values.</p>
         <p className="small">Original file safe · Editing stays local in this browser.</p>
+        {selected && (
+          <section className="edit-controls">
+            <strong className="small">Image editing</strong>
+            {!selected.name.includes("· selected region") && <>
+            <div className="edit-grid">
+              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
+              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
+              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
+              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
+              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
+            </div>
+            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
+            <button className="btn" onClick={()=>{setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(false);setStatus("Crop selection cancel कर दी गई।");}}>Cancel crop</button>
+            <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
+            </>}
+            
+            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
+            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
+            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
+            <div className="edit-grid">
+              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
+              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
+            </div>
+            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
+          </section>
+        )}
       </aside>
       <div className="stage-wrap">
         <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
@@ -660,30 +686,7 @@ export default function PrintEditorPage() {
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
           </div>
-          <section className="edit-controls">
-            <strong className="small">Image editing</strong>
-            {!selected.name.includes("· selected region") && <>
-            <div className="edit-grid">
-              <label className="field">Crop ratio<select value={cropRatio} onChange={e => { const ratio=e.target.value; setCropRatio(ratio); if(ratio!=="free"){const parts=ratio.split(":").map(Number);const target=parts[0]/parts[1];let width=Number(cropRect.width),height=Number(cropRect.height);if(width/height>target)width=height*target;else height=width/target;setCropRect(old=>({...old,width:String(Math.max(1,Math.min(100,width))),height:String(Math.max(1,Math.min(100,height)))}));}}}><option value="free">Free</option><option value="1:1">1:1 Square</option><option value="3:4">3:4</option><option value="4:5">4:5</option><option value="7:9">Passport 35:45</option><option value="16:9">16:9</option></select></label>
-              <label className="field">Left (%)<input type="number" min="0" max="99" value={cropRect.left} onChange={e=>setCropRect(old=>({...old,left:e.target.value}))}/></label>
-              <label className="field">Top (%)<input type="number" min="0" max="99" value={cropRect.top} onChange={e=>setCropRect(old=>({...old,top:e.target.value}))}/></label>
-              <label className="field">Width (%)<input type="number" min="1" max="100" value={cropRect.width} onChange={e=>setCropRect(old=>({...old,width:e.target.value}))}/></label>
-              <label className="field">Height (%)<input type="number" min="1" max="100" value={cropRect.height} onChange={e=>setCropRect(old=>({...old,height:e.target.value}))}/></label>
-            </div>
-            <button className="btn secondary" onClick={cropSelected}>Apply crop</button>
-            <button className="btn" onClick={()=>{setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(false);setStatus("Crop selection cancel कर दी गई।");}}>Cancel crop</button>
-            <button className="btn" onClick={extractSelectedRegion}>Extract selected region as editable photo</button>
-            </>}
-            
-            <label className="field">Brightness: {selected.brightness ?? 100}%<input type="range" min="50" max="150" value={selected.brightness ?? 100} onChange={e=>updateImageFilter("brightness",Number(e.target.value))}/></label>
-            <label className="field">Contrast: {selected.contrast ?? 100}%<input type="range" min="50" max="150" value={selected.contrast ?? 100} onChange={e=>updateImageFilter("contrast",Number(e.target.value))}/></label>
-            <label className="field">Sharpness: {selected.sharpness ?? 0}<input type="range" min="0" max="5" value={selected.sharpness ?? 0} onChange={e=>updateImageFilter("sharpness",Number(e.target.value))}/></label>
-            <div className="edit-grid">
-              <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
-              <button className="btn secondary" onClick={resetSelected}>Reset image</button>
-            </div>
-            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
-          </section>
+
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
