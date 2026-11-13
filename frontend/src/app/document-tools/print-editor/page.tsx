@@ -319,7 +319,7 @@ export default function PrintEditorPage() {
       h1{font-size:clamp(25px,4vw,34px);margin:18px 0 8px}.intro{color:#58685e;line-height:1.5;max-width:850px}
       .toolbar,.panel{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:12px;background:#f2f7f3;border:1px solid #dce8df;border-radius:12px;margin:14px 0}
       .btn{border:0;border-radius:8px;padding:9px 12px;background:#176b4d;color:white;font-weight:700;cursor:pointer}.secondary{background:white;color:#24533d;border:1px solid #cbd9ce}.btn:disabled{opacity:.45}
-      .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px;align-items:start}
+      .status{min-height:22px;color:#28553d}.workspace{display:grid;grid-template-columns:285px minmax(0,1fr);gap:16px;align-items:start}.stage-wrap{grid-column:2;grid-row:1}.side{grid-column:1;grid-row:1}
       .stage-wrap{padding:12px;background:#e9eeeb;border-radius:12px;min-width:0}.stage{position:relative;width:100%;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:none}
       .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
@@ -329,7 +329,7 @@ export default function PrintEditorPage() {
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
-      @media(max-width:780px){.workspace{grid-template-columns:1fr}.side{order:-1}}
+      @media(max-width:780px){.workspace{grid-template-columns:1fr}.stage-wrap,.side{grid-column:1;grid-row:auto}.side{order:-1}}
       @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}body{margin:0!important}.editor{padding:0!important;margin:0!important;max-width:none!important}.top,h1,.intro,.toolbar,.panel,.status,.workspace{display:none!important}.print-pages{display:block!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Tools</a><span className="small">Multi-file · PDF pages · Custom print size</span></div>
@@ -429,7 +429,7 @@ export default function PrintEditorPage() {
               <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>Undo</button>
               <button className="btn secondary" onClick={resetSelected}>Reset image</button>
             </div>
-            <p className="small">Crop values are percentages of the original image. Brightness, contrast and sharpness filters are applied to the preview and print output.</p>
+            <p className="small">किसी document/photo के छोटे हिस्से को edit करने के लिए पहले उसकी copy Duplicate करें, फिर Left/Top/Width/Height (%) से हिस्सा चुनकर Apply crop करें। इसके बाद Brightness, Contrast और Sharpness उसी cropped हिस्से पर लागू होंगे और print में भी दिखेंगे। Zoom/size के लिए ऊपर Width/Height (mm) बदलें या page पर resize handles खींचें। PDF के हर page पर यही editing उपलब्ध है।</p>
           </section>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
