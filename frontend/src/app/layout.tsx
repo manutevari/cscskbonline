@@ -3,8 +3,6 @@ import { Noto_Sans_Devanagari, Outfit } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import GlobalAssistants from "@/components/GlobalAssistants";
-import CSCAppointmentAssistant from "@/components/CSCAppointmentAssistant";
-import CSCLiveVoiceAssistant from "@/components/CSCLiveVoiceAssistant";
 import DocumentToolsShortcut from "@/components/DocumentToolsShortcut";
 
 const outfit = Outfit({
@@ -47,8 +45,6 @@ export default function RootLayout({
         ) : null}
         {children}
         <GlobalAssistants />
-        <CSCAppointmentAssistant />
-        <CSCLiveVoiceAssistant />
         <DocumentToolsShortcut />
       </body>
     </html>
