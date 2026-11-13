@@ -63,6 +63,9 @@ export default function PrintEditorPage() {
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
+  const [lassoMode, setLassoMode] = useState(false);
+  const [lassoPoints, setLassoPoints] = useState<{x:number;y:number}[]>([]);
+  const lassoPointsRef = useRef<{x:number;y:number}[]>([]);
   const [cropMode, setCropMode] = useState(false);
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
@@ -277,6 +280,30 @@ export default function PrintEditorPage() {
       setCropRect({left:"0",top:"0",width:"100",height:"100"});
       setStatus("चुना हुआ हिस्सा अलग editable layer बन गया है। अब brightness, contrast और sharpness केवल इसी हिस्से पर लागू होंगे; बाकी page और original file सुरक्षित हैं।");
     } catch(error) { setStatus(error instanceof Error?error.message:"Region extract नहीं हो सका।"); }
+  };
+
+  const extractLassoRegion = async () => {
+    if (!selected) return;
+    const points = lassoPointsRef.current;
+    if (points.length < 3) { setStatus("Lasso selection के लिए कम-से-कम 3 points बनाएं।"); return; }
+    const image = new Image(); image.src = selected.src;
+    try {
+      await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("Selected photo load नहीं हुई।"));});
+      const polygon = points.map(p=>({x:Math.max(0,Math.min(image.naturalWidth,(p.x-selected.x)/selected.w*image.naturalWidth)),y:Math.max(0,Math.min(image.naturalHeight,(p.y-selected.y)/selected.h*image.naturalHeight))}));
+      const minX=Math.max(0,Math.floor(Math.min(...polygon.map(p=>p.x)))), minY=Math.max(0,Math.floor(Math.min(...polygon.map(p=>p.y))));
+      const maxX=Math.min(image.naturalWidth,Math.ceil(Math.max(...polygon.map(p=>p.x)))), maxY=Math.min(image.naturalHeight,Math.ceil(Math.max(...polygon.map(p=>p.y))));
+      const width=Math.max(1,maxX-minX),height=Math.max(1,maxY-minY);
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Lasso processor उपलब्ध नहीं है।");
+      ctx.beginPath();polygon.forEach((p,i)=>{const x=p.x-minX,y=p.y-minY;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.closePath();ctx.clip();
+      ctx.drawImage(image,-minX,-minY);
+      const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Lasso selection export नहीं हो सका।")),"image/png"));
+      const src=URL.createObjectURL(blob);urlsRef.current.push(src);
+      const region:LayoutItem={id:uid(),name:selected.name+" · lasso region",src,pageId:selected.pageId,x:selected.x+minX/image.naturalWidth*selected.w,y:selected.y+minY/image.naturalHeight*selected.h,w:width/image.naturalWidth*selected.w,h:height/image.naturalHeight*selected.h,brightness:100,contrast:100,sharpness:0};
+      setItems(old=>[...old,region]);setSelectedId(region.id);setSelectedIds([region.id]);
+      setStatus("Lasso से चुना हुआ हिस्सा transparent background के साथ अलग editable layer बन गया है। Original photo सुरक्षित है।");
+    } catch(error) { setStatus(error instanceof Error?error.message:"Lasso selection extract नहीं हो सका।"); }
+    finally { lassoPointsRef.current=[];setLassoPoints([]); }
   };
 
   const rotateSelected = async (degrees: number) => {
@@ -531,6 +558,8 @@ export default function PrintEditorPage() {
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
       <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop selected photo: drag to select area" aria-label="Crop selected photo" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode बंद हुआ।":"Crop mode चालू है: photo पर mouse से drag करके area चुनें, फिर Apply Crop दबाएँ।");}} disabled={!selected}>✂</button>
+      <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Rectangular selection: drag over a photo to extract a separate editable region" aria-label="Rectangular selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setLassoMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Rectangular selection बंद हुआ।":"Rectangular Select चालू: photo के अंदर drag करके area चुनें।");}} disabled={!selected}>▭ Rect Select</button>
+      <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -648,6 +677,11 @@ export default function PrintEditorPage() {
               return {...i,x,y,w,h};}));
             return;
           }
+          if(lassoMode && lassoPointsRef.current.length){
+            const item=items.find(candidate=>candidate.id===selectedId);
+            if(item){const px=Math.max(item.x,Math.min(item.x+item.w,(e.clientX-rect.left)*sx)),py=Math.max(item.y,Math.min(item.y+item.h,(e.clientY-rect.top)*sy));const pts=lassoPointsRef.current,last=pts[pts.length-1];if(Math.hypot(px-last.x,py-last.y)>2){const next=[...pts,{x:px,y:py}];lassoPointsRef.current=next;setLassoPoints(next);}}
+            return;
+          }
           if(regionStart){
             const item=items.find(candidate=>candidate.id===regionStart.itemId);
             if(!item)return;
@@ -663,8 +697,9 @@ export default function PrintEditorPage() {
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;dragOffsetRef.current={x:px-item.x,y:py-item.y};stageRef.current?.setPointerCapture(e.pointerId);setDragId(item.id);} }}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(lassoMode && lassoPointsRef.current.length){setLassoMode(false);void extractLassoRegion();}if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(lassoMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);const first={x:Math.max(item.x,Math.min(item.x+item.w,px)),y:Math.max(item.y,Math.min(item.y+item.h,py))};lassoPointsRef.current=[first];setLassoPoints([first]);}return;} if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;dragOffsetRef.current={x:px-item.x,y:py-item.y};stageRef.current?.setPointerCapture(e.pointerId);setDragId(item.id);} }}>
+            {selectedId===item.id && lassoMode && lassoPoints.length>1 && <svg aria-hidden="true" viewBox={`0 0 100 100`} preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",overflow:"visible"}}><polyline points={lassoPoints.map(p=>`${(p.x-item.x)/item.w*100},${(p.y-item.y)/item.h*100}`).join(" ")} fill="none" stroke="#e11d48" strokeWidth="1.2" strokeDasharray="2 1" vectorEffect="non-scaling-stroke" /></svg>}
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);stageRef.current?.setPointerCapture(e.pointerId);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h,startItemX:item.x,startItemY:item.y});}} />)}
