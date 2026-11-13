@@ -69,6 +69,8 @@ export default function PrintEditorPage() {
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
   const [exportDpi, setExportDpi] = useState("300");
+  const [customDpi, setCustomDpi] = useState("300");
+  const [dimensionUnit, setDimensionUnit] = useState<"px" | "cm" | "mm">("mm");
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -402,7 +404,8 @@ export default function PrintEditorPage() {
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
     // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
     // Scale the exported raster to the selected physical page size and output DPI.
-    const dpi = Math.max(72, Math.min(600, Number(exportDpi) || 300));
+    const requestedDpi = exportDpi === "custom" ? Number(customDpi) : Number(exportDpi);
+    const dpi = Math.max(72, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
     const scaleX = (pageSize.w / 25.4 * dpi) / 794;
     const scaleY = (pageSize.h / 25.4 * dpi) / 1123;
     const canvas = document.createElement("canvas");
@@ -544,6 +547,7 @@ export default function PrintEditorPage() {
       <label className="field">Orientation<select aria-label="Page orientation" value={orientation} onChange={e => setOrientation(e.target.value as "portrait" | "landscape")}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
+      {selected && <div className="field" style={{display:"grid",gap:7}}><strong>Selected photo dimensions</strong><label className="field">Unit<select aria-label="Photo dimension unit" value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm")}><option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option></select></label><label className="field">Width ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.w:dimensionUnit==="cm"?selected.w/794*pageSize.w/10:selected.w/794*pageSize.w).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("w",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*794/pageSize.w:n*794/pageSize.w));}} /></label><label className="field">Height ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.h:dimensionUnit==="cm"?selected.h/1123*pageSize.h/10:selected.h/1123*pageSize.h).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("h",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*1123/pageSize.h:n*1123/pageSize.h));}} /></label></div>}
       <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
       <label className="field">Copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
       <label className="field">Photo width (mm)<input type="number" min="20" max="100" step="0.1" value={photoWidthMm} onChange={e => setPhotoWidthMm(e.target.value)} /></label>
@@ -691,7 +695,7 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option></select></label>
+            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. Higher DPI creates larger files and may use more memory.</p>
 
