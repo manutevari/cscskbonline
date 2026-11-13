@@ -405,9 +405,11 @@ export default function PrintEditorPage() {
     // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
     // Scale the exported raster to the selected physical page size and output DPI.
     const requestedDpi = exportDpi === "custom" ? Number(customDpi) : Number(exportDpi);
-    const dpi = Math.max(72, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
-    const scaleX = (pageSize.w / 25.4 * dpi) / 794;
-    const scaleY = (pageSize.h / 25.4 * dpi) / 1123;
+    const autoResolution = exportDpi === "0";
+    const dpi = autoResolution ? 0 : Math.max(72, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
+    // Auto (0 DPI) exports at the editor's native page canvas resolution without DPI upscaling.
+    const scaleX = autoResolution ? 1 : (pageSize.w / 25.4 * dpi) / 794;
+    const scaleY = autoResolution ? 1 : (pageSize.h / 25.4 * dpi) / 1123;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(794 * scaleX));
     canvas.height = Math.max(1, Math.round(1123 * scaleY));
@@ -695,9 +697,9 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
+            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
           </div>
-          <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. Higher DPI creates larger files and may use more memory.</p>
+          <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
