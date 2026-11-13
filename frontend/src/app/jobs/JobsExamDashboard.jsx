@@ -1,50 +1,103 @@
 "use client";
-import { useState } from "react";
-const boards={SSC:["CGL","CHSL","MTS / Havaldar","GD Constable","CPO SI","JE","Stenographer","Selection Post","JHT"],UPPSC:["All UPPSC openings"],UPSSSC:["All UPSSSC openings"],RRB:["All Railway openings"],"UP Police":["All UP Police openings"]};
-const urls={SSC:"https://ssc.gov.in/",UPPSC:"https://uppsc.up.nic.in/",UPSSSC:"https://upsssc.gov.in/",RRB:"https://www.rrbapply.gov.in/","UP Police":"https://uppbpb.gov.in/"};
-const formGroups=[
- {title:"Certificates • प्रमाणपत्र",description:"उत्तर प्रदेश में सामान्य प्रमाणपत्र सेवाएँ और सरकारी आवेदन",items:[
-  {name:"आय, जाति और निवास प्रमाणपत्र",detail:"आवेदन, स्थिति और उपलब्ध सेवाएँ eDistrict पोर्टल पर जाँचें।",url:"https://edistrict.up.gov.in/edistrictup/",tag:"UP eDistrict"},
-  {name:"जन्म और मृत्यु प्रमाणपत्र",detail:"संबंधित स्थानीय निकाय/पंजीकरण सेवा की आधिकारिक जानकारी देखें।",url:"https://crsorgi.gov.in/",tag:"Civil Registration"}
- ]},
- {title:"Identity • पहचान दस्तावेज़",description:"पहचान और डिजिटल दस्तावेज़ों के आधिकारिक पोर्टल",items:[
-  {name:"Aadhaar सेवाएँ",detail:"UIDAI की आधिकारिक वेबसाइट पर उपलब्ध सेवाएँ और निर्देश देखें।",url:"https://uidai.gov.in/",tag:"UIDAI"},
-  {name:"DigiLocker",detail:"जारी किए गए डिजिटल दस्तावेज़ प्राप्त करें और सत्यापित करें।",url:"https://www.digilocker.gov.in/",tag:"Digital documents"},
-  {name:"Voter Services",detail:"मतदाता पंजीकरण और मतदाता सेवाओं की आधिकारिक जानकारी।",url:"https://voters.eci.gov.in/",tag:"ECI"}
- ]},
- {title:"Welfare & Work • योजनाएँ और श्रम",description:"सरकारी योजना और श्रमिक पंजीकरण के आधिकारिक स्रोत",items:[
-  {name:"eShram",detail:"असंगठित श्रमिक पंजीकरण और पोर्टल संबंधी जानकारी।",url:"https://eshram.gov.in/",tag:"Labour"},
-  {name:"Income Tax / PAN services",detail:"PAN और कर-संबंधी सेवाओं के लिए आधिकारिक आयकर पोर्टल।",url:"https://www.incometax.gov.in/iec/foportal/",tag:"Income Tax"}
- ]}
+
+import { useMemo, useState } from "react";
+
+const boards = {
+  SSC: { exams: ["CGL", "CHSL", "MTS / Havaldar", "GD Constable", "CPO SI", "JE", "Stenographer", "Selection Post", "JHT"], url: "https://ssc.gov.in/" },
+  UPPSC: { exams: ["Combined State / Upper Subordinate", "RO / ARO", "Assistant Professor", "Other UPPSC recruitment"], url: "https://uppsc.up.nic.in/" },
+  UPSSSC: { exams: ["PET", " लेखपाल", "Junior Assistant", " अन्य भर्तियाँ"], url: "https://upsssc.gov.in/" },
+  RRB: { exams: ["NTPC", "Group D", "ALP", "Technician", "JE"], url: "https://www.rrbapply.gov.in/" },
+  "UP Police": { exams: ["Constable", "Sub Inspector", " अन्य भर्तियाँ"], url: "https://uppbpb.gov.in/" },
+};
+
+const shortcuts = [
+  { title: "Latest Jobs", desc: "नई भर्ती और आवेदन की जानकारी", icon: "▤", id: "latest-jobs" },
+  { title: "Admit Cards", desc: "परीक्षा प्रवेश पत्र", icon: "▣", id: "admit-cards" },
+  { title: "Results", desc: "परीक्षा परिणाम और मेरिट", icon: "✓", id: "results" },
+  { title: "Answer Keys", desc: "उत्तर कुंजी और आपत्ति", icon: "≡", id: "answer-keys" },
+  { title: "Syllabus", desc: "पाठ्यक्रम और परीक्षा पैटर्न", icon: "▥", id: "syllabus" },
+  { title: "Exam Calendar", desc: "आगामी परीक्षा कार्यक्रम", icon: "▦", id: "exam-calendar" },
 ];
-const panel={background:"#fff",border:"1px solid #dbe4f0",borderRadius:12,padding:16,minWidth:0};
-export default function JobsExamDashboard(){
- const [board,setBoard]=useState("SSC"),[exam,setExam]=useState("CGL"),[filter,setFilter]=useState("all"),[consent,setConsent]=useState(false),[files,setFiles]=useState([]),[tab,setTab]=useState("Profile"),[msg,setMsg]=useState(""),[formQuery,setFormQuery]=useState("");
- const changeBoard=v=>{setBoard(v);setExam(boards[v][0]);};
- const addFiles=e=>{if(!consent){setMsg("पहले privacy consent दें।");e.target.value="";return;}const incoming=Array.from(e.target.files||[]).filter(f=>/\.(pdf|png|jpe?g|webp|docx?)$/i.test(f.name));setFiles(old=>[...old,...incoming.filter(f=>!old.some(x=>x.name===f.name&&x.size===f.size))]);if(incoming.length)setMsg("फाइल सूची में जुड़ी है। इस preview में OCR/LLM extraction backend से जुड़ा नहीं है।");e.target.value="";};
- const clear=()=>{setFiles([]);setMsg("स्थानीय फाइल सूची साफ की गई; पहले बाहरी सेवा को भेजा गया डेटा इससे नहीं मिटता।");};
- const label={display:"block",fontSize:12,fontWeight:800,marginBottom:7};
- const select={width:"100%",padding:11,border:"1px solid #cbd5e1",borderRadius:8,background:"#fff",color:"#14213d"};
- const row={display:"flex",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:"1px solid #edf2f7",fontSize:12};
- const q=formQuery.trim().toLocaleLowerCase();
- const visibleFormGroups=formGroups.map(group=>({...group,items:group.items.filter(item=>!q||[item.name,item.detail,item.tag,group.title].some(value=>value.toLocaleLowerCase().includes(q)))})).filter(group=>group.items.length);
- return <section style={{background:"#f3f7fc",border:"1px solid #d9e3f0",borderRadius:18,overflow:"hidden",margin:"24px 0",color:"#14213d"}}>
- <header style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:12,padding:20,background:"#fff",borderBottom:"1px solid #d9e3f0"}}><div style={{display:"flex",gap:12,alignItems:"center"}}><strong style={{background:"#155eef",color:"#fff",borderRadius:12,padding:12,fontSize:20}}>CSC</strong><div><h2 style={{margin:0}}>Jobs, Updates &amp; Government Forms</h2><p style={{margin:"5px 0 0",color:"#64748b",fontSize:13}}>सरकारी नौकरी · परीक्षा अपडेट · प्रमाणपत्र · सरकारी फॉर्म</p></div></div><strong style={{fontSize:12,color:"#067647",background:"#dcfce7",borderRadius:30,padding:"8px 12px"}}>One common workspace</strong></header>
- <div style={{display:"flex",gap:10,flexWrap:"wrap",padding:14,background:"#f8fbff",fontSize:12,fontWeight:800}}><a href="#jobs-dashboard" style={{padding:10,borderRadius:8,background:"#e7efff",color:"#1746a2",textDecoration:"none"}}>Jobs &amp; Exams ↓</a><a href="#government-forms" style={{padding:10,borderRadius:8,background:"#dcfce7",color:"#067647",textDecoration:"none"}}>Government Forms ↓</a></div>
- <div id="jobs-dashboard">
- <div style={{display:"flex",gap:10,overflowX:"auto",padding:14,background:"#f8fbff",fontSize:12,fontWeight:700}}>{["1 Select Vacancy","2 Read Notification","3 Upload Documents","4 Extract & Verify","5 Eligibility Check","6 Review & Confirm","7 Final Report"].map(s=><span key={s} style={{whiteSpace:"nowrap",padding:8,borderRadius:8,background:"#e7efff"}}>{s}</span>)}</div>
- <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:12,padding:16,background:"#fff"}}><div><label style={label}>1. Exam Board / Recruiting Body</label><select style={select} value={board} onChange={e=>changeBoard(e.target.value)}>{Object.keys(boards).map(b=><option key={b}>{b}</option>)}</select></div><div><label style={label}>2. Select Exam</label><select style={select} value={exam} onChange={e=>setExam(e.target.value)}>{boards[board].map(x=><option key={x} value={x}>{board==="SSC"?"SSC ":""}{x}</option>)}</select></div><div><label style={label}>3. Current Job Opening</label><select style={select} value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All open &amp; upcoming</option><option value="open">Applications currently open</option><option value="upcoming">Upcoming / dates announced</option><option value="closed">Closed / exam or result pending</option></select></div></div>
- <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,340px),1fr))",gap:14,padding:16}}><section style={panel}><h3 style={{marginTop:0}}>Current {board} Job Openings</h3><p style={{fontSize:12,color:"#64748b"}}>सिर्फ भर्ती बोर्ड या exam चुनना किसी vacancy के active होने का प्रमाण नहीं है।</p><div style={{overflowX:"auto"}}><table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}><thead><tr>{["Vacancy / Post name","Application opens","Application closes","Status","Official notice"].map(x=><th key={x} style={{textAlign:"left",padding:9,background:"#f8fafc",borderBottom:"1px solid #dbe4f0"}}>{x}</th>)}</tr></thead><tbody><tr><td colSpan={5} style={{padding:12,lineHeight:1.6}}><b>Verified vacancy details उपलब्ध नहीं हैं</b><br/><span style={{color:"#64748b"}}>इस dashboard में अभी official notification से निकाला और सत्यापित vacancy feed जुड़ा नहीं है। इसलिए भर्ती का नाम, opening date, closing date या active status अनुमान से नहीं दिखाए जा रहे हैं।</span></td></tr></tbody></table></div><p style={{fontSize:12,color:"#64748b",lineHeight:1.6}}>इसे सही तरह काम कराने के लिए official notification/listing से भर्ती का नाम, विज्ञापन संख्या, आवेदन शुरू होने की तारीख, अंतिम तारीख, vacancy count और notification link निकालकर आज की तारीख से Open / Upcoming / Closed तय करना होगा।</p><a href={urls[board]} target="_blank" rel="noreferrer" style={{display:"inline-block",padding:10,background:"#155eef",color:"#fff",borderRadius:8,textDecoration:"none"}}>{board} official notifications खोलें ↗</a></section>
- <section style={panel}><h3 style={{marginTop:0}}>Selected Exam &amp; Required Documents</h3><p><b>चयन:</b> {board==="SSC"?"SSC ":""}{exam} · {board}</p><p style={{fontSize:13,color:"#64748b",lineHeight:1.6}}>यह exam selection है, किसी specific active vacancy का नाम नहीं। सही document checklist संबंधित भर्ती का official notification पढ़ने के बाद ही तय होनी चाहिए।</p><h4>सामान्य संभावित दस्तावेज़</h4>{["10th certificate / DOB proof","12th marksheet if required","Graduation / PG / B.Ed. / BTC as applicable","Category / EWS / PwD certificate if applicable","Photo and signature per notification","Final-year / provisional proof if permitted"].map(x=><label key={x} style={{display:"flex",gap:8,margin:"9px 0",fontSize:13}}><input type="checkbox" disabled={!consent}/>{x}</label>)}<p style={{fontSize:12,color:"#64748b"}}>ये सामान्य उदाहरण हैं, चुनी हुई भर्ती की verified final list नहीं।</p></section></div>
- {!consent&&<div style={{margin:"0 16px 16px",padding:14,background:"#fff",border:"1px solid #bfd4ff",borderRadius:10,fontSize:12}}><label style={{display:"flex",gap:9,alignItems:"start"}}><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span><b>Privacy and document-processing consent.</b> This preview only enables file selection; it does not yet run OCR or send document text to AI. External AI/embeddings require separate informed permission. <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a></span></label></div>}
- {consent&&<div style={{margin:"0 16px 16px",padding:12,background:"#fff",borderRadius:10,fontSize:12,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>✓ Consent enabled for this session · <a href="/privacy">Privacy Policy</a><button onClick={()=>{setConsent(false);setFiles([]);setMsg("Consent withdrawn; local file list cleared.");}}>Withdraw consent</button></div>}
- <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,340px),1fr))",gap:14,padding:16}}><section style={panel}><h3 style={{marginTop:0}}>Upload Your Documents</h3><p style={{fontSize:12,color:"#64748b"}}>PDF, JPG, PNG, WebP, DOC, DOCX · Consent required</p><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" disabled={!consent} onChange={addFiles}/><div style={{marginTop:12}}>{files.length?files.map(f=><div key={f.name+f.size} style={{padding:9,borderBottom:"1px solid #e2e8f0",fontSize:12}}>📄 {f.name} · {(f.size/1024).toFixed(0)} KB <b style={{color:"#64748b"}}>Not parsed</b></div>):<p style={{fontSize:12,color:"#64748b"}}>No documents selected yet.</p>}</div><h4>Processing status</h4>{["File validation","PDF text extraction / OCR","Document classification","Name / DOB / parent names","Roll / enrollment / serial no.","Marks & percentage","Certificate matching","Eligibility + confidence","Human review"].map((s,i)=><div key={s} style={{...row}}><span>{s}</span><span style={{color:files.length&&i===0?"#067647":"#64748b"}}>{files.length&&i===0?"File selected":"Pending integration"}</span></div>)}</section>
- <section style={panel}><h3 style={{marginTop:0}}>Verification Workspace</h3><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Profile","Marks","Eligibility","Required Docs","AI Thinking","Confidence & Review","Form Mapping"].map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"8px 10px",borderRadius:8,border:"1px solid #cbd5e1",background:tab===t?"#eaf2ff":"#fff",color:tab===t?"#1746a2":"#334155",fontWeight:700,fontSize:12}}>{t}</button>)}</div><h4>{tab}</h4>{tab==="Profile"&&[["Candidate name","Not extracted"],["Father's name","Not extracted"],["Mother's name","Not extracted"],["Date of birth","Not extracted"],["Course / degree","Not extracted"],["Board / university","Not extracted"],["Passing year","Not extracted"],["Roll number","Not extracted"],["Enrollment / serial number","Not extracted"]].map(([k,v])=><div key={k} style={row}><span style={{color:"#64748b"}}>{k}</span><b>{v}</b></div>)}{tab==="Marks"&&<><p>Percentage = (Total obtained ÷ Total maximum) × 100</p>{["Subject-wise maximum / obtained","Total maximum marks","Total obtained marks","Aggregate / final marks","Percentage","CGPA conversion per official rule"].map(x=><p key={x} style={{fontSize:13}}>{x}: <b>Not extracted</b></p>)}</>}{tab==="Eligibility"&&<p style={{fontSize:13}}>PASS / FAIL / UNKNOWN per official rule; age, degree, subject, minimum marks, category relaxation and final-year provisions. No final result until the official notice is verified.</p>}{tab==="Required Docs"&&<p style={{fontSize:13}}>Compare each required certificate against uploaded files. Missing documents are not automatically evidence of fraud.</p>}{tab==="AI Thinking"&&<div><p style={{fontSize:13}}>OCR Thinking is designed to produce an evidence-based explanation summary—not hidden internal chain-of-thought. It will compare the selected official notification with extracted document fields and show the rules, source pages, matched evidence, missing information, conflicts and next action.</p>{["1. Read notification and corrigenda","2. Extract OCR text with page references","3. Identify certificate type and candidate fields","4. Calculate marks and percentage using explicit rules","5. Compare qualifications and required documents","6. Return PASS / FAIL / UNKNOWN with evidence","7. Send uncertain or conflicting cases to human review"].map(s=><div key={s} style={{...row,alignItems:"center"}}><span>{s}</span><b style={{color:"#64748b",fontSize:11}}>Pending integration</b></div>)}<p style={{fontSize:12,color:"#64748b"}}>Local PDF extraction/OCR and chunks up to 500 words with about 40-word overlap are planned. External embeddings require separate informed consent; API keys remain server-side. The reasoning-summary API is not connected yet.</p><button type="button" onClick={()=>setMsg("AI Thinking UI is present, but the notification/OCR/LLM analysis API is not connected yet; no document has been analysed.")} style={{padding:9,borderRadius:8,border:"1px solid #cbd5e1",background:"#fff",fontWeight:700}}>Check Thinking integration status</button></div>}{tab==="Confidence & Review"&&<p style={{fontSize:13}}>Separate OCR, document-type, identity and eligibility evidence scores. Low confidence or conflicts route to human review.</p>}{tab==="Form Mapping"&&<p style={{fontSize:13}}>Map verified fields into application fields, then ask the candidate to confirm. No application/payment submission without explicit confirmation.</p>}</section></div>
- </div>
- <section id="government-forms" style={{padding:18,background:"#fff",borderTop:"1px solid #d9e3f0"}}><div style={{display:"flex",gap:12,justifyContent:"space-between",alignItems:"end",flexWrap:"wrap"}}><div><span style={{display:"block",fontSize:11,fontWeight:900,letterSpacing:".12em",color:"#067647"}}>GOVERNMENT FORMS • सरकारी फॉर्म</span><h2 style={{margin:"6px 0",fontSize:24}}>Forms &amp; Certificates Hub</h2><p style={{margin:"0 0 10px",color:"#64748b",fontSize:13,lineHeight:1.6}}>प्रमाणपत्र, पहचान दस्तावेज़ और योजना/श्रम सेवाओं के आधिकारिक पोर्टल एक ही जगह।</p></div><input aria-label="सरकारी फॉर्म खोजें" placeholder="फॉर्म या सेवा खोजें…" value={formQuery} onChange={e=>setFormQuery(e.target.value)} style={{width:"min(100%,320px)",padding:12,border:"1px solid #cbd5e1",borderRadius:10,color:"#14213d",background:"#fff"}}/></div>
- <p style={{fontSize:12,lineHeight:1.6,color:"#64748b",background:"#f8fafc",padding:11,borderRadius:8}}>महत्वपूर्ण: यह आधिकारिक पोर्टलों की directory है, स्वयं सरकारी आवेदन जमा करने वाला सिस्टम नहीं। आवेदन की पात्रता, शुल्क, दस्तावेज़ और उपलब्धता संबंधित आधिकारिक वेबसाइट पर सत्यापित करें।</p>
- {visibleFormGroups.length?visibleFormGroups.map(group=><div key={group.title} style={{marginTop:18}}><h3 style={{margin:"0 0 4px",fontSize:17}}>{group.title}</h3><p style={{margin:"0 0 12px",fontSize:12,color:"#64748b"}}>{group.description}</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,230px),1fr))",gap:12}}>{group.items.map(item=><article key={item.name} style={{border:"1px solid #dbe4f0",borderRadius:12,padding:14,background:"#fff",display:"flex",flexDirection:"column",gap:8,minWidth:0}}><span style={{fontSize:10,fontWeight:900,color:"#155eef",textTransform:"uppercase"}}>{item.tag}</span><h4 style={{margin:0,fontSize:15}}>{item.name}</h4><p style={{margin:0,fontSize:12,lineHeight:1.6,color:"#64748b",flex:1}}>{item.detail}</p><a href={item.url} target="_blank" rel="noreferrer" style={{display:"inline-block",alignSelf:"start",padding:"9px 11px",background:"#155eef",color:"#fff",borderRadius:8,textDecoration:"none",fontSize:12,fontWeight:800}}>आधिकारिक पोर्टल खोलें ↗</a></article>)}</div></div>):<p role="status" style={{padding:14,color:"#64748b"}}>इस खोज से कोई सेवा नहीं मिली। दूसरा नाम या शब्द लिखें।</p>}
- </section>
- {msg&&<p role="status" style={{margin:"0 16px 12px",padding:12,background:"#eff6ff",color:"#1d4ed8",borderRadius:8,fontSize:12}}>{msg}</p>}
- <footer style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",padding:16,background:"#fff",borderTop:"1px solid #d9e3f0"}}><small style={{color:"#64748b"}}>Dashboard preview · OCR, vacancy feed, LLM and review APIs are not yet connected.</small><button onClick={clear}>Clear local file list</button><a href={urls[board]} target="_blank" rel="noreferrer">Open {board} official portal ↗</a></footer></section>;
+
+const ink = "#14233f";
+const muted = "#64748b";
+const border = "#e2e8f0";
+const card = { background: "#fff", border: "1px solid " + border, borderRadius: 16, padding: 18, minWidth: 0 };
+
+export default function JobsExamDashboard() {
+  const [board, setBoard] = useState("SSC");
+  const [exam, setExam] = useState("CGL");
+  const [section, setSection] = useState("latest-jobs");
+  const [query, setQuery] = useState("");
+  const selected = boards[board];
+  const filtered = useMemo(() => shortcuts.filter(x => (x.title + " " + x.desc).toLowerCase().includes(query.toLowerCase())), [query]);
+
+  function changeBoard(value) { setBoard(value); setExam(boards[value].exams[0]); }
+
+  return (
+    <main style={{ color: ink, background: "#f5f7fb", minHeight: "100vh", fontFamily: "Arial, 'Noto Sans Devanagari', sans-serif" }}>
+      <div style={{ background: "linear-gradient(120deg,#102a56 0%,#174b91 58%,#2476bd 100%)", color: "#fff", padding: "clamp(24px,5vw,52px) clamp(18px,4vw,48px)" }}>
+        <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <a href="/" style={{ color: "#fff", textDecoration: "none", fontWeight: 900, letterSpacing: ".04em" }}>CSC SKB <span style={{ opacity: .7, fontWeight: 500 }}>/ CAREER DESK</span></a>
+            <span style={{ border: "1px solid #ffffff55", background: "#ffffff14", borderRadius: 30, padding: "7px 12px", fontSize: 12 }}>Jobs &amp; Exams Portal</span>
+          </div>
+          <div style={{ maxWidth: 760, paddingTop: 38 }}>
+            <p style={{ margin: 0, color: "#b9d8ff", fontSize: 12, fontWeight: 800, letterSpacing: ".16em" }}>YOUR CAREER, ONE PLACE</p>
+            <h1 style={{ fontSize: "clamp(30px,5vw,52px)", lineHeight: 1.08, margin: "12px 0", letterSpacing: "-.035em" }}>Find your next <span style={{ color: "#8ed5ff" }}>opportunity.</span></h1>
+            <p style={{ color: "#e1edff", fontSize: 16, lineHeight: 1.7, margin: "0 0 22px" }}>सरकारी नौकरी, प्रतियोगी परीक्षाएँ और जरूरी परीक्षा अपडेट — साफ, सरल और एक ही जगह।</p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a href="#latest-jobs" style={{ background: "#fff", color: "#16477f", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 800 }}>भर्ती देखें ↓</a>
+              <a href={selected.url} target="_blank" rel="noreferrer" style={{ border: "1px solid #ffffff80", color: "#fff", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 750 }}>Official {board} website ↗</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "22px clamp(14px,3vw,28px) 44px" }}>
+        <section style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,230px),1fr))", gap: 16, alignItems: "end", boxShadow: "0 8px 28px #14233f0a" }}>
+          <div><label htmlFor="recruiting-board" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>RECRUITING BOARD</label><select id="recruiting-board" value={board} onChange={e => changeBoard(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{Object.keys(boards).map(x => <option key={x}>{x}</option>)}</select></div>
+          <div><label htmlFor="exam-choice" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>EXAM / RECRUITMENT</label><select id="exam-choice" value={exam} onChange={e => setExam(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{selected.exams.map(x => <option key={x}>{x}</option>)}</select></div>
+          <a href={selected.url} target="_blank" rel="noreferrer" style={{ textAlign: "center", padding: 13, borderRadius: 9, background: "#155eef", color: "#fff", textDecoration: "none", fontWeight: 800 }}>Official notification ↗</a>
+        </section>
+
+        <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "30px 0 14px" }}>
+          <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".13em" }}>EXPLORE THE PORTAL</p><h2 style={{ margin: "5px 0 0", fontSize: 25 }}>What are you looking for?</h2></div>
+          <input aria-label="Search portal sections" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search jobs, results, syllabus…" style={{ width: "min(100%,330px)", padding: 12, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,175px),1fr))", gap: 12 }}>
+          {filtered.map(item => <button key={item.id} onClick={() => { setSection(item.id); document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{ textAlign: "left", cursor: "pointer", ...card, transition: "transform .15s", borderColor: section === item.id ? "#8bb8ff" : border, boxShadow: section === item.id ? "0 0 0 2px #dceaff" : "none" }}>
+            <span style={{ width: 40, height: 40, display: "grid", placeItems: "center", background: "#edf4ff", color: "#155eef", borderRadius: 11, fontSize: 20, fontWeight: 900 }}>{item.icon}</span>
+            <strong style={{ display: "block", marginTop: 13, fontSize: 15 }}>{item.title}</strong><span style={{ display: "block", marginTop: 5, color: muted, fontSize: 12, lineHeight: 1.5 }}>{item.desc}</span>
+          </button>)}
+        </div>
+
+        <section id="latest-jobs" style={{ ...card, marginTop: 26, scrollMarginTop: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "start" }}>
+            <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>RECRUITMENT UPDATES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}>Latest {board} Jobs</h2><p style={{ margin: 0, color: muted, fontSize: 13 }}>Selected exam: {exam}</p></div>
+            <a href={selected.url} target="_blank" rel="noreferrer" style={{ color: "#155eef", textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Visit official board ↗</a>
+          </div>
+          <div style={{ marginTop: 18, padding: 18, borderRadius: 12, background: "#f8fafc", border: "1px dashed #cbd5e1" }}>
+            <strong style={{ display: "block", fontSize: 15 }}>Live verified vacancy feed is not connected yet.</strong>
+            <p style={{ color: muted, fontSize: 13, lineHeight: 1.7, margin: "7px 0 12px" }}>इसलिए यहाँ कोई अपुष्ट भर्ती, तारीख या vacancy count नहीं दिखाया जा रहा है। नवीनतम और सही आवेदन तिथियों के लिए संबंधित भर्ती बोर्ड की आधिकारिक सूचना देखें।</p>
+            <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "10px 13px", background: "#155eef", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Open {board} official website ↗</a>
+          </div>
+        </section>
+
+        <section style={{ marginTop: 26 }}>
+          <div style={{ marginBottom: 12 }}><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>EXAM RESOURCES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}> परीक्षा से जुड़ी जानकारी</h2></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,250px),1fr))", gap: 12 }}>
+            {shortcuts.slice(1).map(item => <article id={item.id} key={item.id} style={{ ...card, scrollMarginTop: 18 }}>
+              <span style={{ color: "#155eef", fontSize: 21, fontWeight: 900 }}>{item.icon}</span><h3 style={{ margin: "10px 0 5px", fontSize: 16 }}>{item.title}</h3><p style={{ color: muted, fontSize: 13, lineHeight: 1.6, margin: 0 }}>{item.desc} के लिए आधिकारिक बोर्ड की सूचना देखें।</p>
+              <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 13, color: "#155eef", fontWeight: 800, textDecoration: "none", fontSize: 13 }}>Official updates ↗</a>
+            </article>)}
+          </div>
+        </section>
+
+        <footer style={{ marginTop: 28, padding: "18px 2px", borderTop: "1px solid " + border, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: muted, fontSize: 12 }}>
+          <span>CSC SKB Online · Jobs &amp; Exams</span><span>सूचनाओं की अंतिम पुष्टि संबंधित official notification से करें।</span>
+        </footer>
+      </div>
+    </main>
+  );
 }
