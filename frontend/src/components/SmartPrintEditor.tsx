@@ -68,6 +68,7 @@ export default function PrintEditorPage() {
   const [busy, setBusy] = useState(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
+  const [exportDpi, setExportDpi] = useState("300");
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -399,9 +400,14 @@ export default function PrintEditorPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
-    const scale = 2;
+    // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
+    // Scale the exported raster to the selected physical page size and output DPI.
+    const dpi = Math.max(72, Math.min(600, Number(exportDpi) || 300));
+    const scaleX = (pageSize.w / 25.4 * dpi) / 794;
+    const scaleY = (pageSize.h / 25.4 * dpi) / 1123;
     const canvas = document.createElement("canvas");
-    canvas.width = 794 * scale; canvas.height = 1123 * scale;
+    canvas.width = Math.max(1, Math.round(794 * scaleX));
+    canvas.height = Math.max(1, Math.round(1123 * scaleY));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
     context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
@@ -410,7 +416,7 @@ export default function PrintEditorPage() {
       await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
       context.save();
       context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
-      const x=item.x*scale, y=item.y*scale, w=item.w*scale, h=item.h*scale;
+      const x=item.x*scaleX, y=item.y*scaleY, w=item.w*scaleX, h=item.h*scaleY;
       if (item.rotation) {
         context.translate(x+w/2,y+h/2); context.rotate((item.rotation*Math.PI)/180);
         context.drawImage(image,-w/2,-h/2,w,h);
@@ -685,7 +691,9 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option></select></label>
           </div>
+          <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. Higher DPI creates larger files and may use more memory.</p>
 
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
