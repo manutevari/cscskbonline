@@ -63,11 +63,17 @@ export default function PrintEditorPage() {
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
+  const [lassoMode, setLassoMode] = useState(false);
+  const [lassoPoints, setLassoPoints] = useState<{x:number;y:number}[]>([]);
+  const lassoPointsRef = useRef<{x:number;y:number}[]>([]);
   const [cropMode, setCropMode] = useState(false);
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
+  const [exportDpi, setExportDpi] = useState("300");
+  const [customDpi, setCustomDpi] = useState("300");
+  const [dimensionUnit, setDimensionUnit] = useState<"px" | "cm" | "mm">("mm");
   const [passwordPrompt, setPasswordPrompt] = useState<{fileName:string; incorrect:boolean} | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -276,6 +282,30 @@ export default function PrintEditorPage() {
     } catch(error) { setStatus(error instanceof Error?error.message:"Region extract नहीं हो सका।"); }
   };
 
+  const extractLassoRegion = async () => {
+    if (!selected) return;
+    const points = lassoPointsRef.current;
+    if (points.length < 3) { setStatus("Lasso selection के लिए कम-से-कम 3 points बनाएं।"); return; }
+    const image = new Image(); image.src = selected.src;
+    try {
+      await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("Selected photo load नहीं हुई।"));});
+      const polygon = points.map(p=>({x:Math.max(0,Math.min(image.naturalWidth,(p.x-selected.x)/selected.w*image.naturalWidth)),y:Math.max(0,Math.min(image.naturalHeight,(p.y-selected.y)/selected.h*image.naturalHeight))}));
+      const minX=Math.max(0,Math.floor(Math.min(...polygon.map(p=>p.x)))), minY=Math.max(0,Math.floor(Math.min(...polygon.map(p=>p.y))));
+      const maxX=Math.min(image.naturalWidth,Math.ceil(Math.max(...polygon.map(p=>p.x)))), maxY=Math.min(image.naturalHeight,Math.ceil(Math.max(...polygon.map(p=>p.y))));
+      const width=Math.max(1,maxX-minX),height=Math.max(1,maxY-minY);
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Lasso processor उपलब्ध नहीं है।");
+      ctx.beginPath();polygon.forEach((p,i)=>{const x=p.x-minX,y=p.y-minY;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.closePath();ctx.clip();
+      ctx.drawImage(image,-minX,-minY);
+      const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Lasso selection export नहीं हो सका।")),"image/png"));
+      const src=URL.createObjectURL(blob);urlsRef.current.push(src);
+      const region:LayoutItem={id:uid(),name:selected.name+" · lasso region",src,pageId:selected.pageId,x:selected.x+minX/image.naturalWidth*selected.w,y:selected.y+minY/image.naturalHeight*selected.h,w:width/image.naturalWidth*selected.w,h:height/image.naturalHeight*selected.h,brightness:100,contrast:100,sharpness:0};
+      setItems(old=>[...old,region]);setSelectedId(region.id);setSelectedIds([region.id]);
+      setStatus("Lasso से चुना हुआ हिस्सा transparent background के साथ अलग editable layer बन गया है। Original photo सुरक्षित है।");
+    } catch(error) { setStatus(error instanceof Error?error.message:"Lasso selection extract नहीं हो सका।"); }
+    finally { lassoPointsRef.current=[];setLassoPoints([]); }
+  };
+
   const rotateSelected = async (degrees: number) => {
     if (!selected) return;
     const image = new Image(); image.src = selected.src;
@@ -399,9 +429,17 @@ export default function PrintEditorPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
-    const scale = 2;
+    // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
+    // Scale the exported raster to the selected physical page size and output DPI.
+    const requestedDpi = exportDpi === "custom" ? Number(customDpi) : Number(exportDpi);
+    const autoResolution = exportDpi === "0";
+    const dpi = autoResolution ? 0 : Math.max(72, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
+    // Auto (0 DPI) exports at the editor's native page canvas resolution without DPI upscaling.
+    const scaleX = autoResolution ? 1 : (pageSize.w / 25.4 * dpi) / 794;
+    const scaleY = autoResolution ? 1 : (pageSize.h / 25.4 * dpi) / 1123;
     const canvas = document.createElement("canvas");
-    canvas.width = 794 * scale; canvas.height = 1123 * scale;
+    canvas.width = Math.max(1, Math.round(794 * scaleX));
+    canvas.height = Math.max(1, Math.round(1123 * scaleY));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Image processing canvas उपलब्ध नहीं है।");
     context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
@@ -410,7 +448,7 @@ export default function PrintEditorPage() {
       await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(item.name + " load नहीं हुई।")); });
       context.save();
       context.filter = `brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%)`;
-      const x=item.x*scale, y=item.y*scale, w=item.w*scale, h=item.h*scale;
+      const x=item.x*scaleX, y=item.y*scaleY, w=item.w*scaleX, h=item.h*scaleY;
       if (item.rotation) {
         context.translate(x+w/2,y+h/2); context.rotate((item.rotation*Math.PI)/180);
         context.drawImage(image,-w/2,-h/2,w,h);
@@ -504,7 +542,7 @@ export default function PrintEditorPage() {
       .download-menu{position:relative}.download-menu>summary{list-style:none}.download-menu>summary::-webkit-details-marker{display:none}.download-options{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:grid;gap:5px;min-width:210px;padding:9px;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 24px #17203322}.download-options strong{font-size:11px;color:#64748b;padding:4px 5px 0}.download-options button{border:0;border-radius:6px;background:#f3f6fb;color:#243b60;text-align:left;padding:8px;font-size:12px;cursor:pointer}.download-options button:disabled{opacity:.45;cursor:not-allowed}.compact-toolbar{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #17203312}.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 9px;border:1px solid #d5deeb;border-radius:8px;background:#fff;color:#243b60;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.icon-btn.selected{background:#eaf2ff;border-color:#7ba8e8}.toolbar-spacer{flex:1}.print-btn{white-space:nowrap}
       .status{min-height:18px;color:#28553d;margin:4px 14px;font-size:12px}.workspace{display:grid;grid-template-columns:minmax(210px,230px) minmax(0,1fr) minmax(280px,320px);gap:9px;align-items:start;padding:0 10px;min-height:calc(100vh - 150px)}.workspace>.side:first-child{display:grid}.side-details{min-width:0;position:sticky;top:52px;max-height:calc(100vh - 65px);overflow:auto}.side-details>summary{cursor:pointer;list-style:none;padding:9px 12px;background:#fff;border:1px solid #dce3ef;border-radius:9px;color:#243b60;font-weight:700;font-size:13px;position:sticky;top:0;z-index:2}.side-details>summary::-webkit-details-marker{display:none}.side-details[open]>.side{margin-top:8px}.stage-wrap{min-width:0;min-height:0}.pages{margin-bottom:6px}
       .stage-wrap{padding:10px;background:#e8edf6;border:1px solid #d4ddec;border-radius:9px;min-width:0;min-height:0;display:flex;flex-direction:column}.stage{position:relative;max-width:100%;margin:0 auto;flex:0 0 auto;aspect-ratio:210/297;background:white;overflow:hidden;box-shadow:0 3px 14px #17251f22;touch-action:pan-y pinch-zoom}
-      .placed{position:absolute;border:1px dashed transparent;cursor:default;box-sizing:border-box;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+      .placed{position:absolute;border:1px dashed transparent;cursor:move;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none}.placed.active{border:2px solid #176b4d}.placed.multi{outline:1px solid #7aa58b}.placed img{width:100%;height:100%;object-fit:fill;pointer-events:none;display:block}.edit-controls{display:grid;gap:8px;padding:9px;border:1px solid #dce5de;border-radius:8px}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
       .resize-handle{position:absolute;width:11px;height:11px;border:1px solid white;border-radius:50%;background:#176b4d;z-index:3;touch-action:none}
       .nw{left:-6px;top:-6px;cursor:nwse-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
@@ -520,6 +558,8 @@ export default function PrintEditorPage() {
       <label className="icon-btn" title="Upload images or PDFs">＋ Upload<input type="file" accept="image/*,application/pdf,.pdf" multiple onChange={addFiles} hidden /></label>
       <button type="button" className="icon-btn" title="Rotate selected photo 90° clockwise" aria-label="Rotate selected photo 90° clockwise" onClick={()=>void rotateSelected(90)} disabled={!selected}>↻</button>
       <button type="button" className={"icon-btn "+(cropMode?"selected":"")} title="Crop selected photo: drag to select area" aria-label="Crop selected photo" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setRegionMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setCropMode(v=>!v);setStatus(cropMode?"Crop mode बंद हुआ।":"Crop mode चालू है: photo पर mouse से drag करके area चुनें, फिर Apply Crop दबाएँ।");}} disabled={!selected}>✂</button>
+      <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Rectangular selection: drag over a photo to extract a separate editable region" aria-label="Rectangular selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setLassoMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Rectangular selection बंद हुआ।":"Rectangular Select चालू: photo के अंदर drag करके area चुनें।");}} disabled={!selected}>▭ Rect Select</button>
+      <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
@@ -538,6 +578,7 @@ export default function PrintEditorPage() {
       <label className="field">Orientation<select aria-label="Page orientation" value={orientation} onChange={e => setOrientation(e.target.value as "portrait" | "landscape")}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
+      {selected && <div className="field" style={{display:"grid",gap:7}}><strong>Selected photo dimensions</strong><label className="field">Unit<select aria-label="Photo dimension unit" value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm")}><option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option></select></label><label className="field">Width ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.w:dimensionUnit==="cm"?selected.w/794*pageSize.w/10:selected.w/794*pageSize.w).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("w",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*794/pageSize.w:n*794/pageSize.w));}} /></label><label className="field">Height ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.h:dimensionUnit==="cm"?selected.h/1123*pageSize.h/10:selected.h/1123*pageSize.h).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("h",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*1123/pageSize.h:n*1123/pageSize.h));}} /></label></div>}
       <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
       <label className="field">Copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
       <label className="field">Photo width (mm)<input type="number" min="20" max="100" step="0.1" value={photoWidthMm} onChange={e => setPhotoWidthMm(e.target.value)} /></label>
@@ -636,6 +677,11 @@ export default function PrintEditorPage() {
               return {...i,x,y,w,h};}));
             return;
           }
+          if(lassoMode && lassoPointsRef.current.length){
+            const item=items.find(candidate=>candidate.id===selectedId);
+            if(item){const px=Math.max(item.x,Math.min(item.x+item.w,(e.clientX-rect.left)*sx)),py=Math.max(item.y,Math.min(item.y+item.h,(e.clientY-rect.top)*sy));const pts=lassoPointsRef.current,last=pts[pts.length-1];if(Math.hypot(px-last.x,py-last.y)>2){const next=[...pts,{x:px,y:py}];lassoPointsRef.current=next;setLassoPoints(next);}}
+            return;
+          }
           if(regionStart){
             const item=items.find(candidate=>candidate.id===regionStart.itemId);
             if(!item)return;
@@ -651,8 +697,9 @@ export default function PrintEditorPage() {
           if(!dragId)return;
           const x=(e.clientX-rect.left)*sx-dragOffsetRef.current.x,y=(e.clientY-rect.top)*sy-dragOffsetRef.current.y;
           setItems(old=>old.map(i=>i.id===dragId?{...i,x:Math.max(0,Math.min(794-i.w,x)),y:Math.max(0,Math.min(1123-i.h,y))}:i));
-        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
-          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); }}>
+        }} onPointerUp={()=>{setDragId(null);setResizeState(null);if(lassoMode && lassoPointsRef.current.length){setLassoMode(false);void extractLassoRegion();}if(regionStart){setRegionStart(null);if(cropMode){setCropMode(false);setStatus("Crop area चुना गया है। Apply Crop दबाकर लागू करें या Crop icon से फिर चुनें।");}else{setRegionMode(false);setStatus("चुना हुआ हिस्सा अलग editable layer बनाया जा रहा है…");void extractSelectedRegion();}}}} onPointerLeave={()=>{setDragId(null);setResizeState(null);}}>
+          {pageItems.map(item => <div key={item.id} className={"placed " + (selectedId === item.id ? "active " : "") + (selectedIds.includes(item.id) ? "multi" : "")} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}} onPointerDown={e => { if(e.button!==0)return; e.preventDefault(); if(lassoMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);const first={x:Math.max(item.x,Math.min(item.x+item.w,px)),y:Math.max(item.y,Math.min(item.y+item.h,py))};lassoPointsRef.current=[first];setLassoPoints([first]);}return;} if(cropMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(regionMode){e.currentTarget.setPointerCapture(e.pointerId);const rect=stageRef.current?.getBoundingClientRect();if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;setSelectedId(item.id);setSelectedIds([item.id]);setRegionStart({itemId:item.id,startX:px,startY:py});setCropRect({left:String(Math.max(0,(px-item.x)/item.w*100)),top:String(Math.max(0,(py-item.y)/item.h*100)),width:"1",height:"1"});}return;} if(e.ctrlKey||e.metaKey||e.shiftKey||e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.shiftKey){setSelectedIds(old=>old.includes(item.id)?old.filter(id=>id!==item.id):[...old,item.id]);setSelectedId(item.id);return;} const rect=stageRef.current?.getBoundingClientRect(); setSelectedId(item.id); setSelectedIds([item.id]); if(rect){const px=(e.clientX-rect.left)*794/rect.width,py=(e.clientY-rect.top)*1123/rect.height;dragOffsetRef.current={x:px-item.x,y:py-item.y};stageRef.current?.setPointerCapture(e.pointerId);setDragId(item.id);} }}>
+            {selectedId===item.id && lassoMode && lassoPoints.length>1 && <svg aria-hidden="true" viewBox={`0 0 100 100`} preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",overflow:"visible"}}><polyline points={lassoPoints.map(p=>`${(p.x-item.x)/item.w*100},${(p.y-item.y)/item.h*100}`).join(" ")} fill="none" stroke="#e11d48" strokeWidth="1.2" strokeDasharray="2 1" vectorEffect="non-scaling-stroke" /></svg>}
             <img src={item.src} alt={item.name} draggable={false} style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} />
             {selectedId===item.id && (regionMode || cropRect.left!=="0" || cropRect.top!=="0" || cropRect.width!=="100" || cropRect.height!=="100") && <div aria-hidden="true" style={{position:"absolute",left:cropRect.left+"%",top:cropRect.top+"%",width:cropRect.width+"%",height:cropRect.height+"%",border:"2px dashed #e11d48",background:"#f43f5e22",pointerEvents:"none",boxSizing:"border-box"}} /> }
             {selectedId===item.id && ["nw","n","ne","e","se","s","sw","w"].map(handle=><span key={handle} className={"resize-handle "+handle} onPointerDown={e=>{e.stopPropagation();e.preventDefault();setSelectedId(item.id);setSelectedIds([item.id]);stageRef.current?.setPointerCapture(e.pointerId);setResizeState({id:item.id,handle,startX:e.clientX,startY:e.clientY,startW:item.w,startH:item.h,startItemX:item.x,startItemY:item.y});}} />)}
@@ -685,7 +732,9 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
+            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
           </div>
+          <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
