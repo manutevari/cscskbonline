@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { ADMIN_SESSION_COOKIE, verifyAdminSessionCookie } from "@/lib/admin-session";
 export type MarketingRole = "owner_admin" | "marketing_manager" | "service_expert" | "operations_manager";
 export type MarketingActor = { id: string; role: MarketingRole };
 const CONFIG: Record<MarketingRole,{token:string;id:string}> = {
@@ -8,6 +9,8 @@ const CONFIG: Record<MarketingRole,{token:string;id:string}> = {
  operations_manager:{token:"CSCSKB_MARKETING_OPERATIONS_TOKEN",id:"CSCSKB_MARKETING_OPERATIONS_ID"}
 };
 export function authenticateMarketingActor(request:NextRequest):MarketingActor|null {
+ const adminSession = verifyAdminSessionCookie(request.cookies.get(ADMIN_SESSION_COOKIE)?.value);
+ if (adminSession) return { id: adminSession.sub, role: "owner_admin" };
  const header=request.headers.get("authorization")||"";
  if(!header.startsWith("Bearer "))return null;
  const supplied=header.slice(7); if(!supplied)return null;
