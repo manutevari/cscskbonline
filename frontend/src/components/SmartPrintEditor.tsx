@@ -433,7 +433,7 @@ export default function PrintEditorPage() {
     // Scale the exported raster to the selected physical page size and output DPI.
     const requestedDpi = exportDpi === "custom" ? Number(customDpi) : Number(exportDpi);
     const autoResolution = exportDpi === "0";
-    const dpi = autoResolution ? 0 : Math.max(72, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
+    const dpi = autoResolution ? 0 : Math.max(1, Math.min(1200, Number.isFinite(requestedDpi) ? requestedDpi : 300));
     // Auto (0 DPI) exports at the editor's native page canvas resolution without DPI upscaling.
     const scaleX = autoResolution ? 1 : (pageSize.w / 25.4 * dpi) / 794;
     const scaleY = autoResolution ? 1 : (pageSize.h / 25.4 * dpi) / 1123;
@@ -459,6 +459,60 @@ export default function PrintEditorPage() {
   };
   const canvasBlob = (canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) =>
     new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
+  // Embed the selected print density in raster files. Canvas exports otherwise
+  // commonly carry a browser-default 96 DPI (or no usable density metadata).
+  const addDpiMetadata = async (blob: Blob, dpi: number): Promise<Blob> => {
+    if (!dpi || !Number.isFinite(dpi) || dpi < 1) return blob; // 0 = Auto/Native
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const writeU32 = (view: DataView, offset: number, value: number) => view.setUint32(offset, value >>> 0, false);
+    const crc32 = (data: Uint8Array) => {
+      let crc = 0xffffffff;
+      for (const byte of data) {
+        crc ^= byte;
+        for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    };
+    if (blob.type === "image/png") {
+      const signature = [137,80,78,71,13,10,26,10];
+      if (bytes.length < 33 || !signature.every((value,index) => bytes[index] === value)) return blob;
+      const chunk = new Uint8Array(21);
+      const view = new DataView(chunk.buffer);
+      writeU32(view, 0, 9);
+      chunk.set([112,72,89,115], 4); // pHYs
+      const pixelsPerMetre = Math.round(dpi / 0.0254);
+      writeU32(view, 8, pixelsPerMetre);
+      writeU32(view, 12, pixelsPerMetre);
+      chunk[16] = 1; // metres
+      writeU32(view, 17, crc32(chunk.subarray(4, 17)));
+      // Insert pHYs immediately after IHDR.
+      const ihdrEnd = 8 + 4 + 4 + 13 + 4;
+      const output = new Uint8Array(bytes.length + chunk.length);
+      output.set(bytes.subarray(0, ihdrEnd), 0);
+      output.set(chunk, ihdrEnd);
+      output.set(bytes.subarray(ihdrEnd), ihdrEnd + chunk.length);
+      return new Blob([output], { type: "image/png" });
+    }
+    if (blob.type === "image/jpeg" && bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+      const density = Math.max(1, Math.min(65535, Math.round(dpi)));
+      // Replace density in an existing JFIF APP0 segment when present.
+      if (bytes[2] === 0xff && bytes[3] === 0xe0 && bytes[4] === 0 && bytes[5] >= 16 &&
+          bytes[6] === 0x4a && bytes[7] === 0x46 && bytes[8] === 0x49 && bytes[9] === 0x46 && bytes[10] === 0) {
+        const output = bytes.slice();
+        output[13] = 1; // dots per inch
+        output[14] = (density >>> 8) & 255; output[15] = density & 255;
+        output[16] = (density >>> 8) & 255; output[17] = density & 255;
+        return new Blob([output], { type: "image/jpeg" });
+      }
+      // Add a JFIF APP0 segment after SOI if the encoder omitted one.
+      const app0 = new Uint8Array([0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0x02,0x01,0x01,
+        (density >>> 8) & 255,density & 255,(density >>> 8) & 255,density & 255,0,0]);
+      const output = new Uint8Array(bytes.length + app0.length);
+      output.set(bytes.subarray(0,2),0); output.set(app0,2); output.set(bytes.subarray(2),2+app0.length);
+      return new Blob([output], { type: "image/jpeg" });
+    }
+    return blob;
+  };
   const formatFileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
   const verifyAndDownload = (blob: Blob, filename: string, limitBytes: number) => {
     if (limitBytes > 0 && blob.size > limitBytes) {
@@ -494,7 +548,7 @@ export default function PrintEditorPage() {
     setBusy(true);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
-      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
+      if (exportDpi === "custom" && (!Number.isInteger(Number(customDpi)) || Number(customDpi) < 1 || Number(customDpi) > 1200)) throw new Error("Custom DPI 1 से 1200 के बीच पूर्णांक होना चाहिए।");\n      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
       if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
       const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
       if (kind==="all-pdf") {
@@ -732,7 +786,7 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
+            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="72">72 DPI</option><option value="96">96 DPI — Screen</option><option value="150">150 DPI — Draft print</option><option value="200">200 DPI — Medium quality</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="1200">1200 DPI — Maximum</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (1–1200)<input type="number" min="1" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
