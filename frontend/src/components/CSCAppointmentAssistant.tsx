@@ -6,11 +6,9 @@ import { usePathname } from "next/navigation";
 type Appointment = {
   id: string;
   name: string;
-  mobile: string;
   service: string;
   date: string;
   time: string;
-  remarks: string;
   status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 };
 
