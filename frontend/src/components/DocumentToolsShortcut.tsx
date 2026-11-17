@@ -6,7 +6,7 @@ export default function DocumentToolsShortcut() {
   const pathname = usePathname();
   if (pathname === "/document-tools") return null;
   return (
-    <a href="/document-tools" aria-label="Open document crop resize converter" style={{
+    <a href="/document-tools" className="document-tools-shortcut" aria-label="Open document crop resize converter" style={{
       position: "fixed", left: 16, bottom: 18, zIndex: 2147482000,
       display: "inline-flex", alignItems: "center", gap: 8,
       background: "#176b4d", color: "#fff", padding: "12px 15px",
