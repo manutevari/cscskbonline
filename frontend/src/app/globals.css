@@ -1550,3 +1550,44 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .hero-section *, .services-grid *, .csc-appt-fab { animation: none !important; transition: none !important; }
 }
+
+
+/* Mobile quick access to the two key portals hidden with the desktop navbar. */
+.mobile-primary-nav {
+  display: none;
+}
+@media (max-width: 900px) {
+  .mobile-primary-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
+    padding: .7rem .9rem;
+    background: rgba(2, 8, 23, .88);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .mobile-primary-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    min-width: 0;
+    min-height: 58px;
+    padding: .6rem .7rem;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 13px;
+    color: #fff;
+    text-decoration: none;
+    box-shadow: 0 5px 16px rgba(0,0,0,.16);
+  }
+  .mobile-primary-link > span:first-child { font-size: 1.35rem; flex: 0 0 auto; }
+  .mobile-primary-link strong { display: block; font-size: .84rem; line-height: 1.25; }
+  .mobile-primary-link small { display: block; margin-top: .12rem; color: #d3def0; font-size: .68rem; line-height: 1.2; }
+  .mobile-jobs-link { background: linear-gradient(135deg, rgba(11,114,231,.32), rgba(11,114,231,.12)); border-color: rgba(59,158,255,.42); }
+  .mobile-water-link { background: linear-gradient(135deg, rgba(0,153,190,.28), rgba(0,153,190,.1)); border-color: rgba(88,210,231,.38); }
+}
+@media (max-width: 360px) {
+  .mobile-primary-nav { padding: .55rem; gap: .45rem; }
+  .mobile-primary-link { justify-content: flex-start; gap: .4rem; padding: .55rem .5rem; }
+  .mobile-primary-link strong { font-size: .76rem; }
+  .mobile-primary-link small { font-size: .62rem; }
+}
