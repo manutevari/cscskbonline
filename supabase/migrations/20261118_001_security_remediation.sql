@@ -51,6 +51,7 @@ grant select, insert, update, delete on public.tata_water_enquiries to service_r
 
 -- Public vector search is not currently exposed as a client feature.
 revoke all on function public.match_documents(vector, integer) from public, anon, authenticated;
+grant execute on function public.match_documents(vector, integer) to service_role;
 
 -- Pin function search paths for existing application-owned functions.
 alter function public.marketing_campaign_content_guard() set search_path = public, extensions;
