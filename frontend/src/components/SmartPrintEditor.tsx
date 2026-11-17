@@ -478,19 +478,36 @@ export default function PrintEditorPage() {
     saveBlob(blob, filename);
     return formatFileSize(blob.size);
   };
-  const compressJpegToLimit = async (canvas: HTMLCanvasElement, targetBytes: number) => {
-    let low=0.08, high=0.96, best:Blob|null=null;
-    for(let i=0;i<9;i++){
-      const q=(low+high)/2, blob=await canvasBlob(canvas,"image/jpeg",q);
-      if(blob.size<=targetBytes){best=blob;low=q;}else high=q;
+  const compressJpegToLimit = async (source: HTMLCanvasElement, targetBytes: number) => {
+    // Try quality reduction first, then progressively reduce pixel dimensions.
+    // This is more reliable for strict limits (for example 100 KB) than quality-only compression.
+    let scale = 1;
+    let smallest: Blob | null = null;
+    for (let pass = 0; pass < 8; pass++) {
+      let canvas = source;
+      if (scale < 1) {
+        canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(source.width * scale));
+        canvas.height = Math.max(1, Math.round(source.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Compression canvas उपलब्ध नहीं है।");
+        context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      }
+      for (const quality of [0.88, 0.72, 0.56, 0.4, 0.28, 0.18, 0.1]) {
+        const blob = await canvasBlob(canvas, "image/jpeg", quality);
+        if (!smallest || blob.size < smallest.size) smallest = blob;
+        if (blob.size <= targetBytes) return blob;
+      }
+      scale *= 0.78;
     }
-    if(!best) best=await canvasBlob(canvas,"image/jpeg",0.08);
-    return best;
+    if (smallest && smallest.size <= targetBytes) return smallest;
+    throw new Error("चुनी गई file-size limit में readable output बनाना संभव नहीं हुआ। कृपया limit बढ़ाएँ या कम pages चुनें।");
   };
   const createPdf = async (pageIds: number[], targetBytes = 0) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
-    const perPageTarget=targetBytes>0?Math.max(12000,Math.floor(targetBytes/pageIds.length)):0;
+    const perPageTarget=targetBytes>0?Math.max(2500,Math.floor((targetBytes-6000)/Math.max(1,pageIds.length))):0;
     for (const pageId of pageIds) {
       const canvas=await renderPageCanvas(pageId);
       const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
