@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core import get_settings
 from .models import ApprovalRequest, DocumentMetadata, IngestResponse, KnowledgeStatus, QueryRequest, QueryResponse
 from .service import ingest, retrieve, clients
+from .agent import agent
+from .agent_models import AgentRequest, AgentResponse
+from langchain_core.messages import HumanMessage
 
 app = FastAPI(title="CSCSKB Knowledge Base API", version="0.1.0")
 settings = get_settings()
@@ -52,6 +55,24 @@ def query_knowledge(request: QueryRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Knowledge retrieval is temporarily unavailable") from exc
 
+
+
+@app.post("/v1/agent", response_model=AgentResponse, dependencies=[Depends(require_token)])
+def run_agent(request: AgentRequest):
+    try:
+        result = agent.invoke({"messages": [HumanMessage(content=request.question)]},
+                              config={"recursion_limit": 8})
+        messages = result.get("messages", [])
+        final = next((m for m in reversed(messages) if getattr(m, "type", "") == "ai"), None)
+        if final is None:
+            raise ValueError("Agent returned no final answer")
+        content = final.content
+        answer = content if isinstance(content, str) else str(content)
+        tool_calls = sum(len(getattr(m, "tool_calls", []) or []) for m in messages)
+        return AgentResponse(answer=answer, tool_calls=tool_calls,
+                             evidence_status="retrieval_tool_used" if tool_calls else "no_tool_call")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Knowledge agent is temporarily unavailable") from exc
 
 @app.post("/v1/documents/{document_id}/review", dependencies=[Depends(require_token)])
 def review_document(document_id: str, request: ApprovalRequest):
