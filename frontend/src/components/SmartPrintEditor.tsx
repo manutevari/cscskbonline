@@ -548,7 +548,8 @@ export default function PrintEditorPage() {
     setBusy(true);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
-      if (exportDpi === "custom" && (!Number.isInteger(Number(customDpi)) || Number(customDpi) < 1 || Number(customDpi) > 1200)) throw new Error("Custom DPI 1 से 1200 के बीच पूर्णांक होना चाहिए।");\n      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
+      if (exportDpi === "custom" && (!Number.isInteger(Number(customDpi)) || Number(customDpi) < 1 || Number(customDpi) > 1200)) throw new Error("Custom DPI 1 से 1200 के बीच पूर्णांक होना चाहिए।");
+      const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
       if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
       const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
       if (kind==="all-pdf") {
