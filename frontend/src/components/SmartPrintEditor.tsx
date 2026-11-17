@@ -222,6 +222,17 @@ export default function PrintEditorPage() {
     setPages(old => [...old, { id, label: "Page " + id }]); setActivePage(id);
     setStatus("नया blank page जोड़ा गया।");
   };
+  const deletePage = (pageId: number) => {
+    if (pages.length <= 1) { setStatus("कम-से-कम एक page रखना ज़रूरी है।"); return; }
+    const page = pages.find(p => p.id === pageId);
+    if (!page || !window.confirm(page.label + " और उस page की सभी photos हटाएँ? यह action Undo से restore नहीं होगा।")) return;
+    const remaining = pages.filter(p => p.id !== pageId);
+    setPages(remaining);
+    setItems(old => old.filter(item => item.pageId !== pageId));
+    if (activePage === pageId) setActivePage(remaining[0].id);
+    setSelectedId(null); setSelectedIds([]);
+    setStatus(page.label + " और उस page की सामग्री delete कर दी गई।");
+  };
   const moveToPage = (id: string, pageId: number) => setItems(old => old.map(i => i.id === id ? { ...i, pageId } : i));
   const deleteItem = () => {
     if (!selected) return;
@@ -548,7 +559,7 @@ export default function PrintEditorPage() {
       .n{left:calc(50% - 5px);top:-6px;cursor:ns-resize}.s{left:calc(50% - 5px);bottom:-6px;cursor:ns-resize}.w{left:-6px;top:calc(50% - 5px);cursor:ew-resize}.e{right:-6px;top:calc(50% - 5px);cursor:ew-resize}
       .side{background:white;border:1px solid #dce3ef;border-radius:9px;padding:10px;display:grid;gap:9px;min-width:0}.side h2{font-size:17px;margin:0}.field{display:grid;gap:4px;font-size:12px;font-weight:700;color:#53645a}.field input,.field select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#17251f}
       .thumbs{display:grid;gap:7px}.thumb{display:grid;grid-template-columns:20px 54px minmax(0,1fr);gap:8px;align-items:center;padding:6px;border:1px solid #dce5de;border-radius:8px;cursor:pointer;background:white}.thumb.chosen{border-color:#176b4d;background:#f1f8f3}.thumb input[type=checkbox]{width:17px;height:17px;accent-color:#176b4d}.thumb img{width:54px;height:54px;object-fit:contain;background:#f5f7f5}.small{font-size:12px;color:#5c6b62;overflow-wrap:anywhere}
-      .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
+      .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.page-tab{display:inline-flex;align-items:center;border:1px solid #cbd9ce;border-radius:8px;background:#fff;overflow:hidden}.page-tab.active{border-color:#176b4d;background:#eaf5ed}.pagebtn{padding:7px 9px;border:0;background:transparent;color:#24533d}.page-tab.active .pagebtn{color:#176b4d;font-weight:800}.page-delete{border:0;border-left:1px solid #dce5de;background:transparent;color:#a12b2b;padding:6px 9px;font-size:18px;line-height:1;cursor:pointer}.page-delete:disabled{opacity:.3;cursor:not-allowed}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
       @media(max-width:1180px){.workspace{grid-template-columns:minmax(190px,220px) minmax(0,1fr)}.side-details{grid-column:1/-1;position:static;max-height:none}.side-details>.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:760px){.workspace{grid-template-columns:1fr}.workspace>.side:first-child{grid-template-columns:1fr 1fr}.side-details{grid-column:auto}.side-details>.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
       /* Mobile editor: keep the canvas and controls inside the viewport. */
@@ -577,7 +588,7 @@ export default function PrintEditorPage() {
         .stage{width:100%!important;max-width:100%;height:auto}
         .stage-wrap,.side,.side-details{min-width:0;max-width:100%}
         .pages{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
-        .pagebtn{flex:0 0 auto}
+        .pagebtn{flex:0 0 auto}.page-tab{flex:0 0 auto}
         .field input,.field select{min-width:0;font-size:16px}
         .edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         .thumb{grid-template-columns:20px 48px minmax(0,1fr)}
@@ -691,7 +702,7 @@ export default function PrintEditorPage() {
         )}
       </aside>
       <div className="stage-wrap">
-        <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
+        <div className="pages">{pages.map(p => <div className={"page-tab " + (activePage === p.id ? "active" : "")} key={p.id}><button className="pagebtn" onClick={() => setActivePage(p.id)} aria-current={activePage === p.id ? "page" : undefined}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button><button type="button" className="page-delete" onClick={() => deletePage(p.id)} disabled={pages.length <= 1} aria-label={"Delete " + p.label} title={"Delete " + p.label}>×</button></div>)}</div>
         <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
           onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
           onPointerMove={e => {
