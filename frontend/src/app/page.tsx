@@ -101,18 +101,14 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Background audio is opt-in. Browsers block autoplay and visitors should
+  // remain in control of sound, especially on mobile devices.
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {
-          const handler = () => {
-            audioRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
-            window.removeEventListener("click", handler);
-          };
-          window.addEventListener("click", handler);
-        });
-    }
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setIsPlaying(false);
   }, []);
 
   const toggleMusic = () => {
