@@ -55,7 +55,7 @@ const SLOTS = makeSlots();
 
 function makeId() {
   const d = todayIST().replaceAll("-", "");
-  return `CSC-${d}-${crypto.randomUUID().replaceAll("-", "").slice(0, 5).toUpperCase()}`;
+  return `CSC-${d}-${crypto.randomUUID().toUpperCase()}`;
 }
 
 async function supabase(path: string, init: RequestInit = {}) {
@@ -187,9 +187,15 @@ export async function POST(request: NextRequest) {
 
     const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(saved.id)}`;
     const qrUrl = `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verificationUrl)}`;
+    // Return only the fields needed for the receipt; never echo contact details or remarks.
+    const receipt = { id: saved.id, name: saved.name, service: saved.service, date: saved.date, time: saved.time, status: saved.status };
     return NextResponse.json({
-      appointment: saved, qrUrl, verificationUrl,
-      notifications: { customerWhatsApp, ownerWhatsApp, customerSMS },
+      appointment: receipt, qrUrl, verificationUrl,
+      notifications: {
+        customerWhatsApp: { sent: customerWhatsApp.sent },
+        ownerWhatsApp: { sent: ownerWhatsApp.sent },
+        customerSMS: { sent: customerSMS.sent },
+      },
     });
   } catch (error) {
     console.error("Appointment booking failed:", error);
