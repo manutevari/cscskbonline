@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type SpeechRecognitionLike = {
@@ -15,6 +16,8 @@ declare global {
 }
 
 export default function CSCLiveVoiceAssistant() {
+  const pathname = usePathname();
+  const isDocumentEditor = pathname === "/document-tools" || pathname.includes("smart-print");
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [input, setInput] = useState("");
@@ -352,8 +355,8 @@ export default function CSCLiveVoiceAssistant() {
           <button className="voice-action" type="submit" disabled={busy || !input.trim()}>{busy ? "…" : "Send"}</button>
         </form>
       </section>}
-      {!open && <button className="voice-fab" onClick={() => { setOpen(true); setMinimized(false); }} aria-label="Open AI voice assistant">🎙 Ask AI</button>}
-      {open && minimized && <button className="voice-fab" style={{ bottom: 20, right: 20 }} onClick={() => setMinimized(false)} aria-label="Expand AI voice assistant">🎙 Open Assistant</button>}
+      {!open && !isDocumentEditor && <button className="voice-fab" onClick={() => { setOpen(true); setMinimized(false); }} aria-label="Open AI voice assistant">🎙 Ask AI</button>}
+      {open && minimized && !isDocumentEditor && <button className="voice-fab" style={{ bottom: 20, right: 20 }} onClick={() => setMinimized(false)} aria-label="Expand AI voice assistant">🎙 Open Assistant</button>}
     </>
   );
 }
