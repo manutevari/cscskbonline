@@ -6,11 +6,9 @@ import { usePathname } from "next/navigation";
 type Appointment = {
   id: string;
   name: string;
-  mobile: string;
   service: string;
   date: string;
   time: string;
-  remarks: string;
   status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 };
 
@@ -101,6 +99,7 @@ export default function CSCAppointmentAssistant() {
   const [remarks, setRemarks] = useState("");
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [qrSrc, setQrSrc] = useState("");
@@ -135,17 +134,28 @@ export default function CSCAppointmentAssistant() {
     if (!open || mode !== "book") return;
     let cancelled = false;
     setLoadingSlots(true);
+    setAvailabilityError("");
+    setBookedSlots([]);
     fetch(`/api/appointments/availability?date=${encodeURIComponent(date)}`, { cache: "no-store" })
-      .then((response) => response.json())
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || !Array.isArray(payload.bookedSlots)) throw new Error(payload.error || "Unable to confirm slot availability.");
+        return payload;
+      })
       .then((payload) => {
         if (!cancelled) {
-          const booked = Array.isArray(payload.bookedSlots) ? payload.bookedSlots : [];
+          const booked = payload.bookedSlots as string[];
           setBookedSlots(booked);
           const firstAvailable = SLOTS.find((slot) => !booked.includes(slot) && (date !== todayISO() || SLOTS.indexOf(slot) * SLOT_STEP + SLOT_START_MINUTES >= currentISTMinutes()));
           if (firstAvailable) setTime(firstAvailable);
         }
       })
-      .catch(() => { if (!cancelled) setBookedSlots([]); })
+      .catch((error) => {
+        if (!cancelled) {
+          setBookedSlots([]);
+          setAvailabilityError(error instanceof Error ? error.message : "Unable to confirm slot availability. Please try again.");
+        }
+      })
       .finally(() => { if (!cancelled) setLoadingSlots(false); });
     return () => { cancelled = true; };
   }, [open, mode, date]);
@@ -156,6 +166,7 @@ export default function CSCAppointmentAssistant() {
   }, [primaryQr, qrSrc]);
 
   const slotDisabled = (slot: string) => {
+    if (loadingSlots || availabilityError) return true;
     if (bookedSlots.includes(slot)) return true;
     if (date !== todayISO()) return false;
     const index = SLOTS.indexOf(slot);
@@ -257,6 +268,7 @@ export default function CSCAppointmentAssistant() {
 
                 <div className="csc-appt-calendar">
                   <div className="csc-appt-section-label">🕘 Choose 15-Minute Time Slot {loadingSlots && <small>Checking availability…</small>}</div>
+                  {availabilityError && <p className="csc-appt-error" role="alert">{availabilityError} Booking is paused until availability can be confirmed.</p>}
                   <div className="csc-appt-slot-grid">
                     {SLOTS.map((slot) => {
                       const disabled = slotDisabled(slot);
