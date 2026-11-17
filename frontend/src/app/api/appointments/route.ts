@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 type Booking = {
@@ -55,7 +56,7 @@ const SLOTS = makeSlots();
 
 function makeId() {
   const d = todayIST().replaceAll("-", "");
-  return `CSC-${d}-${crypto.randomUUID().toUpperCase()}`;
+  return `CSC-${d}-${randomUUID().toUpperCase()}`;
 }
 
 async function supabase(path: string, init: RequestInit = {}) {
@@ -71,11 +72,11 @@ async function supabase(path: string, init: RequestInit = {}) {
   return response.json();
 }
 
-async function sendWhatsApp(to: string, appointment: Booking, role: "customer" | "owner") {
+async function sendWhatsApp(to: string, appointment: Booking, role: "customer" | "owner", verificationToken: string) {
   const token = process.env.WHATSAPP_ACCESS_TOKEN, phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const template = role === "customer" ? process.env.WHATSAPP_CUSTOMER_TEMPLATE : process.env.WHATSAPP_OWNER_TEMPLATE;
   if (!token || !phoneNumberId || !template) return { sent: false, reason: "whatsapp_not_configured" };
-  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}`;
+  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
   const parameters = role === "customer"
     ? [appointment.name, appointment.id, appointment.service, appointment.date, appointment.time, verificationUrl]
     : [appointment.id, appointment.name, appointment.mobile, appointment.service, appointment.date, appointment.time, appointment.status];
@@ -91,12 +92,12 @@ async function sendWhatsApp(to: string, appointment: Booking, role: "customer" |
   return { sent: true };
 }
 
-async function sendSMS(to: string, appointment: Booking) {
+async function sendSMS(to: string, appointment: Booking, verificationToken: string) {
   const authKey = process.env.MSG91_AUTH_KEY;
   const templateId = process.env.MSG91_SMS_TEMPLATE_ID;
   if (!authKey || !templateId) return { sent: false, reason: "sms_not_configured" };
 
-  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}`;
+  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
   const response = await fetch("https://control.msg91.com/api/v5/flow", {
     method: "POST",
     headers: {
@@ -135,12 +136,12 @@ function slotStartMinutes(time: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const name = String(body.name || "").trim();
+    const name = String(body.name || "").trim().slice(0, 100);
     const mobile = cleanPhone(String(body.mobile || ""));
-    const service = String(body.service || "").trim();
+    const service = String(body.service || "").trim().slice(0, 120);
     const date = String(body.date || "").trim();
     const time = String(body.time || "").trim();
-    const remarks = String(body.remarks || "").trim();
+    const remarks = String(body.remarks || "").trim().slice(0, 500);
 
     if (!name || !/^\d{10}$/.test(mobile) || !service || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !slotIsValid(time)) {
       return NextResponse.json({ error: "Invalid appointment details" }, { status: 400 });
@@ -164,13 +165,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409 });
     }
 
+    const verificationToken = randomBytes(32).toString("base64url");
+    const verificationTokenHash = createHash("sha256").update(verificationToken).digest("hex");
     const appointment: Booking = {
       id: makeId(), name, mobile, service, date, time, remarks, status: "BOOKED", created_at: new Date().toISOString(),
     };
 
     let inserted: Booking[];
     try {
-      inserted = await supabase("appointments", { method: "POST", body: JSON.stringify(appointment) });
+      inserted = await supabase("appointments", { method: "POST", body: JSON.stringify({ ...appointment, verification_token_hash: verificationTokenHash }) });
     } catch (error) {
       const message = String(error);
       if (message.includes("appointments_date_time_unique")) {
@@ -180,12 +183,12 @@ export async function POST(request: NextRequest) {
     }
     const saved = inserted[0] || appointment;
     const [customerWhatsApp, ownerWhatsApp, customerSMS] = await Promise.all([
-      sendWhatsApp(mobile, saved, "customer"),
-      sendWhatsApp(OWNER_WHATSAPP, saved, "owner"),
-      sendSMS(mobile, saved),
+      sendWhatsApp(mobile, saved, "customer", verificationToken),
+      sendWhatsApp(OWNER_WHATSAPP, saved, "owner", verificationToken),
+      sendSMS(mobile, saved, verificationToken),
     ]);
 
-    const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(saved.id)}`;
+    const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
     const qrUrl = `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verificationUrl)}`;
     // Return only the fields needed for the receipt; never echo contact details or remarks.
     const receipt = { id: saved.id, name: saved.name, service: saved.service, date: saved.date, time: saved.time, status: saved.status };
