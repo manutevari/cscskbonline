@@ -479,30 +479,43 @@ export default function PrintEditorPage() {
     return formatFileSize(blob.size);
   };
   const compressJpegToLimit = async (source: HTMLCanvasElement, targetBytes: number) => {
-    // Try quality reduction first, then progressively reduce pixel dimensions.
-    // This is more reliable for strict limits (for example 100 KB) than quality-only compression.
+    // Aim for 99.5%-100% of the requested maximum (e.g. 99.5-99.8 KB
+    // under a 100 KB cap), while never exceeding the cap.
+    const minimumUsefulBytes = Math.floor(targetBytes * 0.995);
+    let best: Blob | null = null;
     let scale = 1;
-    let smallest: Blob | null = null;
-    for (let pass = 0; pass < 8; pass++) {
-      let canvas = source;
-      if (scale < 1) {
-        canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(source.width * scale));
-        canvas.height = Math.max(1, Math.round(source.height * scale));
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Compression canvas उपलब्ध नहीं है।");
-        context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(source, 0, 0, canvas.width, canvas.height);
-      }
-      for (const quality of [0.88, 0.72, 0.56, 0.4, 0.28, 0.18, 0.1]) {
+    for (let pass = 0; pass < 10; pass++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(source.width * scale));
+      canvas.height = Math.max(1, Math.round(source.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Compression canvas उपलब्ध नहीं है।");
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+
+      // JPEG size generally increases with quality. Binary search finds the
+      // highest quality whose encoded bytes remain within the requested cap.
+      let low = 0.04, high = 0.98;
+      let passBest: Blob | null = null;
+      for (let attempt = 0; attempt < 13; attempt++) {
+        const quality = (low + high) / 2;
         const blob = await canvasBlob(canvas, "image/jpeg", quality);
-        if (!smallest || blob.size < smallest.size) smallest = blob;
-        if (blob.size <= targetBytes) return blob;
+        if (blob.size <= targetBytes) {
+          if (!passBest || blob.size > passBest.size) passBest = blob;
+          low = quality;
+        } else {
+          high = quality;
+        }
       }
-      scale *= 0.78;
+      if (passBest && (!best || passBest.size > best.size)) best = passBest;
+      if (best && best.size >= minimumUsefulBytes) return best;
+      // If quality alone cannot approach the target, lower dimensions in
+      // measured steps and retry; do not upscale tiny source images.
+      scale *= 0.88;
     }
-    if (smallest && smallest.size <= targetBytes) return smallest;
-    throw new Error("चुनी गई file-size limit में readable output बनाना संभव नहीं हुआ। कृपया limit बढ़ाएँ या कम pages चुनें।");
+    if (best && best.size <= targetBytes) return best;
+    throw new Error("इस file को चुनी गई size limit में encode नहीं किया जा सका। कृपया limit बढ़ाएँ या कम pages चुनें।");
   };
   const createPdf = async (pageIds: number[], targetBytes = 0) => {
     const pdf=await PDFDocument.create();
