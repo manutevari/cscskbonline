@@ -313,7 +313,7 @@ export default function CSCAppointmentAssistant() {
         </div>
       )}
 
-      {pathname !== "/jobs" && <div className="csc-appt-float">
+      {pathname !== "/jobs" && pathname !== "/document-tools" && !pathname.includes("smart-print") && <div className="csc-appt-float">
         {!open && <div className="csc-appt-prompt"><strong>Need a CSC service?</strong><span>Book an appointment</span></div>}
         <button className="csc-appt-fab" onClick={() => { setOpen(true); setMode("menu"); }} aria-label="Book CSC Appointment" title="Book CSC Appointment"><span>📅</span><b>Book Appointment</b></button>
       </div>}

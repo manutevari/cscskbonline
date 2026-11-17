@@ -551,6 +551,43 @@ export default function PrintEditorPage() {
       .pages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pagebtn{padding:7px 9px;border:1px solid #cbd9ce;border-radius:7px;background:white;color:#24533d}.pagebtn.active{background:#176b4d;color:white}
       .margin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.print-pages{display:none}
       @media(max-width:1180px){.workspace{grid-template-columns:minmax(190px,220px) minmax(0,1fr)}.side-details{grid-column:1/-1;position:static;max-height:none}.side-details>.side{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:760px){.workspace{grid-template-columns:1fr}.workspace>.side:first-child{grid-template-columns:1fr 1fr}.side-details{grid-column:auto}.side-details>.side{grid-template-columns:1fr}.stage{width:min(100%,480px)}.toolbar,.panel{margin:6px}.compact-toolbar{gap:5px;padding:6px}.icon-btn{font-size:11px;padding:5px 7px;min-height:32px}.toolbar-spacer{display:none}.editor{padding-bottom:12px}}
+      /* Mobile editor: keep the canvas and controls inside the viewport. */
+      @media(max-width:760px){
+        .editor{width:100%;max-width:100%;overflow-x:clip;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+        .top{padding:9px 12px;gap:6px;align-items:flex-start}
+        .top>div{min-width:0;flex:1}
+        .top h1{font-size:17px;line-height:1.2}
+        .top .small{width:100%;font-size:11px}
+        .compact-toolbar{position:sticky;top:0;display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-width:calc(100% - 12px);gap:6px;padding:7px;margin:6px;border-radius:10px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+        .compact-toolbar .icon-btn{flex:0 0 auto;min-height:36px;font-size:12px;padding:7px 9px}
+        .compact-toolbar .toolbar-spacer{display:none}
+        .download-menu{flex:0 0 auto}
+        .download-options{position:fixed;right:8px;left:8px;top:auto;bottom:calc(12px + env(safe-area-inset-bottom));min-width:0;max-height:55dvh;overflow:auto;z-index:1000}
+        .status{margin:6px 12px;overflow-wrap:anywhere}
+        .workspace{display:flex;flex-direction:column;gap:10px;padding:0 8px;min-height:0;width:100%}
+        .workspace>.stage-wrap{order:0;width:100%;padding:7px}
+        .workspace>.side:first-child{order:1;width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+        .workspace>.side:first-child h2,.workspace>.side:first-child hr,.workspace>.side:first-child>.small,.workspace>.side:first-child>p,.workspace>.side:first-child>.edit-controls{grid-column:1/-1}
+        .workspace>.side:first-child .field{min-width:0}
+        .workspace>.side:first-child .margin-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+        .workspace>.side:first-child>.btn{min-width:0;white-space:normal;overflow-wrap:anywhere}
+        .side-details{order:2;width:100%;position:static;max-height:none;overflow:visible}
+        .side-details>.side{display:grid;grid-template-columns:minmax(0,1fr)}
+        .side-details>summary{position:static}
+        .stage{width:100%!important;max-width:100%;height:auto}
+        .stage-wrap,.side,.side-details{min-width:0;max-width:100%}
+        .pages{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+        .pagebtn{flex:0 0 auto}
+        .field input,.field select{min-width:0;font-size:16px}
+        .edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .thumb{grid-template-columns:20px 48px minmax(0,1fr)}
+        .thumb img{width:48px;height:48px}
+      }
+      @media(max-width:380px){
+        .workspace>.side:first-child{grid-template-columns:minmax(0,1fr)}
+        .workspace>.side:first-child h2,.workspace>.side:first-child hr,.workspace>.side:first-child>.small,.workspace>.side:first-child>p,.workspace>.side:first-child>.edit-controls,.workspace>.side:first-child .margin-grid{grid-column:1}
+        .top h1{font-size:16px}
+      }
       @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>{preset} · {pageSize.w} × {pageSize.h} mm · {orientation === "portrait" ? "Portrait" : "Landscape"}</span></div>
