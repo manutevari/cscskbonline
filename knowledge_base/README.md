@@ -33,10 +33,11 @@ Apply `../supabase/migrations/20261118_002_knowledge_base_rag.sql` to a staging 
 - `POST /v1/documents`: multipart file, `X-Document-Metadata` JSON header, bearer token
 - `POST /v1/documents/{id}/review`: approve/reject, different reviewer required
 - `POST /v1/query`: validated question and top-k
+- `POST /v1/agent`: LangGraph agent with typed read-only tools
 
 All endpoints except health require `Authorization: Bearer $KB_API_TOKEN`. Keep this service private behind a server-to-server integration; do not put the token in browser code.
 
-## Initial limitations / next engineering steps
+## Tool calling framework\n\nThe agent uses LangGraph for orchestration and LangChain Core structured tools. Current tools are deliberately read-only: `search_approved_knowledge` and `get_approved_document_metadata`. Tool arguments are Pydantic-validated; graph recursion is bounded; retrieved documents are treated as untrusted evidence. No write, payment, appointment mutation, SQL, publication or approval tools are exposed. If future tools perform consequential actions, route them through a separate authenticated HITL approval service with verified operator identity and immutable audit events.\n\n## Initial limitations / next engineering steps
 
 - Scanned PDF OCR is not yet wired; text extraction failure is explicit. Integrate OCR in a separate worker with page-level provenance.
 - Add durable ingestion jobs, retry queue, malware scanning, MIME sniffing, rate limits, quotas, audit events, and deletion/retention workflows before broad public use.
