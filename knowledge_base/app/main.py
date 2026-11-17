@@ -69,8 +69,11 @@ def run_agent(request: AgentRequest):
         content = final.content
         answer = content if isinstance(content, str) else str(content)
         tool_calls = sum(len(getattr(m, "tool_calls", []) or []) for m in messages)
-        return AgentResponse(answer=answer, tool_calls=tool_calls,
-                             evidence_status="retrieval_tool_used" if tool_calls else "no_tool_call")
+        return AgentResponse(answer=answer, intent=result.get("intent", "out_of_scope"),
+                             intent_confidence=result.get("intent_confidence", 0.0),
+                             tool_calls=tool_calls,
+                             evidence_status=result.get("evidence_status") or
+                                 ("retrieval_tool_used" if tool_calls else "no_tool_call"))
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Knowledge agent is temporarily unavailable") from exc
 
