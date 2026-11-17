@@ -12,6 +12,9 @@ dependencies = [
   "openai>=1.50,<3",
   "pypdf>=5,<7",
   "python-multipart>=0.0.12,<1",
+  "langchain-core>=0.3,<2",
+  "langchain-openai>=0.3,<2",
+  "langgraph>=0.2,<2",
 ]
 
 [tool.ruff]
