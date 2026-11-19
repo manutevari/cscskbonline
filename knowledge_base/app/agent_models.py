@@ -6,6 +6,7 @@ class Intent(StrEnum):
     SCHEME = "scheme"
     FORM = "form"
     DOCUMENT = "document"
+    RECRUITMENT = "recruitment"
     OUT_OF_SCOPE = "out_of_scope"
 
 
