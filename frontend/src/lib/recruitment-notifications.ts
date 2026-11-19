@@ -62,14 +62,14 @@ function parseLinks(html: string, source: typeof SOURCES[number], checkedAt: str
     const attributes = match[1] || "";
     const hrefMatch = attributes.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
     const href = (hrefMatch && (hrefMatch[1] || hrefMatch[2] || hrefMatch[3]) || "").trim();
-    const title = cleanText(match[2] || "").replace(/\bHM\b|\\|\s*translate/gi, "").replace(/[_{}]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    const title = cleanText(match[2] || "").replace(/\bHM\b|\|\s*translate/gi, "").replace(/[_{}]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
     const titleKey = normalizeTitle(title);
     if (!href || !title || title.length < 3 || NAVIGATION_TITLE.test(titleKey) || !MATCH.test(title + " " + href)) continue;
     try {
       const resolved = new URL(href, source.url);
       const base = new URL(source.url);
       if (resolved.protocol !== "https:" || !(resolved.hostname === base.hostname || resolved.hostname.endsWith("." + base.hostname))) continue;
-      if (resolved.pathname === "/" || /\/(home|login|registration|candidate.?corner|menu|index)(\\.html?)?$/i.test(resolved.pathname)) continue;
+      if (resolved.pathname === "/" || /\/(home|login|registration|candidate.?corner|menu|index)(\.html?)?$/i.test(resolved.pathname)) continue;
       const dedupeKey = titleKey + "|" + resolved.pathname.replace(/\/+$/, "");
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
