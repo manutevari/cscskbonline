@@ -78,7 +78,7 @@ export default function JobsExamDashboard(){
   const stateOk=stateFilter==="All States"||normalizedState===stateFilter||r.state===stateFilter;
   const ageBounds=ageFilter==="All Ages"?null:ageFilter==="18+"?[18,100]:ageFilter.endsWith("+")?[Number(ageFilter.slice(0,-1)),100]:ageFilter.split("–").map(Number);
   const ageOk=!ageBounds||(r.max>=ageBounds[0]&&r.min<=ageBounds[1]);
-  const derivedStatus=recruitmentStatus(r); const statusOk=statusFilter==="All Statuses"||derivedStatus===statusFilter||(statusFilter==="Old"&&tab==="Old");
+  const derivedStatus=recruitmentStatus(r); const statusOk=statusFilter==="All Statuses"||derivedStatus===statusFilter||(statusFilter==="Live"&&Boolean(r.kind))||(statusFilter==="Old"&&tab==="Old");
   const feeText=(r.fee||"").toLowerCase();
   const feeOk=feeFilter==="All Fees"||(feeFilter==="₹0"&&/no fee|free|₹0/.test(feeText))||(feeFilter==="₹100"&&/₹100/.test(feeText))||(feeFilter==="₹500"&&/₹500/.test(feeText))||(feeFilter==="₹0–500"&&/₹0|free|no fee|₹100|₹500/.test(feeText));
   const q=qualificationFilter==="All Qualifications"||r.qual.toLowerCase().includes(qualificationFilter.toLowerCase().replace(" pass",""))||(qualificationFilter==="Other"&&!qualifications.slice(1,10).some(v=>r.qual.toLowerCase().includes(v.toLowerCase())));
