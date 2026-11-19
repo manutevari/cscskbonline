@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core import get_settings
 from .models import ApprovalRequest, DocumentMetadata, IngestResponse, KnowledgeStatus, QueryRequest, QueryResponse
 from .service import ingest, retrieve, clients
+from .live_search import LiveSearchRequest, search_tavily
 from .agent import agent
 from .agent_models import AgentRequest, AgentResponse
 from langchain_core.messages import HumanMessage
@@ -55,6 +56,12 @@ def query_knowledge(request: QueryRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Knowledge retrieval is temporarily unavailable") from exc
 
+
+
+@app.post("/v1/live-search", dependencies=[Depends(require_token)])
+def live_search(request: LiveSearchRequest):
+    """Authenticated Tavily-backed live web search. Results are discovery-only until official notice verification."""
+    return search_tavily(request)
 
 
 @app.post("/v1/agent", response_model=AgentResponse, dependencies=[Depends(require_token)])
