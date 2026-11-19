@@ -33,7 +33,7 @@ export default function JobsPage() {
   const [qualification, setQualification] = useState("All");
   const [age, setAge] = useState("All");
   const [category, setCategory] = useState("All");
-  const [active, setActive] = useState("All");
+  const [active, setActive] = useState("Exam Updates");
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentInput, setAgentInput] = useState("");
   const [agentMessages, setAgentMessages] = useState([{ role: "assistant", text: "Namaste 🙏 CSCSKB Online के भर्ती एवं दस्तावेज़ सहायक में आपका हार्दिक स्वागत है। कृपया बताइए, मैं आपकी किस प्रकार सहायता कर सकती हूँ?\n\nमैं आपको सरकारी भर्ती के आधिकारिक पोर्टल खोजने, भर्ती का नाम चुनने, रिज्यूमे/दस्तावेज़ अपलोड करने और फोटो को सामान्य रूप से resize/compress करने में मार्गदर्शन दूँगा।\n\nआप किस भर्ती के लिए आवेदन करना चाहते हैं? SSC, UPPSC, UPSSSC, Railway या UP Police चुनें। अपना रिज्यूमे (PDF/DOC/DOCX) भी अटैच कर सकते हैं; इस prototype में फाइल की सामग्री AI द्वारा पढ़ी नहीं जाती।\n\nलाइव पोर्टल लिंक-जाँच उपलब्ध है, लेकिन यह verified vacancy feed नहीं है। कोई vacancy, अंतिम तारीख या पात्रता केवल आधिकारिक notification से सत्यापित करें।" }]);
@@ -378,6 +378,27 @@ export default function JobsPage() {
         .portal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.portal-links a{color:#dceeff;text-decoration:none;border:1px solid rgba(255,255,255,.16);background:rgba(11,114,231,.13);border-radius:9px;padding:8px 10px;font-size:.84rem;font-weight:700}.portal-links a:hover{border-color:#ff8a00}
         .jobs-help{margin-top:20px}.jobs-help h2{margin:0 0 10px;color:#fff}.jobs-help li{margin:8px 0;color:#b7c7df;line-height:1.5}
         .jobs-empty{color:#b7c7df}
+        /* Refined portal layout: compact panels, stronger hierarchy, less PDF-like stacking */
+        .jobs-shell{max-width:1240px;padding:clamp(10px,2.2vw,24px)}
+        .jobs-header{border-radius:20px;padding:clamp(18px,3vw,30px);background:linear-gradient(125deg,#123b73 0%,#0b2043 62%,#142c50 100%)}
+        .jobs-header h1{font-size:clamp(1.65rem,4vw,2.75rem)}
+        .jobs-notice{font-size:.9rem;padding:12px 15px;margin:12px 0;border-radius:12px}
+        .section-block{margin:22px 0}
+        .section-heading{margin-bottom:12px}
+        .jobs-filters{gap:10px;margin:14px 0}
+        .jobs-grid{gap:12px}
+        .jobs-card{padding:16px;border-radius:14px}
+        .jobs-card h3{font-size:1.08rem}
+        .portal-tabs{position:sticky;top:6px;z-index:4;background:#071a35;padding:8px 2px 10px;border-radius:12px}
+        .portal-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+        .portal-card{padding:16px;border-radius:14px}
+        .portal-card h3{margin:7px 0;font-size:1.08rem}
+        .portal-card p{font-size:.86rem}
+        .portal-links a{font-size:.78rem;padding:7px 9px}
+        .jobs-help{margin:16px 0 24px;padding:16px;border:1px solid rgba(255,174,0,.25);border-radius:14px;background:linear-gradient(135deg,rgba(255,138,0,.08),rgba(255,255,255,.035))}
+        .jobs-help h2{font-size:1.08rem}
+        .jobs-help ol{padding-left:22px;margin:8px 0}
+        .jobs-help li{margin:7px 0;font-size:.88rem}
         @media(max-width:700px){.jobs-filters,.jobs-grid,.portal-grid,.official-notice-grid{grid-template-columns:1fr}.jobs-header{padding:20px}.portal-tabs{margin-right:-2px}.jobs-card,.portal-card{padding:16px}}
       `}
       </style>
