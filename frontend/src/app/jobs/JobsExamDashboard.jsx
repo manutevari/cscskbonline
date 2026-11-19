@@ -46,7 +46,14 @@ const examCatalog = [
   { exam: "High Court / District Court", category: "Courts", level: "Central / State / District", qualification: "Post-specific", age: "Notification-based", fee: "Notification-based", url: "https://www.sci.gov.in/" },
 ];
 
-const getAgeBounds = (ageText) => {\n  if (!ageText || /notification|entry-specific|exam-specific|student-specific|no upper/i.test(ageText)) return null;\n  const nums = ageText.match(/\\d+/g)?.map(Number) || [];\n  if (nums.length < 2) return null;\n  return { min: Math.min(nums[0], nums[nums.length - 2]), max: Math.max(nums[1], nums[nums.length - 1]) };\n};\n\nconst quickLinks = [
+const getAgeBounds = (ageText) => {
+  if (!ageText || /notification|entry-specific|exam-specific|student-specific|no upper/i.test(ageText)) return null;
+  const nums = ageText.match(/\d+/g)?.map(Number) || [];
+  if (nums.length < 2) return null;
+  return { min: Math.min(nums[0], nums[nums.length - 2]), max: Math.max(nums[1], nums[nums.length - 1]) };
+};
+
+const quickLinks = [
   ["Latest Jobs", "New recruitment notices", "↗"],
   ["Admit Cards", "Download hall tickets", "▣"],
   ["Results", "Result & merit updates", "✓"],
@@ -142,10 +149,12 @@ export default function JobsExamDashboard() {
     const matchesCategory = category === "All" || item.category === category || (category === "Central" && item.level.includes("Central")) || (category === "Uttar Pradesh" && ["UPPSC","UPSSSC","UP Police"].includes(item.category)) || (category === "Other States" && ["Bihar","Rajasthan","Madhya Pradesh","Jharkhand"].includes(item.category)) || (category === "District" && item.level.includes("District"));
     const matchesLevel = level === "All" || item.level.includes(level);
     const matchesQualification = qualification === "All" || item.qualification.toLowerCase().includes(qualification.toLowerCase());
-    const matchesAge = age === "All" || item.age.toLowerCase().includes(age.toLowerCase()) || item.age === "Notification-based" || item.age === "Entry-specific";
-    const matchesFee = fee === "All" || item.fee.toLowerCase().includes(fee.toLowerCase()) || item.fee === "Notification-based";
-    const matchesZero = !zeroFee || item.fee.toLowerCase().includes("free") || item.fee.toLowerCase().includes("exemption");
-    const matchesStatus = status === "All" || status === "Official check required";
+    const candidateAge = age === "All" ? null : Number(age);
+    const ageBounds = getAgeBounds(item.age);
+    const matchesAge = age === "All" || (ageBounds && candidateAge >= ageBounds.min && candidateAge <= ageBounds.max);
+    const matchesFee = fee === "All" || (typeof item.feeAmount === "number" && (fee === "0" ? item.feeAmount === 0 : fee === "100" ? item.feeAmount <= 100 : fee === "200" ? item.feeAmount <= 200 : fee === "500" ? item.feeAmount <= 500 : false));
+    const matchesZero = !zeroFee || item.feeAmount === 0;
+    const matchesStatus = status === "All" || item.verificationStatus === "verified";
     return matchesSearch && matchesCategory && matchesLevel && matchesQualification && matchesAge && matchesFee && matchesZero && matchesStatus;
   }), [search, category, level, qualification, age, fee, zeroFee, status]);
 
