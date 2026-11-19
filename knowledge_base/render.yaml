@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: cscskb-knowledge-base
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: knowledge_base/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: KB_API_TOKEN
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: EMBEDDING_DIMENSIONS
+        value: "1536"
+      - key: KB_ALLOWED_ORIGINS
+        value: https://cscskb.online,https://www.cscskb.online
