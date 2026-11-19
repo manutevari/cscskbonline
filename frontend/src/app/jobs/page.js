@@ -216,11 +216,7 @@ export default function JobsPage() {
     setAgentInput("");
     askConversationAgent(message);
   }
-  useEffect(() => {
-    refreshOfficialNotices();
-    const timer = window.setInterval(() => refreshOfficialNotices(), 5 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+
 
   const filtered = useMemo(() => jobs.filter((job) => {
     const qMatch = qualification === "All" || job.qualification.toLowerCase().includes(qualification.toLowerCase());
