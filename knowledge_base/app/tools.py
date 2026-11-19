@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal\nimport json
+from typing import Literal
+import json
 from pydantic import BaseModel, ConfigDict, Field
 from langchain_core.tools import tool, BaseTool
 
