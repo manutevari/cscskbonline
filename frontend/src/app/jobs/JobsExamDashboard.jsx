@@ -64,6 +64,7 @@ const quickLinks = [
 
 const css = `
   .jobportal * { box-sizing: border-box; }
+  .jobportal footer, .jobportal .jp-footer, .jobportal [class*="footer"] { display:none !important; }
   .jobportal { color:#15233d; font-family:Arial,'Noto Sans Devanagari',sans-serif; background:#f3f6fb; min-height:100vh; }
   .jp-shell { max-width:1380px; margin:auto; padding:0 22px 44px; }
   .jp-header { background:#102d59; color:#fff; }
