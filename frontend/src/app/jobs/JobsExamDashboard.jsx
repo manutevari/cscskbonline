@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const categories = [
   { name: "Central", icon: "🇮🇳", groups: ["SSC", "Railway", "Banking", "Insurance", "Defence", "UPSC", "Central Teaching", "Courts", "Other Central"] },
@@ -138,7 +138,7 @@ export default function JobsExamDashboard() {
   const [fee, setFee] = useState("All");
   const [status, setStatus] = useState("All");
   const [zeroFee, setZeroFee] = useState(false);
-  const [selectedExam, setSelectedExam] = useState(null);
+  const [selectedExam, setSelectedExam] = useState(null);\n  const [liveFeed, setLiveFeed] = useState(null);\n  const [feedLoading, setFeedLoading] = useState(false);\n  const [feedError, setFeedError] = useState("");\n  const loadLiveFeed = async (force = false) => {\n    setFeedLoading(true); setFeedError("");\n    try { const res = await fetch(`/api/recruitment/live${force ? "?refresh=1" : ""}`, { cache: "no-store" }); if (!res.ok) throw new Error("Live feed request failed"); const data = await res.json(); setLiveFeed(data); }\n    catch { setFeedError("Live scan is temporarily unavailable. Please open official portals."); }\n    finally { setFeedLoading(false); }\n  };\n  useEffect(() => { loadLiveFeed(false); const timer = setInterval(() => loadLiveFeed(false), 5 * 60 * 1000); return () => clearInterval(timer); }, []);
 
   const categoryNames = ["All", ...categories.map(c => c.name)];
   const activeCategory = categories.find(c => c.name === category);
@@ -187,7 +187,7 @@ export default function JobsExamDashboard() {
           </form>
         </section>
 
-        <div className="jp-layout">
+\n        <section className="jp-panel" id="live-notices" style={{marginBottom:16}}>\n          <div className="jp-sectionhead"><div><h2>Live Recruitment Notices</h2><div className="jp-muted">Official portal link scan · includes UPESSC / teaching notices</div></div><button className="jp-chip" disabled={feedLoading} onClick={() => loadLiveFeed(true)}>{feedLoading ? "Checking portals…" : "↻ Refresh Live Updates"}</button></div>\n          <div className="jp-muted" style={{marginBottom:10}}>Last checked: {liveFeed?.checkedAt ? new Date(liveFeed.checkedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : "Not checked yet"} · Refreshes automatically every 5 minutes while this page is open.</div>\n          {feedError && <div className="jp-note">{feedError}</div>}\n          {liveFeed?.sources?.length > 0 && <div className="jp-vmeta">{liveFeed.sources.map(src=><span className="jp-tag" key={src.name}>{src.status === "ok" ? "✓" : "⚠"} {src.name} · {src.noticeCount} links</span>)}</div>}\n          {liveFeed?.notices?.filter(n => !search.trim() || (n.title + " " + n.board + " " + n.kind).toLowerCase().includes(search.toLowerCase().trim())).slice(0,12).map(notice=><article className="jp-vacancy" key={notice.id}><div className="jp-sectionhead" style={{marginBottom:5}}><div className="jp-vtitle">{notice.title}</div><span className="jp-tag">{notice.board}</span></div><div className="jp-vmeta"><span className="jp-tag">{notice.kind.replace("-", " ")}</span><span className="jp-tag">Source scanned</span></div><a className="jp-link" href={notice.url} target="_blank" rel="noopener noreferrer">Open official notice / source ↗</a></article>)}\n          {liveFeed && (!liveFeed.notices?.length || (search.trim() && !liveFeed.notices.some(n => (n.title + " " + n.board + " " + n.kind).toLowerCase().includes(search.toLowerCase().trim())))) && <div className="jp-note">No matching live links were detected in this scan. Try Refresh or open the official portals below.</div>}\n          <div className="jp-note">{liveFeed?.disclaimer || "A scan of official portal links is not a verified vacancy feed. Always open the notice and confirm details."}</div>\n        </section>\n\n        <div className="jp-layout">
           <aside className="jp-left jp-panel">
             <h3 style={{fontSize:15}}>Browse Categories</h3>
             <div className="jp-cats">
