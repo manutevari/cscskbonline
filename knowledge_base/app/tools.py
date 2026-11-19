@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal\nimport json
 from pydantic import BaseModel, ConfigDict, Field
 from langchain_core.tools import tool, BaseTool
 
@@ -52,7 +52,7 @@ def get_approved_document_metadata(document_id: str) -> str:
 @tool("tavily_live_recruitment_search", args_schema=TavilySearchArgs)
 def tavily_live_recruitment_search(query: str, state: str | None = None, category: str | None = None, language: str = "auto") -> str:
     """Search the live web using Tavily for current recruitment notices. Results are unverified discovery links, not proof of open application status. Prefer official government domains and tell the user to verify the source notice."""
-    return str(search_tavily(LiveSearchRequest(query=query, state=state, category=category, language=language)))
+    return json.dumps(search_tavily(LiveSearchRequest(query=query, state=state, category=category, language=language)), ensure_ascii=False)
 
 
 READ_ONLY_TOOLS: list[BaseTool] = [search_approved_knowledge, get_approved_document_metadata, tavily_live_recruitment_search]
