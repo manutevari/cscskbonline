@@ -6,12 +6,21 @@ from langchain_core.tools import tool, BaseTool
 
 from .models import QueryRequest
 from .service import retrieve
+from .live_search import LiveSearchRequest, search_tavily
 
 
 class SchemeSearchArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question: str = Field(min_length=3, max_length=1200, description="Question about a government scheme or CSC procedure")
     category: str | None = Field(default=None, max_length=100)
+    language: Literal["auto", "hi", "en", "hinglish"] = "auto"
+
+
+class TavilySearchArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=3, max_length=500, description="Recruitment, government job, notification or official notice query")
+    state: str | None = Field(default=None, max_length=80)
+    category: str | None = Field(default=None, max_length=80)
     language: Literal["auto", "hi", "en", "hinglish"] = "auto"
 
 
@@ -40,4 +49,10 @@ def get_approved_document_metadata(document_id: str) -> str:
     return str(response.data)
 
 
-READ_ONLY_TOOLS: list[BaseTool] = [search_approved_knowledge, get_approved_document_metadata]
+@tool("tavily_live_recruitment_search", args_schema=TavilySearchArgs)
+def tavily_live_recruitment_search(query: str, state: str | None = None, category: str | None = None, language: str = "auto") -> str:
+    """Search the live web using Tavily for current recruitment notices. Results are unverified discovery links, not proof of open application status. Prefer official government domains and tell the user to verify the source notice."""
+    return str(search_tavily(LiveSearchRequest(query=query, state=state, category=category, language=language)))
+
+
+READ_ONLY_TOOLS: list[BaseTool] = [search_approved_knowledge, get_approved_document_metadata, tavily_live_recruitment_search]
