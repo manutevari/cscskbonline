@@ -48,52 +48,10 @@ export default function JobsPage() {
   const voiceSilenceTimerRef = useRef(null);
   const voiceTranscriptRef = useRef("");
   const voiceSessionRef = useRef(false);
-  const [liveData, setLiveData] = useState(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  const [liveError, setLiveError] = useState("");
   const [privacyConsent, setPrivacyConsent] = useState(false);
 
-  async function refreshLiveRecruitment() {
-    setLiveLoading(true);
-    setLiveError("");
-    try {
-      const response = await fetch("/api/recruitment/live", { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error("अभी लाइव अपडेट प्राप्त नहीं हो सके।");
-      setLiveData(data);
-    } catch (error) {
-      setLiveError(error.message || "लाइव अपडेट प्राप्त नहीं हो सके। कृपया फिर कोशिश करें।");
-    } finally {
-      setLiveLoading(false);
-    }
-  }
 
-  const [liveFeed, setLiveFeed] = useState(null);
-  const [liveFeedLoading, setLiveFeedLoading] = useState(false);
-  const [liveFeedError, setLiveFeedError] = useState("");
-  const [feedLanguage, setFeedLanguage] = useState("both");
 
-  async function refreshOfficialNotices(force = false) {
-    setLiveFeedLoading(true);
-    setLiveFeedError("");
-    try {
-      const response = await fetch("/api/recruitment/live" + (force ? "?refresh=1" : ""), { cache: "no-store" });
-      if (!response.ok) throw new Error("Official portal scan is unavailable right now.");
-      const data = await response.json();
-      setLiveFeed(data);
-    } catch {
-      setLiveFeedError("अभी official notifications प्राप्त नहीं हो सके। / Official notices could not be fetched right now.");
-    } finally {
-      setLiveFeedLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    refreshLiveRecruitment();
-    const timer = window.setInterval(refreshLiveRecruitment, 5 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-  
 
   function addAgentMessage(role, text) {
     setAgentMessages((previous) => [...previous, { role, text }]);
@@ -286,73 +244,6 @@ export default function JobsPage() {
       </section>
 
       <JobsExamDashboard />
-
-      <section className="section-block live-recruitment" aria-live="polite">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">LIVE OFFICIAL PORTAL CHECK</span>
-            <h2>Live Recruitment &amp; Exam Updates</h2>
-            <p>आधिकारिक भर्ती पोर्टलों को सीधे अभी चेक किया जा रहा है। पेज खुला रहने पर हर 5 मिनट में फिर से जाँच होगी।</p>
-          </div>
-          <button type="button" className="live-refresh" onClick={refreshLiveRecruitment} disabled={liveLoading}>
-            {liveLoading ? "जाँच जारी है…" : "↻ अभी अपडेट जाँचें"}
-          </button>
-        </div>
-        {liveError && <p className="live-error" role="status">{liveError}</p>}
-        {!liveData && liveLoading && <p className="jobs-empty">Namaste 🙏 कृपया प्रतीक्षा करें—आधिकारिक पोर्टल चेक किए जा रहे हैं…</p>}
-        {liveData && <>
-          <p className="live-meta">पिछली जाँच: {new Date(liveData.checkedAt).toLocaleString("hi-IN")} · मिले लिंक: {liveData.totalUpdates}</p>
-          <div className="portal-grid">
-            {(Array.isArray(liveData.portals) ? liveData.portals : []).map((portal) => <article className="portal-card" key={portal.name}>
-              <span className="eyebrow">{portal.category}</span>
-              <h3>{portal.name}</h3>
-              <p>{portal.status === "checked" ? "पोर्टल से अभी संपर्क हुआ" : "यह पोर्टल अभी उपलब्ध नहीं है"}</p>
-              {portal.updates.length > 0
-                ? <div className="portal-links">{portal.updates.map((item, index) => <a key={item.url + index} href={item.url} target="_blank" rel="noreferrer">{item.title} ↗</a>)}</div>
-                : <p className="jobs-empty">{portal.status === "checked" ? "मुख्य पेज पर पहचानने योग्य भर्ती/परीक्षा लिंक नहीं मिले। आधिकारिक वेबसाइट खोलकर नवीनतम नोटिस देखें।" : "कृपया नीचे आधिकारिक वेबसाइट खोलकर देखें।"}</p>}
-              <div className="portal-links"><a href={portal.url} target="_blank" rel="noreferrer">आधिकारिक पोर्टल खोलें ↗</a></div>
-            </article>)}
-          </div>
-          <p className="live-disclaimer">ध्यान दें: यह लाइव वेबसाइट-जाँच है, आधिकारिक भर्ती डेटाबेस/API नहीं। यह पेज पर दिखने वाले लिंक पहचानता है; इससे vacancy की स्थिति, अंतिम तारीख या पात्रता की पुष्टि नहीं होती। अंतिम जानकारी आधिकारिक notification से जाँचें।</p>
-        </>}
-      </section>
-
-      <section className="official-notices" aria-labelledby="official-notices-heading">
-        <div className="official-notices-head">
-          <div>
-            <span className="eyebrow">OFFICIAL SOURCE SCAN • आधिकारिक स्रोत</span>
-            <h2 id="official-notices-heading">Live Recruitment & Exam Notifications / लाइव भर्ती एवं परीक्षा सूचनाएँ</h2>
-            <p>Links are scanned from official portal homepages every 5 minutes. A link is a lead to check—not proof that a vacancy is active.</p>
-          </div>
-          <div className="official-notice-actions">
-            <label>Language / भाषा
-              <select value={feedLanguage} onChange={(e) => setFeedLanguage(e.target.value)}>
-                <option value="both">Hindi + English / हिंदी + English</option>
-                <option value="hi">Hindi / हिंदी</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <button type="button" onClick={() => refreshOfficialNotices(true)} disabled={liveFeedLoading}>{liveFeedLoading ? "Checking… / जाँच रहे हैं…" : "Check now / अभी जाँचें"}</button>
-          </div>
-        </div>
-        {liveFeed?.checkedAt && <p className="official-notice-meta">Last checked / अंतिम जाँच: {new Date(liveFeed.checkedAt).toLocaleString()} • Sources: {(liveFeed.sources || []).filter((x) => x.status === "ok").length}/{(liveFeed.sources || []).length} reachable</p>}
-        {liveFeedError && <p className="official-notice-error" role="status">{liveFeedError}</p>}
-        {liveFeed && <div className="official-source-status">
-          {(liveFeed.sources || []).map((source) => <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className={source.status === "ok" ? "source-ok" : "source-down"}>
-            <span>{source.name}</span><small>{source.status === "ok" ? (feedLanguage === "en" ? "Checked" : feedLanguage === "hi" ? "जाँचा गया" : "Checked / जाँचा गया") : (feedLanguage === "en" ? "Unavailable" : feedLanguage === "hi" ? "उपलब्ध नहीं" : "Unavailable / उपलब्ध नहीं")}</small>
-          </a>)}
-        </div>}
-        {liveFeed && liveFeed.notices?.length > 0 ? <div className="official-notice-grid">
-          {liveFeed.notices.map((notice) => <article key={notice.id} className="official-notice-card">
-            <div className="official-notice-tags"><span>{notice.board}</span><span>{notice.kind.replace("-", " ")}</span></div>
-            <h3>{notice.title}</h3>
-            <p>{feedLanguage === "en" ? "Detected on the official portal. Open the source to verify details." : feedLanguage === "hi" ? "आधिकारिक पोर्टल पर लिंक मिला है। तारीख और पात्रता के लिए मूल नोटिस खोलें।" : "Official portal link detected. / आधिकारिक पोर्टल पर लिंक मिला है।"}</p>
-            <a href={notice.url} target="_blank" rel="noreferrer">{feedLanguage === "en" ? "Open official notice ↗" : feedLanguage === "hi" ? "आधिकारिक नोटिस खोलें ↗" : "Open official notice / नोटिस खोलें ↗"}</a>
-            <small>{feedLanguage === "en" ? "Link scan, not vacancy verification" : feedLanguage === "hi" ? "लिंक स्कैन, भर्ती की पुष्टि नहीं" : "Link scan, not vacancy verification / भर्ती की पुष्टि नहीं"}</small>
-          </article>)}
-        </div> : liveFeed && <p className="official-notice-empty">{feedLanguage === "en" ? "No matching notice links were extracted from the portal homepages. This does not mean no vacancies exist; open the official portals above." : feedLanguage === "hi" ? "पोर्टल के मुख्य पृष्ठों से कोई संबंधित लिंक नहीं मिला। इसका अर्थ यह नहीं कि भर्ती नहीं है; आधिकारिक पोर्टल खोलें।" : "No notice links extracted / कोई लिंक नहीं मिला। This does not prove there are no vacancies / इसका अर्थ भर्ती न होना नहीं है।"}</p>}
-        <p className="official-notice-disclaimer">{feedLanguage === "en" ? liveFeed?.disclaimer : feedLanguage === "hi" ? "यह जाँच आधिकारिक वेबसाइट के मुख्य पृष्ठ पर उपलब्ध लिंक देखती है, कोई आधिकारिक API या पूरी vacancy database नहीं है। अंतिम तारीख, पात्रता और active status मूल notification में जाँचें।" : "Automated homepage link scan—not an official API or verified vacancy database. / यह स्वचालित लिंक-जाँच है, पूरी सत्यापित भर्ती सूची नहीं।"}</p>
-      </section>
 
       <section id="latest-jobs" className="section-block">
         <div className="section-heading"><div><span className="eyebrow">FIND YOUR OPPORTUNITY</span><h2>Latest Jobs &amp; Recruitment</h2><p>योग्यता और आयु के आधार पर भर्ती लिंक छाँटें।</p></div></div>
