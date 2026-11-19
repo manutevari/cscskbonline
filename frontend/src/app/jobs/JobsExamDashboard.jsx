@@ -46,7 +46,7 @@ const examCatalog = [
   { exam: "High Court / District Court", category: "Courts", level: "Central / State / District", qualification: "Post-specific", age: "Notification-based", fee: "Notification-based", url: "https://www.sci.gov.in/" },
 ];
 
-const quickLinks = [
+const getAgeBounds = (ageText) => {\n  if (!ageText || /notification|entry-specific|exam-specific|student-specific|no upper/i.test(ageText)) return null;\n  const nums = ageText.match(/\\d+/g)?.map(Number) || [];\n  if (nums.length < 2) return null;\n  return { min: Math.min(nums[0], nums[nums.length - 2]), max: Math.max(nums[1], nums[nums.length - 1]) };\n};\n\nconst quickLinks = [
   ["Latest Jobs", "New recruitment notices", "↗"],
   ["Admit Cards", "Download hall tickets", "▣"],
   ["Results", "Result & merit updates", "✓"],
@@ -165,7 +165,7 @@ export default function JobsExamDashboard() {
       <div className="jp-shell">
         <div className="jp-ticker" aria-label="Recruitment notification ticker">
           <span className="jp-tickerlabel">LATEST UPDATES</span>
-          <div className="jp-tickertext">Official notification updates will appear here after source verification · Search exams by category, qualification, age and application fee.</div>
+          <div className="jp-tickertext">Directory listings only · Vacancy status and fee/age details require official notification verification.</div>
         </div>
         <section className="jp-hero">
           <div style={{fontSize:11,fontWeight:900,letterSpacing:".15em",color:"#bddcff"}}>YOUR NEXT OPPORTUNITY STARTS HERE</div>
@@ -194,11 +194,11 @@ export default function JobsExamDashboard() {
               <div className="jp-filtergrid">
                 <div><label>Exam Level</label><select value={level} onChange={e=>setLevel(e.target.value)}><option>All</option><option>Central</option><option>State</option><option>District</option><option>School</option><option>Entrance</option><option>Certification</option></select></div>
                 <div><label>Qualification</label><select value={qualification} onChange={e=>setQualification(e.target.value)}><option>All</option><option>10th</option><option>12th</option><option>Graduate</option><option>Postgraduate</option><option>Diploma</option><option>ITI</option></select></div>
-                <div><label>Age Group</label><select value={age} onChange={e=>setAge(e.target.value)}><option>All</option><option>18</option><option>20</option><option>25</option><option>30</option><option>35</option><option>40</option></select></div>
-                <div><label>Application Fee</label><select value={fee} onChange={e=>setFee(e.target.value)}><option>All</option><option>Free</option><option>100</option><option>200</option><option>500</option></select></div>
+                <div><label>Candidate Age (indicative range)</label><select value={age} onChange={e=>setAge(e.target.value)}><option>All</option><option>18</option><option>20</option><option>25</option><option>30</option><option>35</option><option>40</option></select></div>
+                <div><label>Maximum Verified Fee</label><select value={fee} onChange={e=>setFee(e.target.value)}><option>All</option><option value="0">₹0</option><option value="100">Up to ₹100</option><option value="200">Up to ₹200</option><option value="500">Up to ₹500</option></select></div>
               </div>
-              <div className="jp-zero"><input id="zeroFee" type="checkbox" checked={zeroFee} onChange={e=>setZeroFee(e.target.checked)}/><label htmlFor="zeroFee">Only free / fee-exempt options</label></div>
-              <div className="jp-zero"><label style={{margin:0,fontWeight:800}}>Notification:</label><select value={status} onChange={e=>setStatus(e.target.value)} style={{border:"1px solid #dce4ee",borderRadius:7,padding:"6px 8px",background:"#fff",fontSize:12}}><option>All</option><option>Official check required</option></select><span className="jp-muted">Status verification will be connected to live feeds</span></div>
+              <div className="jp-zero"><input id="zeroFee" type="checkbox" checked={zeroFee} onChange={e=>setZeroFee(e.target.checked)}/><label htmlFor="zeroFee">Only verified ₹0 application fees</label></div>
+              <div className="jp-zero"><label style={{margin:0,fontWeight:800}}>Notification:</label><select value={status} onChange={e=>setStatus(e.target.value)} style={{border:"1px solid #dce4ee",borderRadius:7,padding:"6px 8px",background:"#fff",fontSize:12}}><option>All</option><option value="verified">Officially verified only</option></select><span className="jp-muted">Status verification will be connected to live feeds</span></div>
             </div>
 
             <div className="jp-panel" id="vacancies" style={{marginTop:14}}>
@@ -206,9 +206,9 @@ export default function JobsExamDashboard() {
               {filtered.map(item=><article className="jp-vacancy" key={item.exam}>
                 <div className="jp-sectionhead" style={{marginBottom:5}}><div className="jp-vtitle">{item.exam}</div><span className="jp-tag">{item.category}</span></div>
                 <div className="jp-vmeta"><span className="jp-tag">{item.level}</span><span className="jp-tag">Qualification: {item.qualification}</span></div>
-                <div className="jp-vrow"><div><small>Age (indicative)</small><strong>{item.age}</strong></div><div><small>Fee</small><strong>{item.fee}</strong></div><div><small>Dates / Vacancy</small><strong>Official notice</strong></div></div>
+                <div className="jp-vrow"><div><small>Age (indicative; notice may differ)</small><strong>{item.age}</strong></div><div><small>Fee</small><strong>{item.fee}</strong></div><div><small>Verification</small><strong>Not verified</strong></div></div>
                 <div style={{display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",alignItems:"center"}}><button onClick={()=>setSelectedExam(selectedExam===item.exam?null:item.exam)} className="jp-chip">{selectedExam===item.exam?"Hide details":"Eligibility & Details"}</button><a className="jp-link" href={item.url} target="_blank" rel="noopener noreferrer">Official website / Apply ↗</a></div>
-                {selectedExam===item.exam&&<div className="jp-note"><strong>Important:</strong> This is a directory entry, not a confirmed active vacancy. Check the linked official notification for exact age cutoff, relaxations, qualification, category-wise vacancies, fee, opening/closing dates and application link before applying.</div>}
+                {selectedExam===item.exam&&<div className="jp-note"><strong>Important:</strong> Directory reference only—not a confirmed active vacancy. Unknown age or fee data will not qualify for numeric filters. Verify cutoff date, relaxation, qualification, fees, vacancies and dates in the official notice.</div>}
               </article>)}
               {filtered.length===0&&<div className="jp-note">No matching exams. Try clearing filters or searching another exam name.</div>}
             </div>
