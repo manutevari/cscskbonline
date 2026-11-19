@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     kb_api_token: SecretStr
     kb_allowed_origins: str = "https://cscskb.online,https://www.cscskb.online"
-    max_upload_bytes: int = 15_000_000
+    tavily_api_key: SecretStr | None = None\n    max_upload_bytes: int = 15_000_000
 
     @field_validator("embedding_dimensions")
     @classmethod
