@@ -21,7 +21,7 @@ const SOURCES = [
   { name: "UPPSC", url: "https://uppsc.up.nic.in/" },
   { name: "UPSSSC", url: "https://upsssc.gov.in/" },
   { name: "Railway Recruitment Board", url: "https://www.rrbapply.gov.in/" },
-  { name: "UP Police Recruitment Board", url: "https://uppbpb.gov.in/" },\n  { name: "UPESSC", url: "https://upessc.up.gov.in/" },\n  { name: "UPESSC OTR Portal", url: "https://apply.upessc.org/" },
+  { name: "UP Police Recruitment Board", url: "https://uppbpb.gov.in/" },\n  { name: "UPESSC Official Website", url: "https://www.upessc.up.gov.in/" },\n  { name: "UPESSC OTR / Recruitment Portal", url: "https://apply.upessc.org/" },
 ];
 
 const MATCH = /(notification|notice|recruitment|vacanc|advertisement|apply online|admit.?card|answer.?key|result|exam|examination|selection|important date|latest|tgt|pgt|teacher|assistant professor|assistant teacher|lecturer|प्रवक्ता|अध्यापक|शिक्षक|भर्ती|अधिसूचना|विज्ञापन|प्रवेश पत्र|उत्तर कुंजी|परिणाम|परीक्षा|नोटिस)/i;
