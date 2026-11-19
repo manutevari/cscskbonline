@@ -323,7 +323,7 @@ export default function JobsPage() {
           <span aria-hidden="true" className="jobs-agent-spark">✦</span><span>{agentOpen ? "चैट बंद करें" : "Document Checker Assistant"}</span>
         </button>
       </div>
-      <footer className="jobs-footer">CSCSKB Online • यह सूचना-सहायक पोर्टल है; अंतिम पुष्टि संबंधित आधिकारिक भर्ती पोर्टल पर करें।</footer>
+
       <style jsx>{`
 
         .jobs-agent-flow{margin:5px 10px;padding:8px;border:1px solid rgba(110,180,255,.32);border-radius:12px;background:#0b2043;max-height:165px;overflow-y:auto;flex-shrink:0}.jobs-agent-flow-title{display:flex;justify-content:space-between;gap:8px;font-weight:900;font-size:.86rem}.jobs-agent-flow-title small{color:#9fc8ff;font-size:.7rem}.jobs-agent-progress{height:5px;background:#20395b;border-radius:999px;margin:9px 0;overflow:hidden}.jobs-agent-progress span{display:block;height:100%;background:#ff8a00;transition:width .2s}.jobs-agent-step{display:grid;gap:8px;font-size:.82rem;line-height:1.45}.jobs-agent-step p{margin:0;color:#c8d7ec}.jobs-agent-step select{width:100%;padding:9px;border-radius:8px;background:#071a35;color:white;border:1px solid #47658c}.jobs-agent-step button{padding:9px;border:0;border-radius:8px;background:#ff8a00;color:#160c00;font-weight:900;cursor:pointer}.jobs-agent-step button:disabled{opacity:.5}.jobs-agent-file-list{padding:8px 10px;font-size:.75rem;color:#dceeff}.jobs-agent-file-list>div{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid #294361;overflow-wrap:anywhere}.jobs-agent-file-list button{flex-shrink:0;background:#5b2330;color:white;border:0;border-radius:6px;padding:5px;font-size:.7rem}.jobs-agent-spark{animation:jobsBob 1.7s ease-in-out infinite}@keyframes jobsBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -377,7 +377,7 @@ export default function JobsPage() {
         .jobs-apply{margin-top:10px}.portal-tabs{display:flex;gap:8px;overflow-x:auto;padding:3px 1px 12px}.portal-tabs button{flex:0 0 auto;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:#102748;color:#dbeafe;padding:10px 14px;font-weight:800;cursor:pointer}.portal-tabs button.selected{background:#ff8a00;color:#160c00;border-color:#ff8a00}
         .portal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.portal-links a{color:#dceeff;text-decoration:none;border:1px solid rgba(255,255,255,.16);background:rgba(11,114,231,.13);border-radius:9px;padding:8px 10px;font-size:.84rem;font-weight:700}.portal-links a:hover{border-color:#ff8a00}
         .jobs-help{margin-top:20px}.jobs-help h2{margin:0 0 10px;color:#fff}.jobs-help li{margin:8px 0;color:#b7c7df;line-height:1.5}
-        .jobs-empty{color:#b7c7df}.jobs-footer{text-align:center;color:#8298b8;font-size:.8rem;padding:26px 0}
+        .jobs-empty{color:#b7c7df}
         @media(max-width:700px){.jobs-filters,.jobs-grid,.portal-grid,.official-notice-grid{grid-template-columns:1fr}.jobs-header{padding:20px}.portal-tabs{margin-right:-2px}.jobs-card,.portal-card{padding:16px}}
       `}
       </style>
