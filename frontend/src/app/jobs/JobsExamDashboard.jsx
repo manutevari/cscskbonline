@@ -247,7 +247,7 @@ export default function JobsExamDashboard() {
           <div className="jp-sectionhead"><h2 style={{fontSize:18,margin:0}}>School & Entrance Exams</h2><span className="jp-muted">Class 9–12 · Boards · Entrance</span></div>
           <div className="jp-bottomcats">{["UP Board","CBSE","ICSE","NEET / JEE","CUET","NVS / JNVST","Sainik School","Other Boards","School Results","Admit Cards"].map((name,i)=><button className="jp-bottomcat" key={name} onClick={()=>{setCategory(name==="NEET / JEE"||name==="CUET"?"Entrance":"School Exams");setSearch(name);document.getElementById("exam-list")?.scrollIntoView({behavior:"smooth"});}}><span>{["🏫","📘","📗","🧪","🎓","🏫","🛡️","📚","✓","▣"][i]}</span><strong>{name}</strong></button>)}</div>
         </section>
-        <footer style={{display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",borderTop:"1px solid #e2e8f0",marginTop:20,paddingTop:14,color:"#75849a",fontSize:11}}>CSCSKB Online · Jobs & Exams <span>Always verify eligibility and dates from the official notification.</span></footer>
+
       </div>
     </main>
   );
