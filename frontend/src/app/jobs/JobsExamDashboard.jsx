@@ -1,276 +1,60 @@
 "use client";
+import { useMemo, useState } from "react";
 
-import { useEffect, useMemo, useState } from "react";
-
-const categories = [
-  { name: "Central", icon: "🇮🇳", groups: ["SSC", "Railway", "Banking", "Insurance", "Defence", "UPSC", "Central Teaching", "Courts", "Other Central"] },
-  { name: "Uttar Pradesh", icon: "📍", groups: ["UPPSC", "UPSSSC", "UP Police", "UP TET", "UP Teaching", "UP Courts", "Other UP"] },
-  { name: "Other States", icon: "🗺️", groups: ["Bihar", "Rajasthan", "Madhya Pradesh", "Jharkhand", "Delhi", "Other State"] },
-  { name: "District", icon: "🏛️", groups: ["District Recruitment", "Local Bodies", "District Courts"] },
-  { name: "Teaching", icon: "🎓", groups: ["CTET", "State TET", "REET", "Bihar TET", "Jharkhand TET", "MP TET", "UP TET", "PRT", "TGT", "PGT", "D.El.Ed / BTC", "B.Ed"] },
-  { name: "Defence", icon: "🛡️", groups: ["Army", "Agniveer Army", "Navy", "Agniveer Navy", "Air Force", "Agniveer Vayu", "NDA", "CDS", "TES", "Coast Guard"] },
-  { name: "Entrance", icon: "📚", groups: ["NEET", "JEE", "CUET", "NVS", "JNVST", "Sainik School", "Other Entrance"] },
-  { name: "School Exams", icon: "🏫", groups: ["Class 9", "Class 10", "Class 11", "Class 12", "UP Board", "CBSE", "ICSE", "Other Boards"] },
-  { name: "Computer & Skills", icon: "💻", groups: ["CCC", "CPC", "CPCT", "RSCIT", "IAF / IBF", "DR", "Computer Certification", "Other Skills"] },
-  { name: "Other Exams", icon: "🔎", groups: ["High Court", "Supreme Court", "Lower Courts", "Intelligence Bureau", "Other Recruitment"] },
+const rowsAll = [
+{exam:"SSC CGL",cat:"SSC",age:"18–32",fee:"UR/OBC/EWS ₹100 · SC/ST/PwBD/Women exempt",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC CHSL",cat:"SSC",age:"18–27",fee:"₹100 · exemptions as notified",qual:"12th",url:"https://ssc.gov.in/"},
+{exam:"SSC MTS / Havaldar",cat:"SSC",age:"18–25 / 18–27",fee:"₹100 · exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"SSC GD Constable",cat:"SSC",age:"18–23",fee:"₹100 · exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"SSC CPO",cat:"SSC",age:"20–25",fee:"₹100 · exemptions as notified",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC Stenographer",cat:"SSC",age:"Notice-based",fee:"See notice",qual:"12th + skill test",url:"https://ssc.gov.in/"},
+{exam:"RRB NTPC",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://www.rrbapply.gov.in/"},
+{exam:"RRB Group D",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"10th / ITI",url:"https://www.rrbapply.gov.in/"},
+{exam:"RRB ALP / Technician",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"ITI / Diploma",url:"https://www.rrbapply.gov.in/"},
+{exam:"SBI PO / Clerk",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://sbi.co.in/web/careers"},
+{exam:"IBPS PO / Clerk",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://www.ibps.in/"},
+{exam:"RBI Assistant / Grade B",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.rbi.org.in/"},
+{exam:"LIC AAO / Assistant",cat:"Insurance",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://licindia.in/"},
+{exam:"UPPSC PCS",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://uppsc.up.nic.in/"},
+{exam:"UPSSSC PET",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"As notified",url:"https://upsssc.gov.in/"},
+{exam:"UPSSSC Lekhpal / Junior Assistant",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://upsssc.gov.in/"},
+{exam:"UP Police Constable / SI",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://uppbpb.gov.in/"},
+{exam:"CTET",cat:"Teaching",age:"Verify notice",fee:"Category-wise; see notice",qual:"Teacher qualification",url:"https://ctet.nic.in/"},
+{exam:"UPTET / State TET",cat:"Teaching",age:"Notice-based",fee:"Category-wise; see notice",qual:"D.El.Ed / B.Ed etc.",url:"https://updeled.gov.in/"},
+{exam:"PRT / TGT / PGT Recruitment",cat:"Teaching",age:"Recruitment-specific",fee:"Category-wise; see notice",qual:"Relevant degree + teacher qualification",url:"https://www.cbse.gov.in/"},
+{exam:"Army Agniveer / TES",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"10th / 12th / PCM by entry",url:"https://joinindianarmy.nic.in/"},
+{exam:"Navy / Agniveer",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"Entry-specific",url:"https://joinindiannavy.gov.in/"},
+{exam:"Air Force / Agniveer Vayu",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"Entry-specific",url:"https://agnipathvayu.cdac.in/"},
+{exam:"NDA / CDS",cat:"Defence",age:"Entry-specific",fee:"Exemptions as notified",qual:"12th / Graduate by entry",url:"https://upsc.gov.in/"},
+{exam:"NEET / JEE / CUET",cat:"Entrance",age:"Exam-specific",fee:"Category-wise; see notice",qual:"12th / subject-specific",url:"https://nta.ac.in/"},
+{exam:"NVS / JNVST",cat:"Entrance",age:"Class-specific",fee:"See notice",qual:"Class-specific",url:"https://navodaya.gov.in/"},
+{exam:"UP Board / CBSE / ICSE",cat:"School",age:"Student-specific",fee:"Board-specific",qual:"Class 9–12",url:"https://upmsp.edu.in/"},
+{exam:"CCC / CPCT / RSCIT",cat:"Computer",age:"Exam-specific",fee:"Exam-specific",qual:"Exam-specific",url:"https://www.nielit.gov.in/"},
+{exam:"High Court / District Court",cat:"Courts",age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.sci.gov.in/"},
 ];
-
-const examCatalog = [
-  { exam: "SSC CGL", category: "SSC", level: "Central", qualification: "Graduate", age: "18–32", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "SSC CHSL", category: "SSC", level: "Central", qualification: "12th", age: "18–27", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "SSC MTS / Havaldar", category: "SSC", level: "Central", qualification: "10th", age: "18–25 / 18–27", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "SSC GD Constable", category: "SSC", level: "Central", qualification: "10th", age: "18–23", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "SSC CPO", category: "SSC", level: "Central", qualification: "Graduate", age: "20–25", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "SSC Stenographer", category: "SSC", level: "Central", qualification: "12th", age: "Notification-based", fee: "Paid / category exemptions", url: "https://ssc.gov.in/" },
-  { exam: "RRB NTPC", category: "Railway", level: "Central", qualification: "12th / Graduate", age: "Notification-based", fee: "Notification-based", url: "https://www.rrbapply.gov.in/" },
-  { exam: "RRB Group D", category: "Railway", level: "Central", qualification: "10th / ITI", age: "Notification-based", fee: "Notification-based", url: "https://www.rrbapply.gov.in/" },
-  { exam: "RRB ALP / Technician", category: "Railway", level: "Central", qualification: "ITI / Diploma", age: "Notification-based", fee: "Notification-based", url: "https://www.rrbapply.gov.in/" },
-  { exam: "SBI PO / Clerk", category: "Banking", level: "Central", qualification: "Graduate", age: "Notification-based", fee: "Notification-based", url: "https://sbi.co.in/web/careers" },
-  { exam: "IBPS PO / Clerk", category: "Banking", level: "Central", qualification: "Graduate", age: "Notification-based", fee: "Notification-based", url: "https://www.ibps.in/" },
-  { exam: "RBI Assistant / Grade B", category: "Banking", level: "Central", qualification: "Graduate", age: "Notification-based", fee: "Notification-based", url: "https://www.rbi.org.in/" },
-  { exam: "LIC Assistant / AAO", category: "Insurance", level: "Central", qualification: "Graduate", age: "Notification-based", fee: "Notification-based", url: "https://licindia.in/" },
-  { exam: "UPPSC PCS", category: "UPPSC", level: "State", qualification: "Graduate", age: "Notification-based", fee: "Notification-based", url: "https://uppsc.up.nic.in/" },
-  { exam: "UPSSSC PET", category: "UPSSSC", level: "State", qualification: "10th / Notification-based", age: "Notification-based", fee: "Notification-based", url: "https://upsssc.gov.in/" },
-  { exam: "UPSSSC Lekhpal / Junior Assistant", category: "UPSSSC", level: "State", qualification: "Notification-based", age: "Notification-based", fee: "Notification-based", url: "https://upsssc.gov.in/" },
-  { exam: "UP Police Constable / SI", category: "UP Police", level: "State", qualification: "12th / Graduate", age: "Notification-based", fee: "Notification-based", url: "https://uppbpb.gov.in/" },
-  { exam: "CTET", category: "Teaching", level: "Central", qualification: "Teacher qualification as notified", age: "No upper age (verify notice)", fee: "Notification-based", url: "https://ctet.nic.in/" },
-  { exam: "UPTET / State TETs", category: "Teaching", level: "State", qualification: "D.El.Ed / B.Ed etc. as notified", age: "Notification-based", fee: "Notification-based", url: "https://updeled.gov.in/" },
-  { exam: "TGT / PGT / PRT Recruitments", category: "Teaching", level: "Central / State", qualification: "Relevant degree + teacher qualification", age: "Notification-based", fee: "Notification-based", url: "https://www.cbse.gov.in/" },
-  { exam: "Army Agniveer / TES", category: "Defence", level: "Central", qualification: "10th / 12th / PCM etc. by entry", age: "Entry-specific", fee: "Notification-based", url: "https://joinindianarmy.nic.in/" },
-  { exam: "Navy / Agniveer", category: "Defence", level: "Central", qualification: "Entry-specific", age: "Entry-specific", fee: "Notification-based", url: "https://joinindiannavy.gov.in/" },
-  { exam: "Air Force / Agniveer Vayu", category: "Defence", level: "Central", qualification: "Entry-specific", age: "Entry-specific", fee: "Notification-based", url: "https://agnipathvayu.cdac.in/" },
-  { exam: "NDA / CDS", category: "Defence", level: "Central", qualification: "12th / Graduate by entry", age: "Entry-specific", fee: "Notification-based", url: "https://upsc.gov.in/" },
-  { exam: "UP Board / CBSE / School Exams", category: "School Exams", level: "School", qualification: "Class 9–12", age: "Student-specific", fee: "Board-specific", url: "https://upmsp.edu.in/" },
-  { exam: "NEET / JEE / CUET", category: "Entrance", level: "Entrance", qualification: "12th / subject-specific", age: "Exam-specific", fee: "Notification-based", url: "https://nta.ac.in/" },
-  { exam: "CCC / CPCT / RSCIT", category: "Computer & Skills", level: "Certification", qualification: "Exam-specific", age: "Exam-specific", fee: "Exam-specific", url: "https://www.nielit.gov.in/" },
-  { exam: "High Court / District Court", category: "Courts", level: "Central / State / District", qualification: "Post-specific", age: "Notification-based", fee: "Notification-based", url: "https://www.sci.gov.in/" },
+const rowsOld = [
+{exam:"SSC CGL — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC CHSL — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"12th",url:"https://ssc.gov.in/"},
+{exam:"SSC MTS — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"RRB NTPC — Previous cycles",cat:"Railway",age:"Cycle-specific",fee:"Historical notice",qual:"12th / Graduate",url:"https://www.rrbapply.gov.in/"},
+{exam:"UP Police — Previous recruitment",cat:"UP",age:"Cycle-specific",fee:"Historical notice",qual:"Post-specific",url:"https://uppbpb.gov.in/"},
+{exam:"UPSSSC — Previous recruitments",cat:"UP",age:"Cycle-specific",fee:"Historical notice",qual:"Post-specific",url:"https://upsssc.gov.in/"},
+{exam:"CTET — Previous sessions",cat:"Teaching",age:"Session-specific",fee:"Historical notice",qual:"Teacher qualification",url:"https://ctet.nic.in/"},
+{exam:"UPTET — Previous sessions",cat:"Teaching",age:"Session-specific",fee:"Historical notice",qual:"Teacher qualification",url:"https://updeled.gov.in/"},
 ];
+const cats=["All Categories","SSC","Railway","Banking","Insurance","UP","Teaching","Defence","Entrance","School","Computer","Courts"];
+const blank="—";
 
-const getAgeBounds = (ageText) => {
-  if (!ageText || /notification|entry-specific|exam-specific|student-specific|no upper/i.test(ageText)) return null;
-  const nums = ageText.match(/\d+/g)?.map(Number) || [];
-  if (nums.length < 2) return null;
-  return { min: Math.min(nums[0], nums[nums.length - 2]), max: Math.max(nums[1], nums[nums.length - 1]) };
-};
-
-const quickLinks = [
-  ["Latest Jobs", "New recruitment notices", "↗"],
-  ["Admit Cards", "Download hall tickets", "▣"],
-  ["Results", "Result & merit updates", "✓"],
-  ["Answer Keys", "Keys & objections", "≡"],
-  ["Exam Calendar", "Upcoming exam dates", "▦"],
-  ["School Exams", "Class 9–12 & boards", "🏫"],
-];
-
-const css = `
-  .jobportal * { box-sizing: border-box; }
-  .jobportal footer, .jobportal .jp-footer, .jobportal [class*="footer"] { display:none !important; }
-  .jobportal { color:#15233d; font-family:Arial,'Noto Sans Devanagari',sans-serif; background:#f3f6fb; min-height:100vh; }
-  .jp-shell { max-width:1380px; margin:auto; padding:0 22px 44px; }
-  .jp-header { background:#102d59; color:#fff; }
-  .jp-headerin { max-width:1380px; margin:auto; padding:16px 22px; display:flex; gap:18px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-  .jp-brand { font-weight:900; letter-spacing:.03em; font-size:19px; }
-  .jp-brand small { font-weight:500; opacity:.72; display:block; font-size:11px; letter-spacing:.08em; margin-top:3px; }
-  .jp-nav { display:flex; gap:7px; flex-wrap:wrap; }
-  .jp-nav a { color:#e8f1ff; text-decoration:none; font-size:13px; font-weight:700; padding:8px 10px; border-radius:8px; }
-  .jp-nav a:hover { background:#ffffff18; }
-  .jp-ticker { background:#fff; border:1px solid #e3e9f2; border-radius:12px; margin:16px 0; display:flex; overflow:hidden; align-items:center; }
-  .jp-tickerlabel { background:#e43d48; color:#fff; padding:11px 14px; font-size:12px; font-weight:900; white-space:nowrap; }
-  .jp-tickertext { color:#344660; font-size:13px; padding:11px 14px; overflow:hidden; white-space:nowrap; }
-  .jp-hero { background:linear-gradient(120deg,#173a71,#205ca8); color:white; border-radius:18px; padding:28px; margin-bottom:18px; }
-  .jp-hero h1 { font-size:clamp(26px,4vw,40px); line-height:1.1; margin:9px 0 10px; letter-spacing:-.035em; }
-  .jp-hero p { color:#d9eaff; margin:0 0 18px; line-height:1.55; }
-  .jp-search { display:flex; gap:9px; background:white; border-radius:12px; padding:7px; max-width:850px; }
-  .jp-search input { flex:1; min-width:0; border:0; outline:none; padding:12px; color:#16243c; font-size:15px; }
-  .jp-search button { border:0; border-radius:9px; background:#155eef; color:white; font-weight:800; padding:0 18px; cursor:pointer; }
-  .jp-layout { display:grid; grid-template-columns:240px minmax(0,1fr) 265px; gap:16px; align-items:start; }
-  .jp-panel { background:#fff; border:1px solid #e2e8f0; border-radius:15px; padding:16px; }
-  .jp-panel h2,.jp-panel h3 { margin:0 0 12px; }
-  .jp-cats { display:grid; gap:5px; }
-  .jp-cat { display:flex; align-items:center; gap:9px; width:100%; border:1px solid transparent; background:transparent; text-align:left; padding:9px; border-radius:9px; color:#243752; font-weight:700; font-size:13px; cursor:pointer; }
-  .jp-cat:hover,.jp-cat.active { background:#edf4ff; color:#155eef; border-color:#d5e5ff; }
-  .jp-cat small { margin-left:auto; color:#7b8ca3; font-weight:600; }
-  .jp-examchips { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
-  .jp-chip { border:1px solid #dbe4ef; background:#fff; color:#42546d; border-radius:999px; padding:7px 10px; font-size:12px; cursor:pointer; }
-  .jp-chip.active { background:#eaf2ff; border-color:#b8d2ff; color:#155eef; font-weight:800; }
-  .jp-sectionhead { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-  .jp-sectionhead h2 { margin:0; font-size:20px; }
-  .jp-muted { color:#718198; font-size:12px; }
-  .jp-count { background:#eef4ff; color:#155eef; border-radius:999px; padding:5px 9px; font-size:11px; font-weight:800; }
-  .jp-filtergrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-  .jp-filtergrid label { display:block; color:#6b7a90; font-size:11px; font-weight:800; margin-bottom:5px; }
-  .jp-filtergrid select { width:100%; border:1px solid #dce4ee; background:white; color:#233650; padding:9px; border-radius:8px; font-size:12px; }
-  .jp-vacancy { border:1px solid #e5ebf3; border-radius:12px; padding:14px; margin-top:10px; }
-  .jp-vtitle { font-weight:850; font-size:15px; }
-  .jp-vmeta { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
-  .jp-tag { font-size:10px; font-weight:800; background:#f0f4fa; color:#51647e; padding:5px 7px; border-radius:6px; }
-  .jp-vrow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:10px 0; }
-  .jp-vrow div { background:#f8fafc; border-radius:8px; padding:8px; }
-  .jp-vrow small { display:block; color:#75849a; font-size:10px; margin-bottom:4px; }
-  .jp-vrow strong { font-size:12px; }
-  .jp-link { display:inline-flex; align-items:center; text-decoration:none; font-weight:800; color:#155eef; font-size:12px; }
-  .jp-quick { display:grid; gap:8px; }
-  .jp-quick a { text-decoration:none; border:1px solid #e5ebf3; border-radius:10px; padding:10px; display:flex; gap:9px; align-items:center; color:#223650; }
-  .jp-quick a:hover { border-color:#b8d2ff; background:#f7faff; }
-  .jp-qicon { width:30px; height:30px; border-radius:8px; background:#edf4ff; color:#155eef; display:grid; place-items:center; font-weight:900; }
-  .jp-quick strong { display:block; font-size:12px; }
-  .jp-quick small { display:block; color:#77869b; font-size:10px; margin-top:2px; }
-  .jp-dateitem { display:flex; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid #eef2f7; font-size:12px; }
-  .jp-dateitem:last-child { border-bottom:0; }
-  .jp-zero { display:flex; gap:8px; align-items:center; margin-top:12px; font-size:12px; color:#465b75; }
-  .jp-zero input { accent-color:#155eef; }
-  .jp-bottomcats { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:18px; }
-  .jp-bottomcat { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:13px; text-align:left; cursor:pointer; color:#233650; }
-  .jp-bottomcat:hover { border-color:#b8d2ff; background:#f8fbff; }
-  .jp-bottomcat strong { display:block; font-size:12px; margin-top:5px; }
-  .jp-bottomcat span { font-size:18px; }
-  .jp-note { font-size:11px; color:#718198; line-height:1.55; background:#f8fafc; border:1px dashed #dbe3ed; border-radius:10px; padding:11px; margin-top:12px; }
-  @media(max-width:1050px){ .jp-layout{grid-template-columns:220px minmax(0,1fr)} .jp-right{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px} .jp-right .jp-panel{height:fit-content} .jp-bottomcats{grid-template-columns:repeat(3,minmax(0,1fr))} }
-  @media(max-width:700px){ .jp-shell{padding:0 12px 30px} .jp-headerin{padding:13px 14px} .jp-nav{display:none} .jp-ticker{margin:10px 0} .jp-tickerlabel{padding:9px 10px;font-size:10px} .jp-tickertext{font-size:11px;padding:9px 10px} .jp-hero{padding:19px;border-radius:14px} .jp-search{flex-direction:column} .jp-search button{padding:12px} .jp-layout{grid-template-columns:1fr} .jp-left{order:2} .jp-center{order:1} .jp-right{order:3;grid-column:auto;display:grid;grid-template-columns:1fr} .jp-filtergrid{grid-template-columns:1fr 1fr} .jp-vrow{grid-template-columns:1fr 1fr} .jp-bottomcats{grid-template-columns:repeat(2,minmax(0,1fr))} }
-`;
-
-export default function JobsExamDashboard() {
-  const [category, setCategory] = useState("All");
-  const [search, setSearch] = useState("");
-  const [level, setLevel] = useState("All");
-  const [qualification, setQualification] = useState("All");
-  const [age, setAge] = useState("All");
-  const [fee, setFee] = useState("All");
-  const [status, setStatus] = useState("All");
-  const [zeroFee, setZeroFee] = useState(false);
-  const [selectedExam, setSelectedExam] = useState(null);
-  const [liveFeed, setLiveFeed] = useState(null);
-  const [feedLoading, setFeedLoading] = useState(false);
-  const [feedError, setFeedError] = useState("");
-  const loadLiveFeed = async (force = false) => {
-    setFeedLoading(true); setFeedError("");
-    try { const res = await fetch(`/api/recruitment/live${force ? "?refresh=1" : ""}`, { cache: "no-store" }); if (!res.ok) throw new Error("Live feed request failed"); const data = await res.json(); setLiveFeed(data); }
-    catch { setFeedError("Live scan is temporarily unavailable. Please open official portals."); }
-    finally { setFeedLoading(false); }
-  };
-  useEffect(() => { loadLiveFeed(false); const timer = setInterval(() => loadLiveFeed(false), 5 * 60 * 1000); return () => clearInterval(timer); }, []);
-
-  const categoryNames = ["All", ...categories.map(c => c.name)];
-  const activeCategory = categories.find(c => c.name === category);
-  const examsInCategory = activeCategory ? activeCategory.groups : [];
-
-  const filtered = useMemo(() => examCatalog.filter(item => {
-    const term = search.toLowerCase().trim();
-    const matchesSearch = !term || (item.exam + " " + item.category + " " + item.level + " " + item.qualification).toLowerCase().includes(term);
-    const matchesCategory = category === "All" || item.category === category || (category === "Central" && item.level.includes("Central")) || (category === "Uttar Pradesh" && ["UPPSC","UPSSSC","UP Police"].includes(item.category)) || (category === "Other States" && ["Bihar","Rajasthan","Madhya Pradesh","Jharkhand"].includes(item.category)) || (category === "District" && item.level.includes("District"));
-    const matchesLevel = level === "All" || item.level.includes(level);
-    const matchesQualification = qualification === "All" || item.qualification.toLowerCase().includes(qualification.toLowerCase());
-    const candidateAge = age === "All" ? null : Number(age);
-    const ageBounds = getAgeBounds(item.age);
-    const matchesAge = age === "All" || (ageBounds && candidateAge >= ageBounds.min && candidateAge <= ageBounds.max);
-    const matchesFee = fee === "All" || (typeof item.feeAmount === "number" && (fee === "0" ? item.feeAmount === 0 : fee === "100" ? item.feeAmount <= 100 : fee === "200" ? item.feeAmount <= 200 : fee === "500" ? item.feeAmount <= 500 : false));
-    const matchesZero = !zeroFee || item.feeAmount === 0;
-    const matchesStatus = status === "All" || item.verificationStatus === "verified";
-    return matchesSearch && matchesCategory && matchesLevel && matchesQualification && matchesAge && matchesFee && matchesZero && matchesStatus;
-  }), [search, category, level, qualification, age, fee, zeroFee, status]);
-
-  const openOfficial = (url) => window.open(url, "_blank", "noopener,noreferrer");
-
-  return (
-    <main className="jobportal">
-      <style>{css}</style>
-      <header className="jp-header">
-        <div className="jp-headerin">
-          <div className="jp-brand">CSC SKB ONLINE <small>CAREER DESK · JOBS & EXAMS</small></div>
-          <nav className="jp-nav" aria-label="Portal navigation">
-            <a href="#vacancies">Latest Jobs</a><a href="#quicklinks">Admit Card</a><a href="#quicklinks">Results</a><a href="#quicklinks">Answer Key</a><a href="#school">School Exams</a>
-          </nav>
-        </div>
-      </header>
-      <div className="jp-shell">
-        <div className="jp-ticker" aria-label="Recruitment notification ticker">
-          <span className="jp-tickerlabel">LATEST UPDATES</span>
-          <div className="jp-tickertext">Directory listings only · Vacancy status and fee/age details require official notification verification.</div>
-        </div>
-        <section className="jp-hero">
-          <div style={{fontSize:11,fontWeight:900,letterSpacing:".15em",color:"#bddcff"}}>YOUR NEXT OPPORTUNITY STARTS HERE</div>
-          <h1>Find your exam.<br/>Find your opportunity.</h1>
-          <p>सरकारी भर्ती, प्रतियोगी परीक्षाएँ, स्कूल और प्रवेश परीक्षाएँ — एक व्यवस्थित पोर्टल पर।</p>
-          <form className="jp-search" onSubmit={e=>e.preventDefault()}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search SSC, Railway, TET, Police, NEET, school exam..." aria-label="Search exams and vacancies"/>
-            <button type="button" onClick={()=>document.getElementById("exam-list")?.scrollIntoView({behavior:"smooth"})}>Search Exams</button>
-          </form>
-        </section>
-
-
-        <section className="jp-panel" id="live-notices" style={{marginBottom:16}}>
-          <div className="jp-sectionhead"><div><h2>Live Recruitment Notices</h2><div className="jp-muted">Official portal link scan · includes UPESSC / teaching notices</div></div><button className="jp-chip" disabled={feedLoading} onClick={() => loadLiveFeed(true)}>{feedLoading ? "Checking portals…" : "↻ Refresh Live Updates"}</button></div>
-          <div className="jp-muted" style={{marginBottom:10}}>Last checked: {liveFeed?.checkedAt ? new Date(liveFeed.checkedAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : "Not checked yet"} · Refreshes automatically every 5 minutes while this page is open.</div>
-          {feedError && <div className="jp-note">{feedError}</div>}
-          {liveFeed?.sources?.length > 0 && <div className="jp-vmeta">{liveFeed.sources.map(src=><span className="jp-tag" key={src.name}>{src.status === "ok" ? "✓" : "⚠"} {src.name} · {src.noticeCount} links</span>)}</div>}
-          {liveFeed?.notices?.filter(n => !search.trim() || (n.title + " " + n.board + " " + n.kind).toLowerCase().includes(search.toLowerCase().trim())).slice(0,12).map(notice=><article className="jp-vacancy" key={notice.id}><div className="jp-sectionhead" style={{marginBottom:5}}><div className="jp-vtitle">{notice.title}</div><span className="jp-tag">{notice.board}</span></div><div className="jp-vmeta"><span className="jp-tag">{notice.kind.replace("-", " ")}</span><span className="jp-tag">Source scanned</span></div><a className="jp-link" href={notice.url} target="_blank" rel="noopener noreferrer">Open official notice / source ↗</a></article>)}
-          {liveFeed && (!liveFeed.notices?.length || (search.trim() && !liveFeed.notices.some(n => (n.title + " " + n.board + " " + n.kind).toLowerCase().includes(search.toLowerCase().trim())))) && <div className="jp-note">No matching live links were detected in this scan. Try Refresh or open the official portals below.</div>}
-          <div className="jp-note">{liveFeed?.disclaimer || "A scan of official portal links is not a verified vacancy feed. Always open the notice and confirm details."}</div>
-        </section>
-
-        <div className="jp-layout">
-          <aside className="jp-left jp-panel">
-            <h3 style={{fontSize:15}}>Browse Categories</h3>
-            <div className="jp-cats">
-              {categories.map(c=><button key={c.name} className={"jp-cat "+(category===c.name?"active":"")} onClick={()=>{setCategory(c.name);setSelectedExam(null);}}><span>{c.icon}</span>{c.name}<small>{c.groups.length}</small></button>)}
-            <button className={"jp-cat "+(category==="All"?"active":"")} onClick={()=>{setCategory("All");setSelectedExam(null);}}>✦ All Exams <small>{examCatalog.length}</small></button>
-            </div>
-            {activeCategory && <div><div className="jp-muted" style={{marginTop:12,fontWeight:800}}>POPULAR IN {category.toUpperCase()}</div><div className="jp-examchips">{examsInCategory.map(g=><button key={g} className="jp-chip" onClick={()=>setSearch(g)}>{g}</button>)}</div></div>}
-            <div className="jp-note">Categories are expandable; we will add the full exam directory progressively. Links open official recruitment websites.</div>
-          </aside>
-
-          <section className="jp-center" id="exam-list">
-            <div className="jp-panel">
-              <div className="jp-sectionhead"><h2>Smart Exam Finder</h2><span className="jp-count">{filtered.length} matches</span></div>
-              <div className="jp-filtergrid">
-                <div><label>Exam Level</label><select value={level} onChange={e=>setLevel(e.target.value)}><option>All</option><option>Central</option><option>State</option><option>District</option><option>School</option><option>Entrance</option><option>Certification</option></select></div>
-                <div><label>Qualification</label><select value={qualification} onChange={e=>setQualification(e.target.value)}><option>All</option><option>10th</option><option>12th</option><option>Graduate</option><option>Postgraduate</option><option>Diploma</option><option>ITI</option></select></div>
-                <div><label>Candidate Age (indicative range)</label><select value={age} onChange={e=>setAge(e.target.value)}><option>All</option><option>18</option><option>20</option><option>25</option><option>30</option><option>35</option><option>40</option></select></div>
-                <div><label>Maximum Verified Fee</label><select value={fee} onChange={e=>setFee(e.target.value)}><option>All</option><option value="0">₹0</option><option value="100">Up to ₹100</option><option value="200">Up to ₹200</option><option value="500">Up to ₹500</option></select></div>
-              </div>
-              <div className="jp-zero"><input id="zeroFee" type="checkbox" checked={zeroFee} onChange={e=>setZeroFee(e.target.checked)}/><label htmlFor="zeroFee">Only verified ₹0 application fees</label></div>
-              <div className="jp-zero"><label style={{margin:0,fontWeight:800}}>Notification:</label><select value={status} onChange={e=>setStatus(e.target.value)} style={{border:"1px solid #dce4ee",borderRadius:7,padding:"6px 8px",background:"#fff",fontSize:12}}><option>All</option><option value="verified">Officially verified only</option></select><span className="jp-muted">Status verification will be connected to live feeds</span></div>
-            </div>
-
-            <div className="jp-panel" id="vacancies" style={{marginTop:14}}>
-              <div className="jp-sectionhead"><div><h2>Latest & Popular Exams</h2><div className="jp-muted">Select an exam to view eligibility basics and official link</div></div><span className="jp-count">Directory</span></div>
-              {filtered.map(item=><article className="jp-vacancy" key={item.exam}>
-                <div className="jp-sectionhead" style={{marginBottom:5}}><div className="jp-vtitle">{item.exam}</div><span className="jp-tag">{item.category}</span></div>
-                <div className="jp-vmeta"><span className="jp-tag">{item.level}</span><span className="jp-tag">Qualification: {item.qualification}</span></div>
-                <div className="jp-vrow"><div><small>Age (indicative; notice may differ)</small><strong>{item.age}</strong></div><div><small>Fee</small><strong>{item.fee}</strong></div><div><small>Verification</small><strong>Not verified</strong></div></div>
-                <div style={{display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",alignItems:"center"}}><button onClick={()=>setSelectedExam(selectedExam===item.exam?null:item.exam)} className="jp-chip">{selectedExam===item.exam?"Hide details":"Eligibility & Details"}</button><a className="jp-link" href={item.url} target="_blank" rel="noopener noreferrer">Official website / Apply ↗</a></div>
-                {selectedExam===item.exam&&<div className="jp-note"><strong>Important:</strong> Directory reference only—not a confirmed active vacancy. Unknown age or fee data will not qualify for numeric filters. Verify cutoff date, relaxation, qualification, fees, vacancies and dates in the official notice.</div>}
-              </article>)}
-              {filtered.length===0&&<div className="jp-note">No matching exams. Try clearing filters or searching another exam name.</div>}
-            </div>
-          </section>
-
-          <aside className="jp-right">
-            <section className="jp-panel">
-              <h3 style={{fontSize:15}}>Important Dates</h3>
-              <div className="jp-dateitem"><span>Application deadlines</span><strong>Official feed pending</strong></div>
-              <div className="jp-dateitem"><span>Exam dates</span><strong>Official feed pending</strong></div>
-              <div className="jp-dateitem"><span>Admit card releases</span><strong>Official feed pending</strong></div>
-              <div className="jp-note">Verified date alerts and calendar reminders will be enabled with notification data integration.</div>
-            </section>
-            <section className="jp-panel" id="quicklinks" style={{marginTop:12}}>
-              <h3 style={{fontSize:15}}>Quick Links</h3>
-              <div className="jp-quick">{quickLinks.map(([title,desc,icon])=><a href={title==="School Exams"?"#school":"#vacancies"} key={title}><span className="jp-qicon">{icon}</span><span><strong>{title}</strong><small>{desc}</small></span></a>)}</div>
-            </section>
-            <section className="jp-panel" style={{marginTop:12}}>
-              <h3 style={{fontSize:15}}>Official Source Check</h3>
-              <p className="jp-muted" style={{lineHeight:1.6}}>Vacancy dates, fees and eligibility will only be marked verified after checking the official notice.</p>
-              <a className="jp-link" href="https://www.sarkariresult.com/" target="_blank" rel="noopener noreferrer">Sarkari Result ↗</a>
-            </section>
-          </aside>
-        </div>
-
-        <section id="school" style={{marginTop:18}}>
-          <div className="jp-sectionhead"><h2 style={{fontSize:18,margin:0}}>School & Entrance Exams</h2><span className="jp-muted">Class 9–12 · Boards · Entrance</span></div>
-          <div className="jp-bottomcats">{["UP Board","CBSE","ICSE","NEET / JEE","CUET","NVS / JNVST","Sainik School","Other Boards","School Results","Admit Cards"].map((name,i)=><button className="jp-bottomcat" key={name} onClick={()=>{setCategory(name==="NEET / JEE"||name==="CUET"?"Entrance":"School Exams");setSearch(name);document.getElementById("exam-list")?.scrollIntoView({behavior:"smooth"});}}><span>{["🏫","📘","📗","🧪","🎓","🏫","🛡️","📚","✓","▣"][i]}</span><strong>{name}</strong></button>)}</div>
-        </section>
-
-      </div>
-    </main>
-  );
+export default function JobsExamDashboard(){
+ const [section,setSection]=useState("All"),[category,setCategory]=useState("All Categories"),[search,setSearch]=useState(""),[selected,setSelected]=useState("");
+ const base=section==="Old"?rowsOld:rowsAll;
+ const filtered=useMemo(()=>base.filter(r=>(category==="All Categories"||r.cat===category)&&(!search.trim()||(r.exam+" "+r.cat+" "+r.qual).toLowerCase().includes(search.trim().toLowerCase()))),[base,category,search]);
+ const item=filtered.find(r=>r.exam===selected);
+ return <main className="exam-register"><style>{\`
+ .exam-register{min-height:100vh;background:linear-gradient(135deg,#101827,#1d3048);padding:clamp(12px,2.5vw,30px);font-family:Arial,'Noto Sans Devanagari',sans-serif;color:#14233b}.wrap{max-width:1600px;margin:auto}.head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;color:#f8fafc;margin-bottom:18px}.brand{font-size:13px;font-weight:900;letter-spacing:.14em;color:#cbd5e1}.brand small{display:block;font-size:11px;letter-spacing:.05em;font-weight:500;color:#94a3b8;margin-top:5px}.title{font-size:clamp(25px,3vw,36px);font-weight:900;letter-spacing:-.04em;margin:5px 0}.subtitle{color:#aebed2;font-size:13px}.card{background:#f8fafc;border:1px solid #d9e2ed;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px #0002}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:16px;border-bottom:1px solid #dce4ee;background:white}.tabs{display:flex;padding:4px;background:#edf2f7;border-radius:10px;gap:4px}.tabs button{border:0;border-radius:8px;padding:9px 18px;font-weight:800;color:#52657d;background:transparent;cursor:pointer}.tabs button.active{background:#17365f;color:white}.search{flex:1;min-width:180px;border:1px solid #d5deea;border-radius:9px;padding:10px 12px;font-size:14px}.select{border:1px solid #d5deea;border-radius:9px;padding:10px 12px;background:white;color:#1e344f;font-size:13px}.count{font-size:12px;font-weight:800;color:#64748b;margin-left:auto;white-space:nowrap}.scroll{overflow:auto;max-height:calc(100vh - 255px);min-height:350px}.table{border-collapse:separate;border-spacing:0;width:100%;min-width:1500px;font-size:12px;background:white}.table th{position:sticky;top:0;z-index:2;background:#17365f;color:white;text-align:left;padding:13px 12px;font-size:11px;white-space:nowrap}.table td{padding:12px;border-bottom:1px solid #e8edf3;vertical-align:top;color:#33465f;line-height:1.45}.table tbody tr:nth-child(even){background:#f7f9fc}.table tbody tr:hover,.table tbody tr.selected{background:#edf5ff}.name{border:0;background:none;padding:0;color:#164a91;font-weight:900;font-size:13px;text-align:left;cursor:pointer}.sub{font-size:10px;color:#8090a5;margin-top:4px}.fee{min-width:220px;max-width:270px}.pill{display:inline-block;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800;background:#edf1f6;color:#66758a;white-space:nowrap}.link{display:inline-block;background:#e7f0ff;color:#1452a1;border:1px solid #cbdfff;padding:7px 9px;border-radius:7px;text-decoration:none;font-weight:800;white-space:nowrap}.empty{text-align:center!important;padding:45px!important;color:#718096!important}.detail{padding:16px;background:#eef5ff;border-top:1px solid #d7e5f8;display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap}.detail strong{display:block;color:#183c69;margin-bottom:5px}.detail p{margin:0;color:#5c6f87;font-size:12px;line-height:1.5}.note{padding:12px 16px;color:#738298;font-size:11px;background:#f8fafc;border-top:1px solid #e6ebf2}@media(max-width:650px){.toolbar{align-items:stretch}.tabs{width:100%}.tabs button{flex:1}.search,.select{width:100%}.count{margin-left:0}.scroll{max-height:70vh}}\`}</style>
+ <div className="wrap"><header className="head"><div><div className="brand">CSC SKB ONLINE <small>CAREER DESK · JOBS & EXAMS</small></div><h1 className="title">Exam Register</h1><div className="subtitle">भर्ती और परीक्षाओं की साफ़ spreadsheet-style सूची</div></div><div style={{fontSize:12,color:"#aebed2"}}>Preview only · Production untouched</div></header>
+ <section className="card"><div className="toolbar"><div className="tabs" role="tablist">{["All","Old"].map(t=><button key={t} role="tab" aria-selected={section===t} className={section===t?"active":""} onClick={()=>{setSection(t);setSelected("");}}>{t}</button>)}</div><input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search SSC, Railway, TGT, exam…" aria-label="Search exams"/><select className="select" value={category} onChange={e=>setCategory(e.target.value)} aria-label="Category filter">{cats.map(c=><option key={c}>{c}</option>)}</select><span className="count">{filtered.length} entries</span></div>
+ <div className="scroll"><table className="table"><thead><tr><th>Exam / Recruitment</th><th>Age</th><th>Category-wise Fees</th><th>Qualification</th><th>Form Start</th><th>Last Date</th><th>Correction</th><th>Exam Date</th><th>Admit Card</th><th>Result</th><th>Action</th></tr></thead><tbody>{filtered.map(r=><tr key={r.exam} className={selected===r.exam?"selected":""}><td><button className="name" onClick={()=>setSelected(selected===r.exam?"":r.exam)}>{r.exam}</button><div className="sub">{r.cat}</div></td><td>{r.age||blank}</td><td className="fee">{r.fee||blank}</td><td>{r.qual||blank}</td><td>{r.start||blank}</td><td>{r.last||blank}</td><td>{r.correction||blank}</td><td>{r.examDate||blank}</td><td><span className="pill">{r.admit||"Not announced"}</span></td><td><span className="pill">{r.result||"Not announced"}</span></td><td><a className="link" href={r.url} target="_blank" rel="noopener noreferrer">{section==="Old"?"Archive / Official":"Official portal"} ↗</a></td></tr>)}{!filtered.length&&<tr><td colSpan="11" className="empty">इस category में कोई entry नहीं मिली।</td></tr>}</tbody></table></div>
+ {item&&<div className="detail"><div><strong>{item.exam}</strong><p>Category: {item.cat} · Qualification: {item.qual} · Age: {item.age}. Dates/status केवल official notice verify होने पर अपडेट होंगे।</p></div><a className="link" href={item.url} target="_blank" rel="noopener noreferrer">Official source ↗</a></div>}
+ <div className="note">यह directory/reference list है। Form dates, exam dates, admit card और result status अभी verified notice के बिना खाली/Not announced हैं। Old में previous-cycle references हैं; cycle-wise archive data बाद में सत्यापित entries से भरेगा।</div></section></div></main>;
 }
