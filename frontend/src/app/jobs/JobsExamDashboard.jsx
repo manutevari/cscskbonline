@@ -59,7 +59,7 @@ export default function JobsExamDashboard(){
  useEffect(()=>{let active=true;const load=async()=>{try{const res=await fetch("/api/recruitment/live",{cache:"no-store"});if(!res.ok)throw new Error("Feed request failed");const data=await res.json();if(active){setLiveFeed(data);setFeedError("");}}catch{if(active)setFeedError("Live feed temporarily unavailable");}};load();const timer=setInterval(load,5000);return()=>{active=false;clearInterval(timer);};},[]);
  const pageSize=20;
  const liveRows=(liveFeed?.notices||[]).map(n=>({exam:n.title,cat:n.board,state:"Central",status:"Live",min:0,max:100,age:"See official notice",fee:"See official notification",qual:"See official notification",url:n.url,notificationUrl:n.url,vacancy:"Not reported",start:"—",last:"—",correction:"—",examDate:"—",admit:"Not announced",result:"Not announced",kind:n.kind,checkedAt:n.checkedAt}));
- const base=tab==="Old"?archiveRows:tab==="Live"?liveRows:rows;
+ const base=tab==="Old"?archiveRows:tab==="Live"?liveRows:[...liveRows,...rows];
  const filtered=useMemo(()=>base.filter(r=>{
   const catOk=category==="All Categories"||r.cat===category||(category==="State Govt"&&r.cat==="State")||(category==="Other"&&!categories.slice(1,10).includes(r.cat));
   const normalizedState=r.state==="All India"?"Central":r.state;
