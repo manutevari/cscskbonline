@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import JobsExamDashboard from "./JobsExamDashboard";
 
 const jobs = [
   { id: 1, title: "SSC भर्ती और परीक्षा अपडेट", category: "केंद्र सरकार", qualification: "10वीं / 12वीं / स्नातक", minAge: 18, maxAge: 30, url: "https://ssc.gov.in/" },
@@ -239,7 +238,6 @@ export default function JobsPage() {
         <strong>महत्वपूर्ण सूचना:</strong> यह पोर्टल पाँच आधिकारिक भर्ती वेबसाइटों को चेक करके कुछ भर्ती/परीक्षा-संबंधी लिंक पहचानने की कोशिश करता है। यह verified vacancy/result feed या आधिकारिक API नहीं है। लिंक छूट सकते हैं या अप्रासंगिक हो सकते हैं; अंतिम तारीख, पात्रता, आयु-सीमा और परिणाम हमेशा आधिकारिक नोटिस से सत्यापित करें।
       </section>
 
-      <JobsExamDashboard />
 
       <section id="latest-jobs" className="section-block">
         <div className="section-heading"><div><span className="eyebrow">FIND YOUR OPPORTUNITY</span><h2>Latest Jobs &amp; Recruitment</h2><p>योग्यता और आयु के आधार पर भर्ती लिंक छाँटें।</p></div></div>
