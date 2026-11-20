@@ -641,11 +641,11 @@ export default function PrintEditorPage() {
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
       {selected && <div className="field" style={{display:"grid",gap:7}}><strong>Selected photo dimensions</strong><label className="field">Unit<select aria-label="Photo dimension unit" value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm")}><option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option></select></label><label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}<label className="field">Width ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.w:dimensionUnit==="cm"?selected.w/794*pageSize.w/10:selected.w/794*pageSize.w).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("w",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*794/pageSize.w:n*794/pageSize.w));}} /></label><label className="field">Height ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.h:dimensionUnit==="cm"?selected.h/1123*pageSize.h/10:selected.h/1123*pageSize.h).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("h",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*1123/pageSize.h:n*1123/pageSize.h));}} /></label></div>}
-      <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
+      
       <label className="field">Copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
       <label className="field">Photo width (mm)<input type="number" min="20" max="100" step="0.1" value={photoWidthMm} onChange={e => setPhotoWidthMm(e.target.value)} /></label>
       <label className="field">Photo height (mm)<input type="number" min="20" max="120" step="0.1" value={photoHeightMm} onChange={e => setPhotoHeightMm(e.target.value)} /></label>
-      <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
+      
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? (batchProgress? `${batchProgress.phase} · ${batchProgress.completed}/${batchProgress.total} pages` : "Files process हो रही हैं…") : status}</p>
     {batchProgress && <section aria-live="polite" style={{margin:"4px 14px 10px",padding:10,border:"1px solid #cbd5e1",borderRadius:9,background:"#fff",color:"#243b60"}}>
@@ -665,13 +665,6 @@ export default function PrintEditorPage() {
     <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id} style={{padding:`${Number(pageMargins.top)||0}mm ${Number(pageMargins.right)||0}mm ${Number(pageMargins.bottom)||0}mm ${Number(pageMargins.left)||0}mm`,boxSizing:"border-box"}}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
     <div className="workspace">
       <aside className="side">
-        <h2>▣ Document Actions</h2>
-        
-        <button className="btn secondary" onClick={addPage}>＋ Open / Add Page</button>
-        <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
-        <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
-        <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
-        <hr />
         <h2>Page setup</h2>
         <label className="field">Page margins
           <select value={marginPreset} onChange={e => {
