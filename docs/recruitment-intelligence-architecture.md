@@ -5,6 +5,8 @@
 - Optional LLM analyzer via OpenAI Chat Completions API. It is instructed to ground summaries in search evidence and mark discovery as unverified.
 - API endpoint: POST /api/recruitment/intelligence/search (query, state, category).
 - Exam Register UI has an AI Recruitment Search box. It uses selected state and category; displays source links, snippets, search scores and LLM analysis.
+- Forecast helper computes cycle interval median and median absolute deviation from verified cycle records, with confidence/status colors and an explicit estimate disclaimer. It currently has no UI or historical DB connection.
+- Text chunking helper prepared for future RAG ingestion.
 - India registry lists all 28 States and 8 UTs with curated portal domains. Registry is a starting point and coverage needs audit.
 
 ## Architecture
