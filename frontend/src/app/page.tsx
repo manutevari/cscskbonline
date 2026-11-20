@@ -181,6 +181,16 @@ export default function Home() {
         </div>
       </nav>
 
+      {/* MOBILE PRIMARY NAVIGATION: keep key business portals visible on small screens */}
+      <nav className="mobile-primary-nav" aria-label="Quick access portals">
+        <a href="/jobs-exams" className="mobile-primary-link mobile-jobs-link">
+          <span aria-hidden="true">💼</span><span><strong>Jobs &amp; Exams</strong><small>Exam Portal</small></span>
+        </a>
+        <a href="/tata-water" className="mobile-primary-link mobile-water-link">
+          <span aria-hidden="true">💧</span><span><strong>Tata Water</strong><small>Distributor &amp; Enquiry</small></span>
+        </a>
+      </nav>
+
       {/* UPDATES BAR */}
       <div className="updates-bar updates-bar-live">
         <div className="updates-label">
