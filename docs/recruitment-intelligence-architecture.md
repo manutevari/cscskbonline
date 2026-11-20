@@ -1,35 +1,26 @@
-# CSCSKB Recruitment Intelligence (Preview architecture)
+# Recruitment Intelligence architecture and staged implementation
 
-## Proposed flow
-Exam Register UI -> LLM orchestrator -> Central / State / UT router -> source adapters
-(Tavily search + official source GET/POST/API/HTML/PDF connectors) -> raw evidence -> LLM analyzer/extractor
--> validation/provenance -> normalized recruitment records -> database/history -> RAG retrieval -> intelligence modules.
+## Implemented on preview branch
+- Tavily Search POST connector, configurable API key, official-domain allowlist for state-specific queries where registry entries exist.
+- Optional LLM analyzer via OpenAI Chat Completions API. It is instructed to ground summaries in search evidence and mark discovery as unverified.
+- API endpoint: POST /api/recruitment/intelligence/search (query, state, category).
+- Exam Register UI has an AI Recruitment Search box. It uses selected state and category; displays source links, snippets, search scores and LLM analysis.
+- India registry lists all 28 States and 8 UTs with curated portal domains. Registry is a starting point and coverage needs audit.
 
-## Modules
-- Search discovery: Tavily API search (enabled only when TAVILY_API_KEY is configured).
-- Source connectors: official portals using their supported access method; POST is not universal or forced.
-- LLM analyzer: optional OpenAI-compatible Chat Completions via OPENAI_API_KEY. Results are discovery summaries, not verified facts.
-- Knowledge base/RAG: planned persistent retrieval layer; not yet implemented. Requires DB schema, document storage and embeddings/vector search.
-- Predictor / Trend Analyzer: architecture-ready; only show estimates once history is sufficient and confidence is disclosed.
-- Eligibility Matcher / Alert Engine: planned modules.
-- Scheduler and source-health monitor: planned orchestration, retry and coverage tracking.
+## Architecture
+UI -> search API -> state/central/UT routing -> Tavily + source connectors -> evidence collection -> LLM analysis/extraction -> validation/provenance -> structured database -> historical records -> RAG -> predictor/trend/eligibility/alerts/calendar.
 
-## Predictability color coding
-Green = high-confidence regular cycle (supported by published calendars or multiple verified historical cycles);
-Yellow = recurring but date variability;
-Orange = irregular/low consistency;
-Grey = insufficient verified history. Labels should be evidence-derived, not guessed.
+## Not yet operational / external prerequisites
+- Preview env secrets: TAVILY_API_KEY; OPENAI_API_KEY optional for analyzer; RECRUITMENT_LLM_MODEL optional.
+- Supabase persistence requires dedicated preview DB credentials and applying migration `frontend/supabase/migrations/202611210001_recruitment_intelligence.sql`. Do not apply to production.
+- Embeddings and RAG retrieval endpoints; scheduled collection; state-specific POST/GET/RSS/PDF adapters; full source coverage validation; predictor with history; alert delivery; verified live/closed classification.
+- Search results are discovery leads, not verified vacancy data. Dates, vacancy, fees, eligibility require official notification verification.
 
-## Current preview API
-POST /api/recruitment/intelligence/search
-Body: { query: string, state?: string, category?: string }
-Requires TAVILY_API_KEY. Optional LLM analysis requires OPENAI_API_KEY and optional RECRUITMENT_LLM_MODEL.
-Never expose keys to client. Results include URLs and discovery warnings. No persistent RAG writes yet.
+## Forecast confidence
+Green: high regularity (official published calendar or multiple verified historical cycles); Yellow: recurring with variance; Orange: irregular/weak consistency; Grey: insufficient verified history. Forecast must show estimate, confidence, data window and source evidence.
 
-## Next implementation steps
-1. Configure Preview environment secrets (TAVILY_API_KEY, optionally OPENAI_API_KEY).
-2. Add per-state source registry, connector adapters, and official-domain validation.
-3. Persist normalized notices, source snapshots, and history in DB; implement deduplication.
-4. Add embedding/vector retrieval and RAG answer endpoint with citations.
-5. Predictor, cycle analyzer, eligibility matcher, alert engine.
-6. Add UI, scheduled refresh, source health, retry/circuit-breakers and tests.
+## Source registry
+States and UTs are searchable. State-specific official domains are used where configured; broader Tavily search is used for All India; Central search uses central recruitment portals. Domains are not an exhaustive source inventory.
+
+## Security notes
+Keys remain server-side. Request body fields are bounded. Results include source URLs and snippets; LLM input is treated as untrusted source material. Do not execute retrieved content. Add authentication/rate limiting and audit logs before public high-volume use.
