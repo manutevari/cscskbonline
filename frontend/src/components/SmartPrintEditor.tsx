@@ -61,6 +61,7 @@ export default function PrintEditorPage() {
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
+  const [pendingDownload, setPendingDownload] = useState<{url:string; filename:string} | null>(null);
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
   const [lassoMode, setLassoMode] = useState(false);
@@ -476,12 +477,11 @@ export default function PrintEditorPage() {
   };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
   const saveBlob = (blob: Blob, filename: string) => {
-    // The displayed size and downloaded file both use this exact finalized Blob.
+    // On mobile webviews, automatic downloads after async processing can be blocked.
+    // Offer a second, explicit user-tap download link instead.
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = filename;
-    document.body.appendChild(anchor); anchor.click(); anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setPendingDownload(old => { if (old?.url) URL.revokeObjectURL(old.url); return { url, filename }; });
+    setStatus(`File तैयार है (${formatFileSize(blob.size)}). नीचे “Download file” पर tap करें।`);
   };
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
     // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
@@ -705,6 +705,7 @@ export default function PrintEditorPage() {
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    {pendingDownload && <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"center",padding:"12px",margin:"8px 0",border:"1px solid #b6d4fe",borderRadius:10,background:"#eff6ff"}}><a href={pendingDownload.url} download={pendingDownload.filename} onClick={() => window.setTimeout(() => { if (pendingDownload?.url) URL.revokeObjectURL(pendingDownload.url); setPendingDownload(null); }, 60000)} style={{display:"inline-block",padding:"12px 18px",background:"#155eef",color:"#fff",borderRadius:8,fontWeight:700,textDecoration:"none"}}>⬇ Download file</a><span style={{fontSize:13,color:"#334155"}}>{pendingDownload.filename} · tap this button to save on your device</span></div>
     {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
       <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
         <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
