@@ -79,3 +79,34 @@ alter table public.recruitment_documents enable row level security;
 alter table public.recruitment_evidence enable row level security;
 alter table public.recruitment_history enable row level security;
 alter table public.recruitment_chunks enable row level security;
+
+create or replace function public.match_recruitment_chunks(
+  query_embedding vector(1536),
+  filter_state text default null,
+  filter_category text default null,
+  match_count integer default 8
+)
+returns table (
+  id uuid,
+  document_id uuid,
+  chunk_text text,
+  metadata jsonb,
+  similarity double precision
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select c.id, c.document_id, c.chunk_text, c.metadata,
+         1 - (c.embedding <=> query_embedding) as similarity
+  from public.recruitment_chunks c
+  where c.embedding is not null
+    and (filter_state is null or c.metadata->>'state' = filter_state)
+    and (filter_category is null or c.metadata->>'category' = filter_category)
+  order by c.embedding <=> query_embedding
+  limit greatest(1, least(match_count, 12));
+$$;
+
+revoke all on function public.match_recruitment_chunks(vector(1536),text,text,integer) from public, anon, authenticated;
+grant execute on function public.match_recruitment_chunks(vector(1536),text,text,integer) to service_role;
