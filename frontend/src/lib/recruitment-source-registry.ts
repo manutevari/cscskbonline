@@ -47,6 +47,7 @@ export const STATE_PORTAL_DOMAINS: Record<string,string[]> = {
 };
 
 export function domainsForState(state: string, category = "All Categories"): string[] {
-  if (!state || state === "All States" || state === "All India" || state === "Central") return CENTRAL_RECRUITMENT_DOMAINS;
+  if (!state || state === "All States" || state === "All India") return [];
+  if (state === "Central") return CENTRAL_RECRUITMENT_DOMAINS;
   return STATE_PORTAL_DOMAINS[state] || [];
 }
