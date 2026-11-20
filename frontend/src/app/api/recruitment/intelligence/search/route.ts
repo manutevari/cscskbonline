@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { searchRecruitment, persistSearchResults } from "@/lib/recruitment-intelligence";
 
+const rateWindow=new Map<string,{start:number,count:number}>();
+function limited(request:Request){const forwarded=request.headers.get("x-forwarded-for")||"unknown";const ip=forwarded.split(",")[0].trim().slice(0,80);const now=Date.now();const current=rateWindow.get(ip);if(!current||now-current.start>60000){rateWindow.set(ip,{start:now,count:1});return false;}current.count++;return current.count>8;}
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  if (limited(request)) return NextResponse.json({error:"Rate limit exceeded. Please wait a minute and retry."},{status:429});
   try {
     const body = await request.json();
     const query = typeof body?.query === "string" ? body.query.trim().slice(0, 300) : "";
