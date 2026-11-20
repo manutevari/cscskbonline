@@ -19,6 +19,7 @@ export type RecruitmentSearchResult = {
 
 const TAVILY_URL = "https://api.tavily.com/search";
 const ALLOWED_SEARCH_DEPTH = "advanced";
+import { domainsForState } from "@/lib/recruitment-source-registry";
 
 export async function searchRecruitment(query: string, state: string, category: string): Promise<RecruitmentSearchResult> {
   const apiKey = process.env.TAVILY_API_KEY;
@@ -30,7 +31,7 @@ export async function searchRecruitment(query: string, state: string, category: 
   const response = await fetch(TAVILY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: apiKey, query: contextualQuery, search_depth: ALLOWED_SEARCH_DEPTH, topic: "general", max_results: 12, include_answer: false, include_raw_content: true }),
+    body: JSON.stringify({ api_key: apiKey, query: contextualQuery, search_depth: ALLOWED_SEARCH_DEPTH, topic: "general", max_results: 12, include_answer: false, include_raw_content: true, include_domains: domainsForState(state, category) }),
     cache: "no-store",
     signal: AbortSignal.timeout(15000),
   });
