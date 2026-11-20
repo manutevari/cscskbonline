@@ -26,3 +26,14 @@ States and UTs are searchable. State-specific official domains are used where co
 
 ## Security notes
 Keys remain server-side. Request body fields are bounded. Results include source URLs and snippets; LLM input is treated as untrusted source material. Do not execute retrieved content. Add authentication/rate limiting and audit logs before public high-volume use.
+
+
+## Implemented additions (latest preview branch work)
+- Search results can optionally be persisted as recruitment documents and evidence; embedding/chunk writes require Preview Supabase service credentials plus OpenAI embedding key.
+- Chunking utility and vector embedding integration use OpenAI `text-embedding-3-small` (1536 dimensions by default).
+- RAG query endpoint: POST `/api/recruitment/intelligence/ask` with `query`, optional state/category. Retrieves similarity-matched chunks and synthesizes an answer with source URL citations.
+- RAG UI panel is added to Exam Register.
+- Basic per-runtime rate limiting (8 requests/minute/IP) is present on the two intelligence endpoints; this is a best-effort guard, not a distributed rate limiter.
+- Optional LLM uses OPENAI_API_KEY or OPENROUTER_API_KEY (OpenRouter fallback); embedding generation still requires OPENAI_API_KEY.
+- Preview environment needs: `TAVILY_API_KEY` (legacy `tavily_key` is also read), `OPENAI_API_KEY` for embeddings, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` for persistence, and optional `OPENROUTER_API_KEY` / `RECRUITMENT_LLM_MODEL`.
+- Migration draft adds vector match RPC. It has not been applied. A dedicated Supabase branch has not been created yet pending confirmation of estimated cost ($0.01344/hour).
