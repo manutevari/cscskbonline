@@ -22,7 +22,7 @@ const ALLOWED_SEARCH_DEPTH = "advanced";
 import { domainsForState } from "@/lib/recruitment-source-registry";
 
 export async function searchRecruitment(query: string, state: string, category: string): Promise<RecruitmentSearchResult> {
-  const apiKey = process.env.TAVILY_API_KEY;
+  const apiKey = process.env.TAVILY_API_KEY || process.env.tavily_key;
   const checkedAt = new Date().toISOString();
   const contextualQuery = [query, state !== "All India" && state !== "All States" ? state : "", category !== "All Categories" ? category : "", "government recruitment official notification vacancy"].filter(Boolean).join(" ");
   if (!apiKey) {
@@ -46,10 +46,12 @@ export async function searchRecruitment(query: string, state: string, category: 
   })).filter((r: RecruitmentSearchItem) => /^https?:\/\//i.test(r.url)) : [];
   let analysis: string | undefined;
   let analyzed = false;
-  const llmKey = process.env.OPENAI_API_KEY;
+  const openAiKey = process.env.OPENAI_API_KEY;
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const llmKey = openAiKey || openRouterKey;
   if (llmKey && items.length) {
-    const model = process.env.RECRUITMENT_LLM_MODEL || "gpt-4.1-mini";
-    const llmResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    const model = process.env.RECRUITMENT_LLM_MODEL || (openRouterKey && !openAiKey ? "openai/gpt-4.1-mini" : "gpt-4.1-mini");
+    const llmResponse = await fetch(openRouterKey && !openAiKey ? "https://openrouter.ai/api/v1/chat/completions" : "https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${llmKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -71,5 +73,5 @@ export async function searchRecruitment(query: string, state: string, category: 
       analysis = "Search results returned, but the configured LLM analyzer request failed.";
     }
   }
-  return { query: contextualQuery, state, category, checkedAt, searchProvider: "tavily", items, analyzed, analysis, warning: !llmKey ? "OPENAI_API_KEY is not configured; raw results are returned without LLM analysis." : undefined };
+  return { query: contextualQuery, state, category, checkedAt, searchProvider: "tavily", items, analyzed, analysis, warning: !llmKey ? "OPENAI_API_KEY or OPENROUTER_API_KEY is not configured; raw results are returned without LLM analysis." : undefined };
 }
