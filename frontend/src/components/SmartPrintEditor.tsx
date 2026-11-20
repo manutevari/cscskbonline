@@ -190,6 +190,11 @@ export default function PrintEditorPage() {
           }
         }
         const highQualityPrint = !permissions || permissions.includes(permissionFlags.PRINT_HIGH_QUALITY);
+        // Each imported PDF page becomes its own editor page, not an image stacked
+        // with other pages on the currently selected canvas.
+        let nextPdfPageId = Math.max(0, ...pages.map(p => p.id), ...items.map(i => i.pageId));
+        const pdfPagesToAppend: LayoutPage[] = [];
+        let reuseEmptyActivePage = !items.some(i => i.pageId === activePage) && added === 0;
         for (let n = 1; n <= pdf.numPages; n++) {
           const page = await pdf.getPage(n), viewport = page.getViewport({ scale: highQualityPrint ? 2.5 : 1.5 });
           const canvas = document.createElement("canvas");
@@ -198,11 +203,29 @@ export default function PrintEditorPage() {
           if (!ctx) throw new Error("PDF canvas उपलब्ध नहीं है।");
           await page.render({ canvasContext: ctx, viewport }).promise;
           const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PDF page render failed")), "image/png"));
-          const pageFile = new File([blob], file.name.replace(/\.pdf$/i, "") + "-page-" + n + ".png", { type: "image/png" });
-          await addImage(pageFile); added++;
+          const baseName = file.name.replace(/\.pdf$/i, "");
+          const pageFile = new File([blob], baseName + "-page-" + n + ".png", { type: "image/png" });
+          let editorPageId: number;
+          if (reuseEmptyActivePage) {
+            editorPageId = activePage;
+            reuseEmptyActivePage = false;
+            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages });
+          } else {
+            editorPageId = ++nextPdfPageId;
+            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages });
+          }
+          await addImage(pageFile, editorPageId); added++;
+          setActivePage(editorPageId);
+        }
+        if (pdfPagesToAppend.length) {
+          setPages(old => {
+            const replaceLabels = new Map(pdfPagesToAppend.filter(p => old.some(existing => existing.id === p.id)).map(p => [p.id, p.label]));
+            const updated = old.map(p => replaceLabels.has(p.id) ? { ...p, label: replaceLabels.get(p.id)! } : p);
+            return [...updated, ...pdfPagesToAppend.filter(p => !old.some(existing => existing.id === p.id))];
+          });
         }
       }
-      setStatus(added + " image/PDF page(s) layout में जोड़ दिए गए। अब page assignment और layout mode चुनें।");
+      setStatus(added + " image/PDF page(s) जोड़ दिए गए। PDF के हर पेज को अलग editor page में रखा गया है।");
     } catch (error) {
       const e = error as { name?: string; message?: string; code?: number };
       if (e.name === "PasswordException" || e.code === 1 || e.code === 2) setStatus("यह PDF password-protected है। सही password डालकर फिर से चुनें।");
@@ -226,6 +249,33 @@ export default function PrintEditorPage() {
   const deleteItem = () => {
     if (!selected) return;
     setItems(old => old.filter(i => i.id !== selected.id)); setSelectedId(null);
+  };
+  const deleteActivePage = () => {
+    if (pages.length <= 1) {
+      setItems(old => old.filter(i => i.pageId !== activePage));
+      setSelectedId(null); setSelectedIds([]);
+      setStatus("आखिरी page हटाया नहीं जा सकता; उसका content साफ कर दिया गया है।");
+      return;
+    }
+    const remaining = pages.filter(p => p.id !== activePage);
+    const nextPage = remaining[0];
+    setPages(remaining);
+    setItems(old => old.filter(i => i.pageId !== activePage));
+    setActivePage(nextPage.id);
+    setSelectedId(null); setSelectedIds([]);
+    setStatus("Page और उसका content delete कर दिया गया।");
+  };
+  const fitSelectedToPage = (mode: "fit" | "fill" | "stretch") => {
+    if (!selected) return;
+    if (mode === "stretch") {
+      setItems(old => old.map(i => i.id === selected.id ? { ...i, x: 0, y: 0, w: 794, h: 1123 } : i));
+      setStatus("Selected image पूरे page में stretch कर दी गई।");
+      return;
+    }
+    const scale = mode === "fit" ? Math.min(794 / selected.w, 1123 / selected.h) : Math.max(794 / selected.w, 1123 / selected.h);
+    const w = selected.w * scale, h = selected.h * scale;
+    setItems(old => old.map(i => i.id === selected.id ? { ...i, x: (794 - w) / 2, y: (1123 - h) / 2, w, h } : i));
+    setStatus(mode === "fit" ? "Image पूरे page में fit की गई; aspect ratio सुरक्षित है।" : "Image page भरने के लिए scale की गई; किनारे crop हो सकते हैं।");
   };
   const updateSelected = (key: "x" | "y" | "w" | "h", value: string) => {
     if (!selected || value.trim() === "") return;
@@ -623,6 +673,7 @@ export default function PrintEditorPage() {
       <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Rectangular selection: drag over a photo to extract a separate editable region" aria-label="Rectangular selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setLassoMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Rectangular selection बंद हुआ।":"Rectangular Select चालू: photo के अंदर drag करके area चुनें।");}} disabled={!selected}>▭ Rect Select</button>
       <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
+      <button className="icon-btn" title="Delete current page and its contents" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete page</button>
       <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
@@ -723,7 +774,7 @@ export default function PrintEditorPage() {
         )}
       </aside>
       <div className="stage-wrap">
-        <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
+        <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}<button className="pagebtn" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete active page</button></div>
         <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
           onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
           onPointerMove={e => {
@@ -798,6 +849,12 @@ export default function PrintEditorPage() {
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("fit")}>Fit page</button>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("fill")}>Fill page</button>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("stretch")}>Stretch</button>
+          </div>
+          <p className="small">Fit: पूरी photo दिखेगी, ratio सुरक्षित। Fill: page भरता है, किनारे crop हो सकते हैं। Stretch: पूरा page, लेकिन ratio बदल सकता है।</p>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
