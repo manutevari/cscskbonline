@@ -461,25 +461,50 @@ export default function PrintEditorPage() {
     new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
   const formatFileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
   const verifyAndDownload = (blob: Blob, filename: string, limitBytes: number) => {
-    if (limitBytes > 0 && blob.size > limitBytes) {
-      throw new Error(`Final ${filename} size ${formatFileSize(blob.size)} है, जो चुनी गई ${formatFileSize(limitBytes)} maximum सीमा से अधिक है। File download नहीं की गई; बड़ा limit चुनें या JPEG format इस्तेमाल करें।`);
-    }
     saveBlob(blob, filename);
-    return formatFileSize(blob.size);
+    const actual = formatFileSize(blob.size);
+    if (limitBytes > 0 && blob.size > limitBytes) {
+      return `${actual} (target ${formatFileSize(limitBytes)} से थोड़ा अधिक; download जारी)`;
+    }
+    return actual;
   };
   const compressJpegToLimit = async (canvas: HTMLCanvasElement, targetBytes: number) => {
-    let low=0.08, high=0.96, best:Blob|null=null;
-    for(let i=0;i<9;i++){
-      const q=(low+high)/2, blob=await canvasBlob(canvas,"image/jpeg",q);
-      if(blob.size<=targetBytes){best=blob;low=q;}else high=q;
+    // First lower JPEG quality, then progressively downsample. This is much more
+    // reliable for strict 100/200 KB targets than quality-only compression.
+    const target = Math.max(1024, Math.floor(targetBytes));
+    let scale = 1;
+    let best: Blob | null = null;
+    let working = canvas;
+    for (let pass = 0; pass < 12; pass++) {
+      let low = 0.05, high = 0.94, candidate: Blob | null = null;
+      for (let i = 0; i < 10; i++) {
+        const q = (low + high) / 2;
+        const blob = await canvasBlob(working, "image/jpeg", q);
+        if (blob.size <= target) { candidate = blob; low = q; }
+        else high = q;
+      }
+      if (candidate) return candidate;
+      const lowestQuality = await canvasBlob(working, "image/jpeg", 0.05);
+      if (!best || lowestQuality.size < best.size) best = lowestQuality;
+      const nextScale = scale * 0.82;
+      const nextWidth = Math.max(1, Math.round(canvas.width * nextScale));
+      const nextHeight = Math.max(1, Math.round(canvas.height * nextScale));
+      if (nextScale < 0.08 || Math.min(nextWidth, nextHeight) < 180) break;
+      const next = document.createElement("canvas");
+      next.width = nextWidth; next.height = nextHeight;
+      const ctx = next.getContext("2d");
+      if (!ctx) break;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, next.width, next.height);
+      ctx.drawImage(canvas, 0, 0, next.width, next.height);
+      working = next; scale = nextScale;
     }
-    if(!best) best=await canvasBlob(canvas,"image/jpeg",0.08);
-    return best;
+    // Never silently fail a download just because the exact target is unattainable.
+    return best ?? await canvasBlob(working, "image/jpeg", 0.05);
   };
   const createPdf = async (pageIds: number[], targetBytes = 0) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
-    const perPageTarget=targetBytes>0?Math.max(12000,Math.floor(targetBytes/pageIds.length)):0;
+    const perPageTarget=targetBytes>0?Math.max(1024,Math.floor(targetBytes/pageIds.length)):0;
     for (const pageId of pageIds) {
       const canvas=await renderPageCanvas(pageId);
       const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
