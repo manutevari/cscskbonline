@@ -22,15 +22,19 @@ const SOURCES = [
   { name: "UPSSSC", url: "https://upsssc.gov.in/" },
   { name: "Railway Recruitment Board", url: "https://www.rrbapply.gov.in/" },
   { name: "UP Police Recruitment Board", url: "https://uppbpb.gov.in/" },
+  { name: "UPESSC Official Website", url: "https://www.upessc.up.gov.in/" },
+  { name: "UPESSC OTR / Recruitment Portal", url: "https://apply.upessc.org/" },
 ];
 
-const MATCH = /(notification|notice|recruitment|vacanc|advertisement|apply online|admit.?card|answer.?key|result|exam|examination|selection|important date|latest|भर्ती|अधिसूचना|विज्ञापन|प्रवेश पत्र|उत्तर कुंजी|परिणाम|परीक्षा|नोटिस)/i;
+const MATCH = /(notification|notice|recruitment|vacanc|advertisement|apply online|admit.?card|answer.?key|result|exam|examination|selection|important date|latest|tgt|pgt|teacher|assistant professor|assistant teacher|lecturer|प्रवक्ता|अध्यापक|शिक्षक|भर्ती|अधिसूचना|विज्ञापन|प्रवेश पत्र|उत्तर कुंजी|परिणाम|परीक्षा|नोटिस)/i;
+const NAVIGATION_TITLE = /^(examinations?|active exam|examcal|online notifications?|interview only|screeningtest|examinationonly|exam calendar|home|login|registration|candidate corner|notice board|latest updates?)$/i;
+const normalizeTitle = (text: string) => text.toLowerCase().replace(/\b(hm|translate)\b/gi, "").replace(/[^a-z0-9\u0900-\u097f]+/g, " ").trim();
 const KIND = (text: string): RecruitmentNotice["kind"] => {
   if (/admit.?card|प्रवेश पत्र/i.test(text)) return "admit-card";
   if (/answer.?key|उत्तर कुंजी/i.test(text)) return "answer-key";
   if (/result|परिणाम|merit list/i.test(text)) return "result";
   if (/exam|examination|परीक्षा|schedule|calendar/i.test(text)) return "exam";
-  if (/recruitment|vacanc|advertisement|apply online|भर्ती|विज्ञापन/i.test(text)) return "recruitment";
+  if (/recruitment|vacanc|advertisement|apply online|tgt|pgt|teacher|assistant professor|assistant teacher|lecturer|प्रवक्ता|अध्यापक|शिक्षक|भर्ती|विज्ञापन/i.test(text)) return "recruitment";
   return "notice";
 };
 
@@ -58,14 +62,17 @@ function parseLinks(html: string, source: typeof SOURCES[number], checkedAt: str
     const attributes = match[1] || "";
     const hrefMatch = attributes.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
     const href = (hrefMatch && (hrefMatch[1] || hrefMatch[2] || hrefMatch[3]) || "").trim();
-    const title = cleanText(match[2] || "").slice(0, 180);
-    if (!href || !title || title.length < 3 || !MATCH.test(title + " " + href)) continue;
+    const title = cleanText(match[2] || "").replace(/\bHM\b|\|\s*translate/gi, "").replace(/[_{}]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    const titleKey = normalizeTitle(title);
+    if (!href || !title || title.length < 3 || NAVIGATION_TITLE.test(titleKey) || !MATCH.test(title + " " + href)) continue;
     try {
       const resolved = new URL(href, source.url);
       const base = new URL(source.url);
       if (resolved.protocol !== "https:" || !(resolved.hostname === base.hostname || resolved.hostname.endsWith("." + base.hostname))) continue;
-      if (seen.has(resolved.href)) continue;
-      seen.add(resolved.href);
+      if (resolved.pathname === "/" || /\/(home|login|registration|candidate.?corner|menu|index)(\.html?)?$/i.test(resolved.pathname)) continue;
+      const dedupeKey = titleKey + "|" + resolved.pathname.replace(/\/+$/, "");
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
       output.push({
         id: source.name + ":" + resolved.href,
         board: source.name,
