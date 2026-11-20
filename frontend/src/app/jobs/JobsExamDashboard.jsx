@@ -1,103 +1,166 @@
 "use client";
+import { useEffect, useMemo, useState } from "react";
 
-import { useMemo, useState } from "react";
-
-const boards = {
-  SSC: { exams: ["CGL", "CHSL", "MTS / Havaldar", "GD Constable", "CPO SI", "JE", "Stenographer", "Selection Post", "JHT"], url: "https://ssc.gov.in/" },
-  UPPSC: { exams: ["Combined State / Upper Subordinate", "RO / ARO", "Assistant Professor", "Other UPPSC recruitment"], url: "https://uppsc.up.nic.in/" },
-  UPSSSC: { exams: ["PET", " लेखपाल", "Junior Assistant", " अन्य भर्तियाँ"], url: "https://upsssc.gov.in/" },
-  RRB: { exams: ["NTPC", "Group D", "ALP", "Technician", "JE"], url: "https://www.rrbapply.gov.in/" },
-  "UP Police": { exams: ["Constable", "Sub Inspector", " अन्य भर्तियाँ"], url: "https://uppbpb.gov.in/" },
-};
-
-const shortcuts = [
-  { title: "Latest Jobs", desc: "नई भर्ती और आवेदन की जानकारी", icon: "▤", id: "latest-jobs" },
-  { title: "Admit Cards", desc: "परीक्षा प्रवेश पत्र", icon: "▣", id: "admit-cards" },
-  { title: "Results", desc: "परीक्षा परिणाम और मेरिट", icon: "✓", id: "results" },
-  { title: "Answer Keys", desc: "उत्तर कुंजी और आपत्ति", icon: "≡", id: "answer-keys" },
-  { title: "Syllabus", desc: "पाठ्यक्रम और परीक्षा पैटर्न", icon: "▥", id: "syllabus" },
-  { title: "Exam Calendar", desc: "आगामी परीक्षा कार्यक्रम", icon: "▦", id: "exam-calendar" },
+const rows = [
+ {exam:"SSC CGL",cat:"SSC",state:"All India",status:"Reference",min:18,max:32,age:"18–32 (notice-wise)",fee:"₹100; exemptions as notified",qual:"Graduate",url:"https://ssc.gov.in/"},
+ {exam:"SSC CHSL",cat:"SSC",state:"All India",status:"Reference",min:18,max:27,age:"18–27",fee:"₹100; exemptions as notified",qual:"12th",url:"https://ssc.gov.in/"},
+ {exam:"SSC MTS / Havaldar",cat:"SSC",state:"All India",status:"Reference",min:18,max:27,age:"18–25 / 18–27",fee:"₹100; exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+ {exam:"SSC GD Constable",cat:"SSC",state:"All India",status:"Reference",min:18,max:23,age:"18–23",fee:"₹100; exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+ {exam:"SSC CPO",cat:"SSC",state:"All India",status:"Reference",min:20,max:25,age:"20–25",fee:"₹100; exemptions as notified",qual:"Graduate",url:"https://ssc.gov.in/"},
+ {exam:"SSC Stenographer",cat:"SSC",state:"All India",status:"Reference",min:18,max:30,age:"Notice-based",fee:"See official notice",qual:"12th + skill test",url:"https://ssc.gov.in/"},
+ {exam:"UPSC Civil Services",cat:"UPSC",state:"All India",status:"Reference",min:21,max:32,age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://upsc.gov.in/"},
+ {exam:"NDA / Naval Academy",cat:"Defence",state:"All India",status:"Reference",min:16,max:19,age:"Entry-specific",fee:"Exemptions as notified",qual:"12th; subject-specific",url:"https://upsc.gov.in/"},
+ {exam:"CDS",cat:"Defence",state:"All India",status:"Reference",min:19,max:25,age:"Entry-specific",fee:"Exemptions as notified",qual:"Graduate / entry-specific",url:"https://upsc.gov.in/"},
+ {exam:"Army Agniveer",cat:"Defence",state:"All India",status:"Reference",min:17,max:23,age:"Entry-specific",fee:"See notification",qual:"10th / 12th by entry",url:"https://joinindianarmy.nic.in/"},
+ {exam:"Navy Agniveer",cat:"Defence",state:"All India",status:"Reference",min:17,max:23,age:"Entry-specific",fee:"See notification",qual:"Entry-specific",url:"https://joinindiannavy.gov.in/"},
+ {exam:"Agniveer Vayu",cat:"Defence",state:"All India",status:"Reference",min:17,max:23,age:"Entry-specific",fee:"See notification",qual:"Entry-specific",url:"https://agnipathvayu.cdac.in/"},
+ {exam:"RRB NTPC",cat:"Railway",state:"All India",status:"Reference",min:18,max:36,age:"Notice-based",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://www.rrbapply.gov.in/"},
+ {exam:"RRB Group D",cat:"Railway",state:"All India",status:"Reference",min:18,max:33,age:"Notice-based",fee:"Category-wise; see notice",qual:"10th / ITI",url:"https://www.rrbapply.gov.in/"},
+ {exam:"RRB ALP / Technician",cat:"Railway",state:"All India",status:"Reference",min:18,max:33,age:"Notice-based",fee:"Category-wise; see notice",qual:"ITI / Diploma",url:"https://www.rrbapply.gov.in/"},
+ {exam:"SBI PO / Clerk",cat:"Banking",state:"All India",status:"Reference",min:20,max:30,age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://sbi.co.in/web/careers"},
+ {exam:"IBPS PO / Clerk",cat:"Banking",state:"All India",status:"Reference",min:20,max:30,age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://www.ibps.in/"},
+ {exam:"RBI Assistant / Grade B",cat:"Banking",state:"All India",status:"Reference",min:20,max:30,age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.rbi.org.in/"},
+ {exam:"LIC AAO / Assistant",cat:"Insurance",state:"All India",status:"Reference",min:21,max:30,age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://licindia.in/"},
+ {exam:"UPPSC PCS",cat:"State",state:"Uttar Pradesh",status:"Reference",min:21,max:40,age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://uppsc.up.nic.in/"},
+ {exam:"UPSSSC PET",cat:"State",state:"Uttar Pradesh",status:"Reference",min:18,max:40,age:"Notice-based",fee:"See official notice",qual:"As notified",url:"https://upsssc.gov.in/"},
+ {exam:"UPSSSC Lekhpal / Junior Assistant",cat:"State",state:"Uttar Pradesh",status:"Reference",min:18,max:40,age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://upsssc.gov.in/"},
+ {exam:"UP Police Constable / SI",cat:"Police",state:"Uttar Pradesh",status:"Reference",min:18,max:40,age:"Post-specific",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://uppbpb.gov.in/"},
+ {exam:"CTET",cat:"Teaching",state:"All India",status:"Reference",min:18,max:60,age:"Verify notification",fee:"Category-wise; see notice",qual:"Teacher qualification",url:"https://ctet.nic.in/"},
+ {exam:"State TET / UPTET",cat:"Teaching",state:"Uttar Pradesh",status:"Reference",min:18,max:60,age:"Notice-based",fee:"Category-wise; see notice",qual:"D.El.Ed / B.Ed etc.",url:"https://updeled.gov.in/"},
+ {exam:"PRT / TGT / PGT Recruitment",cat:"Teaching",state:"All India",status:"Reference",min:18,max:40,age:"Recruitment-specific",fee:"Category-wise; see notice",qual:"Relevant degree + teacher qualification",url:"https://www.cbse.gov.in/"},
+ {exam:"NEET UG",cat:"Entrance",state:"All India",status:"Reference",min:17,max:100,age:"Minimum 17 (verify rules)",fee:"Category-wise; see notice",qual:"12th PCB",url:"https://neet.nta.nic.in/"},
+ {exam:"JEE Main",cat:"Entrance",state:"All India",status:"Reference",min:16,max:100,age:"Year-of-passing rules",fee:"Category-wise; see notice",qual:"12th PCM / eligible years",url:"https://jeemain.nta.nic.in/"},
+ {exam:"CUET UG",cat:"Entrance",state:"All India",status:"Reference",min:16,max:100,age:"University-specific",fee:"Category-wise; see notice",qual:"12th",url:"https://cuet.nta.nic.in/"},
+ {exam:"JNVST Class 6 Admission",cat:"Online Forms",state:"All India",status:"Online Form",min:10,max:12,age:"Class/date-of-birth criteria",fee:"Generally no fee; verify",qual:"Class 5 student",url:"https://navodaya.gov.in/"},
+ {exam:"JNVST Class 9 Admission",cat:"Online Forms",state:"All India",status:"Online Form",min:13,max:15,age:"Class/date-of-birth criteria",fee:"Verify official notice",qual:"Class 8 student",url:"https://navodaya.gov.in/"},
+ {exam:"Sainik School AISSEE",cat:"Online Forms",state:"All India",status:"Online Form",min:10,max:15,age:"Class-specific DOB range",fee:"Category-wise; see notice",qual:"Class 5 / 8 as applicable",url:"https://aissee.nta.nic.in/"},
+ {exam:"RTE 25% Free Admission",cat:"Online Forms",state:"Uttar Pradesh",status:"Online Form",min:3,max:8,age:"Age/class rules vary by state",fee:"Free admission under applicable rules",qual:"Eligible children; state rules",url:"https://rte25.upsdc.gov.in/"},
+ {exam:"School Admissions (Online)",cat:"Online Forms",state:"All India",status:"Online Form",min:3,max:18,age:"School/state-specific",fee:"School-specific",qual:"Class/admission-specific",url:"https://www.education.gov.in/"},
+ {exam:"Scholarship Applications",cat:"Online Forms",state:"All India",status:"Online Form",min:5,max:18,age:"Scheme-specific",fee:"Usually no application fee; verify",qual:"Class, income, category, merit-specific",url:"https://scholarships.gov.in/"},
+ {exam:"National Scholarship Portal",cat:"Online Forms",state:"All India",status:"Online Form",min:5,max:25,age:"Scheme-specific",fee:"No fee; verify scheme",qual:"Scheme-specific",url:"https://scholarships.gov.in/"},
+ {exam:"UP School / College Admission Forms",cat:"Online Forms",state:"Uttar Pradesh",status:"Online Form",min:5,max:18,age:"Admission-specific",fee:"Institution-specific",qual:"Class-specific",url:"https://up.gov.in/"},
+ {exam:"CCC / CPCT / RSCIT",cat:"Certification",state:"All India",status:"Reference",min:14,max:100,age:"Exam-specific",fee:"Exam-specific",qual:"Exam-specific",url:"https://www.nielit.gov.in/"},
+ {exam:"High Court / District Court Recruitment",cat:"District",state:"All India",status:"Reference",min:18,max:40,age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.sci.gov.in/"},
+ {exam:"PSU Recruitment (GATE / Direct)",cat:"PSU",state:"All India",status:"Reference",min:18,max:35,age:"Post-specific",fee:"See notice",qual:"Engineering / relevant degree",url:"https://www.ncs.gov.in/"},
+ {exam:"State Government Recruitment Directory",cat:"State",state:"All India",status:"Reference",min:18,max:40,age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.ncs.gov.in/"},
+ {exam:"District / Local Recruitment",cat:"District",state:"All India",status:"Reference",min:18,max:40,age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.ncs.gov.in/"},
 ];
+const archiveRows = []; // No verified archived-cycle dataset yet; never label current reference rows as previous cycles.
+const categories=["All Categories","SSC","UPSC","Railway","Banking","Police","Teaching","Defence","State Govt","Other","Insurance","State","District","PSU","Entrance","School","Online Forms","Certification"];
+const qualifications=["All Qualifications","No formal schooling","5th Pass","8th Pass","10th Pass","12th Pass","ITI","Diploma","Graduate","Postgraduate","Teacher Qualification","Other"];
+const feeBands=["All Fees","₹0","₹100","₹500","₹0–500","₹500–1,000","₹1,000+"];
+const dateFilters=["All Dates","Application Start","Last Date","Correction Date","Exam Date","Result Date"];
+const states=["All States","All India","Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"];
+const blank="—";
+function parseRecruitmentDate(v){
+ if(!v||v==="—"||v==="-"||/not (announced|verified)|see notification/i.test(String(v)))return null;
+ const raw=String(v).trim();const iso=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+ if(iso)return new Date(Number(iso[1]),Number(iso[2])-1,Number(iso[3]));
+ const dmy=raw.match(/^(\d{1,2})[\/. -](\d{1,2})[\/. -](\d{4})$/);
+ if(dmy)return new Date(Number(dmy[3]),Number(dmy[2])-1,Number(dmy[1]));
+ return null;
+}
+function recruitmentStatus(row){
+ const start=parseRecruitmentDate(row.start),last=parseRecruitmentDate(row.last);
+ const today=new Date();today.setHours(0,0,0,0);
+ if(row.verifiedStatus&&["Live","Upcoming","Closed","Old"].includes(row.verifiedStatus))return row.verifiedStatus;
+ if(start&&start>today)return "Upcoming";
+ if(last&&last<today)return "Closed";
+ if(start&&last&&start<=today&&last>=today)return "Live";
+ return row.status==="Old"?"Old":"Reference";
+}
+const categoryRouter=(row,selected)=>{
+ if(selected==="All Categories")return true;
+ const aliases={"State Govt":["State"],"School":["School","Online Forms"]};
+ return (aliases[selected]||[selected]).includes(row.cat);
+};
+const stateRouter=(row,selected)=>{
+ if(selected==="All States")return true;
+ const normalized=row.state==="All India"?"Central":row.state;
+ return normalized===selected||row.state===selected;
+};
+const ageRouter=(row,selected)=>{
+ if(selected==="All Ages")return true;
+ const bounds=selected==="18+"?[18,100]:selected.endsWith("+")?[Number(selected.slice(0,-1)),100]:selected.split(/[–-]/).map(Number);
+ if(!bounds.every(Number.isFinite))return false;
+ const criteria=row.notificationCriteria;
+ const min=criteria?.ageMin??(row.criteriaVerified?row.min:null),max=criteria?.ageMax??(row.criteriaVerified?row.max:null);
+ return Number.isFinite(Number(min))&&Number.isFinite(Number(max))&&Number(max)>=bounds[0]&&Number(min)<=bounds[1];
+};
+const categoryEligibilityRouter=(row,selected)=>{
+ if(selected==="All Candidate Categories")return true;
+ const list=row.notificationCriteria?.eligibleCategories||row.eligibleCategories;
+ return row.criteriaVerified===true&&Array.isArray(list)&&list.includes(selected);
+};
+const feeRouter=(row,selected)=>{
+ if(selected==="All Fees")return true;
+ const fee=row.notificationCriteria?.feeAmount??(row.criteriaVerified?row.feeAmount:null);
+ if(fee===null||fee===undefined||fee===""||!Number.isFinite(Number(fee)))return false;
+ const n=Number(fee);
+ if(selected==="₹0")return n===0;
+ if(selected==="₹100")return n===100;
+ if(selected==="₹500")return n===500;
+ if(selected==="₹0–500")return n>=0&&n<=500;
+ if(selected==="₹500–1,000")return n>500&&n<=1000;
+ if(selected==="₹1,000+")return n>1000;
+ return false;
+};
+const qualificationRouter=(row,selected)=>{
+ if(selected==="All Qualifications")return true;
+ const q=String(row.notificationCriteria?.qualification|| (row.criteriaVerified?row.qual:"")||"").toLowerCase();
+ const aliases={"5th Pass":["5th","class 5"],"8th Pass":["8th","class 8"],"10th Pass":["10th","class 10"],"12th Pass":["12th","class 12"],"Teacher Qualification":["teacher","d.el.ed","b.ed","ctet","tet"],"Graduate":["graduate","degree","bachelor"],"Postgraduate":["postgraduate","master"],"No formal schooling":["no formal","unskilled"]};
+ const terms=aliases[selected]||[selected.toLowerCase().replace(" pass","")];
+ return row.criteriaVerified===true&&q!=="see official notification"&&terms.some(term=>q.includes(term));
+};
+const dateRouter=(row,selected)=>{
+ if(selected==="All Dates")return true;
+ const fields={"Application Start":"start","Last Date":"last","Correction Date":"correction","Exam Date":"examDate","Result Date":"result"};
+ return Boolean(row.criteriaVerified===true&&parseRecruitmentDate(row.notificationCriteria?.dates?.[fields[selected]]||row[fields[selected]]));
+};
+const searchRouter=(row,query)=>{
+ if(!query.trim())return true;
+ const haystack=[row.exam,row.cat,row.state,row.qual,row.age,row.fee,row.vacancy,row.notificationCriteria?.qualification,row.notificationCriteria?.post,row.notificationCriteria?.subjects,row.notificationCriteria?.physicalRequirements,row.notificationCriteria?.domicile].filter(Boolean).join(" ").toLowerCase();
+ return haystack.includes(query.trim().toLowerCase());
+};
+function recruitmentQueryRouter(row,filters){
+ return categoryRouter(row,filters.category)&&stateRouter(row,filters.state)&&ageRouter(row,filters.age)&&
+ (filters.status==="All Statuses"||recruitmentStatus(row)===filters.status)&&feeRouter(row,filters.fee)&&
+ qualificationRouter(row,filters.qualification)&&dateRouter(row,filters.date)&&
+ categoryEligibilityRouter(row,filters.candidateCategory)&&searchRouter(row,filters.search);
+}
 
-const ink = "#14233f";
-const muted = "#64748b";
-const border = "#e2e8f0";
-const card = { background: "#fff", border: "1px solid " + border, borderRadius: 16, padding: 18, minWidth: 0 };
 
-export default function JobsExamDashboard() {
-  const [board, setBoard] = useState("SSC");
-  const [exam, setExam] = useState("CGL");
-  const [section, setSection] = useState("latest-jobs");
-  const [query, setQuery] = useState("");
-  const selected = boards[board];
-  const filtered = useMemo(() => shortcuts.filter(x => (x.title + " " + x.desc).toLowerCase().includes(query.toLowerCase())), [query]);
-
-  function changeBoard(value) { setBoard(value); setExam(boards[value].exams[0]); }
-
-  return (
-    <main style={{ color: ink, background: "#f5f7fb", minHeight: "100vh", fontFamily: "Arial, 'Noto Sans Devanagari', sans-serif" }}>
-      <div style={{ background: "linear-gradient(120deg,#102a56 0%,#174b91 58%,#2476bd 100%)", color: "#fff", padding: "clamp(24px,5vw,52px) clamp(18px,4vw,48px)" }}>
-        <div style={{ maxWidth: 1240, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <a href="/" style={{ color: "#fff", textDecoration: "none", fontWeight: 900, letterSpacing: ".04em" }}>CSC SKB <span style={{ opacity: .7, fontWeight: 500 }}>/ CAREER DESK</span></a>
-            <span style={{ border: "1px solid #ffffff55", background: "#ffffff14", borderRadius: 30, padding: "7px 12px", fontSize: 12 }}>Jobs &amp; Exams Portal</span>
-          </div>
-          <div style={{ maxWidth: 760, paddingTop: 38 }}>
-            <p style={{ margin: 0, color: "#b9d8ff", fontSize: 12, fontWeight: 800, letterSpacing: ".16em" }}>YOUR CAREER, ONE PLACE</p>
-            <h1 style={{ fontSize: "clamp(30px,5vw,52px)", lineHeight: 1.08, margin: "12px 0", letterSpacing: "-.035em" }}>Find your next <span style={{ color: "#8ed5ff" }}>opportunity.</span></h1>
-            <p style={{ color: "#e1edff", fontSize: 16, lineHeight: 1.7, margin: "0 0 22px" }}>सरकारी नौकरी, प्रतियोगी परीक्षाएँ और जरूरी परीक्षा अपडेट — साफ, सरल और एक ही जगह।</p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href="#latest-jobs" style={{ background: "#fff", color: "#16477f", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 800 }}>भर्ती देखें ↓</a>
-              <a href={selected.url} target="_blank" rel="noreferrer" style={{ border: "1px solid #ffffff80", color: "#fff", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 750 }}>Official {board} website ↗</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "22px clamp(14px,3vw,28px) 44px" }}>
-        <section style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,230px),1fr))", gap: 16, alignItems: "end", boxShadow: "0 8px 28px #14233f0a" }}>
-          <div><label htmlFor="recruiting-board" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>RECRUITING BOARD</label><select id="recruiting-board" value={board} onChange={e => changeBoard(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{Object.keys(boards).map(x => <option key={x}>{x}</option>)}</select></div>
-          <div><label htmlFor="exam-choice" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>EXAM / RECRUITMENT</label><select id="exam-choice" value={exam} onChange={e => setExam(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{selected.exams.map(x => <option key={x}>{x}</option>)}</select></div>
-          <a href={selected.url} target="_blank" rel="noreferrer" style={{ textAlign: "center", padding: 13, borderRadius: 9, background: "#155eef", color: "#fff", textDecoration: "none", fontWeight: 800 }}>Official notification ↗</a>
-        </section>
-
-        <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "30px 0 14px" }}>
-          <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".13em" }}>EXPLORE THE PORTAL</p><h2 style={{ margin: "5px 0 0", fontSize: 25 }}>What are you looking for?</h2></div>
-          <input aria-label="Search portal sections" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search jobs, results, syllabus…" style={{ width: "min(100%,330px)", padding: 12, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,175px),1fr))", gap: 12 }}>
-          {filtered.map(item => <button key={item.id} onClick={() => { setSection(item.id); document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{ textAlign: "left", cursor: "pointer", ...card, transition: "transform .15s", borderColor: section === item.id ? "#8bb8ff" : border, boxShadow: section === item.id ? "0 0 0 2px #dceaff" : "none" }}>
-            <span style={{ width: 40, height: 40, display: "grid", placeItems: "center", background: "#edf4ff", color: "#155eef", borderRadius: 11, fontSize: 20, fontWeight: 900 }}>{item.icon}</span>
-            <strong style={{ display: "block", marginTop: 13, fontSize: 15 }}>{item.title}</strong><span style={{ display: "block", marginTop: 5, color: muted, fontSize: 12, lineHeight: 1.5 }}>{item.desc}</span>
-          </button>)}
-        </div>
-
-        <section id="latest-jobs" style={{ ...card, marginTop: 26, scrollMarginTop: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "start" }}>
-            <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>RECRUITMENT UPDATES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}>Latest {board} Jobs</h2><p style={{ margin: 0, color: muted, fontSize: 13 }}>Selected exam: {exam}</p></div>
-            <a href={selected.url} target="_blank" rel="noreferrer" style={{ color: "#155eef", textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Visit official board ↗</a>
-          </div>
-          <div style={{ marginTop: 18, padding: 18, borderRadius: 12, background: "#f8fafc", border: "1px dashed #cbd5e1" }}>
-            <strong style={{ display: "block", fontSize: 15 }}>Live verified vacancy feed is not connected yet.</strong>
-            <p style={{ color: muted, fontSize: 13, lineHeight: 1.7, margin: "7px 0 12px" }}>इसलिए यहाँ कोई अपुष्ट भर्ती, तारीख या vacancy count नहीं दिखाया जा रहा है। नवीनतम और सही आवेदन तिथियों के लिए संबंधित भर्ती बोर्ड की आधिकारिक सूचना देखें।</p>
-            <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "10px 13px", background: "#155eef", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Open {board} official website ↗</a>
-          </div>
-        </section>
-
-        <section style={{ marginTop: 26 }}>
-          <div style={{ marginBottom: 12 }}><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>EXAM RESOURCES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}> परीक्षा से जुड़ी जानकारी</h2></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,250px),1fr))", gap: 12 }}>
-            {shortcuts.slice(1).map(item => <article id={item.id} key={item.id} style={{ ...card, scrollMarginTop: 18 }}>
-              <span style={{ color: "#155eef", fontSize: 21, fontWeight: 900 }}>{item.icon}</span><h3 style={{ margin: "10px 0 5px", fontSize: 16 }}>{item.title}</h3><p style={{ color: muted, fontSize: 13, lineHeight: 1.6, margin: 0 }}>{item.desc} के लिए आधिकारिक बोर्ड की सूचना देखें।</p>
-              <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 13, color: "#155eef", fontWeight: 800, textDecoration: "none", fontSize: 13 }}>Official updates ↗</a>
-            </article>)}
-          </div>
-        </section>
-
-        <footer style={{ marginTop: 28, padding: "18px 2px", borderTop: "1px solid " + border, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: muted, fontSize: 12 }}>
-          <span>CSC SKB Online · Jobs &amp; Exams</span><span>सूचनाओं की अंतिम पुष्टि संबंधित official notification से करें।</span>
-        </footer>
-      </div>
-    </main>
-  );
+export default function JobsExamDashboard(){
+ const [tab,setTab]=useState("All"),[category,setCategory]=useState("All Categories"),[statusFilter,setStatusFilter]=useState("All Statuses"),[stateFilter,setStateFilter]=useState("All States"),[candidateCategory,setCandidateCategory]=useState("All Candidate Categories"),[ageFilter,setAgeFilter]=useState("All Ages"),[search,setSearch]=useState(""),[page,setPage]=useState(1),[feeFilter,setFeeFilter]=useState("All Fees"),[qualificationFilter,setQualificationFilter]=useState("All Qualifications"),[dateFilter,setDateFilter]=useState("All Dates");
+ const [liveFeed,setLiveFeed]=useState(null),[feedError,setFeedError]=useState("");
+ useEffect(()=>{let active=true;const load=async()=>{try{const res=await fetch("/api/recruitment/live",{cache:"no-store"});if(!res.ok)throw new Error("Feed request failed");const data=await res.json();if(active){setLiveFeed(data);setFeedError("");}}catch{if(active)setFeedError("Live feed temporarily unavailable");}};load();const timer=setInterval(load,300000);return()=>{active=false;clearInterval(timer);};},[]);
+ const [intelBusy,setIntelBusy]=useState(false),[intelResult,setIntelResult]=useState(null),[intelError,setIntelError]=useState("");
+ const runIntelSearch=async()=>{const q=search.trim();if(!q)return;setIntelBusy(true);setIntelError("");setIntelResult(null);try{const response=await fetch("/api/recruitment/intelligence/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q,state:stateFilter,category})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||"Search failed");setIntelResult(payload);}catch(e){setIntelError(e.message||"Search failed");}finally{setIntelBusy(false);}};
+ const [kbQuestion,setKbQuestion]=useState(""),[kbBusy,setKbBusy]=useState(false),[kbAnswer,setKbAnswer]=useState(null),[kbError,setKbError]=useState("");
+ const askKnowledgeBase=async()=>{const q=kbQuestion.trim();if(!q)return;setKbBusy(true);setKbError("");setKbAnswer(null);try{const response=await fetch("/api/recruitment/intelligence/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q,state:stateFilter,category})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||"Knowledge query failed");setKbAnswer(payload);}catch(e){setKbError(e.message||"Knowledge query failed");}finally{setKbBusy(false);}};
+ const pageSize=20;
+ const cleanNoticeTitle=(title)=>{const raw=String(title||"Official portal notice").replace(/\\{\\{[^}]*\\}\\}/g,"").replace(/\\s*\\|\\s*translate\\s*/gi,"").replace(/[_{}]+/g," ").replace(/\\s+/g," ").trim();const friendly={"ActiveExam HM":"Active Exam","ForthcomExam HM":"Forthcoming Exam","OnlineNotifications HM":"Online Notifications","ApplyOnline HM":"Apply Online","InterviewOnly HM":"Interview Only","ScreeningTestInt HM":"Screening Test / Interview","ExaminationAndInterviewOnly HM":"Examination & Interview Only","PreExamMainExamInt HM":"Preliminary / Main Exam / Interview"};return friendly[raw]||raw||"Official portal notice";};
+ const noticeCategory=(board)=>/ssc/i.test(board)?"SSC":/uppsc|upsssc|upessc/i.test(board)?"State":/railway|rrb/i.test(board)?"Railway":/police/i.test(board)?"Police":/bank/i.test(board)?"Banking":/teacher|education/i.test(board)?"Teaching":"Other";
+ const noticeState=(board)=>/up police|uppsc|upsssc|upessc/i.test(board)?"Uttar Pradesh":/ssc|railway|rrb|bank/i.test(board)?"Central":"All States";
+ const liveRows=(liveFeed?.notices||[]).map(n=>({exam:cleanNoticeTitle(n.title),cat:noticeCategory(n.board),state:noticeState(n.board),status:"Reference",min:null,max:null,age:"See official notice",fee:"See official notification",feeAmount:null,eligibleCategories:[],criteriaVerified:false,notificationCriteria:null,qual:"See official notification",url:n.sourceUrl||n.url,notificationUrl:n.url,vacancy:"Not verified",start:"—",last:"—",correction:"—",examDate:"—",admit:"Not announced",result:"Not announced",kind:n.kind,checkedAt:n.checkedAt}));
+ const base=tab==="Old"?archiveRows:tab==="Live"?liveRows:[...liveRows,...rows];
+ const activeFilters={category,status:statusFilter,state:stateFilter,candidateCategory,age:ageFilter,fee:feeFilter,qualification:qualificationFilter,date:dateFilter,search};
+ const filterKeys=["category","status","state","candidateCategory","age","fee","qualification","date"];
+ const optionRows=(key)=>base.filter(r=>recruitmentQueryRouter(r,{...activeFilters,search:"",[key]:key==="category"?"All Categories":key==="status"?"All Statuses":key==="state"?"All States":key==="candidateCategory"?"All Candidate Categories":key==="age"?"All Ages":key==="fee"?"All Fees":key==="qualification"?"All Qualifications":"All Dates"}));
+ const optionCount=(key,value)=>key==="state"&&value==="All States"?optionRows(key).length:optionRows(key).filter(r=>key==="category"?r.cat===value:key==="state"?(r.state==="All India"?"Central":r.state)===value:key==="status"?recruitmentStatus(r)===value:key==="candidateCategory"?(r.notificationCriteria?.eligibleCategories||[]).includes(value):key==="age"?ageRouter(r,value):key==="fee"?feeRouter(r,value):key==="qualification"?qualificationRouter(r,value):dateRouter(r,value)).length;
+ const stateCoverageLabel=(value)=>{if(value==="All States")return `${value} (${liveRows.length} scanned notices)`;if(value==="Central")return `${value} (${liveRows.filter(r=>r.state==="Central").length} scanned notices)`;if(value==="Uttar Pradesh")return `${value} (${liveRows.filter(r=>r.state==="Uttar Pradesh").length} scanned notices · partial coverage)`;return `${value} (not monitored)`;};
+ const cascade=(key,values,current)=>values.map(v=>({value:typeof v==="string"?v:v.value,label:key==="state"?stateCoverageLabel(typeof v==="string"?v:v.value):(typeof v==="string"?v:v.label),disabled:false,count:key==="state"?undefined:optionCount(key,typeof v==="string"?v:v.value)}));
+ const filtered=useMemo(()=>base.filter(r=>recruitmentQueryRouter(r,activeFilters)),[base,category,statusFilter,stateFilter,candidateCategory,ageFilter,search,feeFilter,qualificationFilter,dateFilter]);
+ const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));const pageRows=filtered.slice((page-1)*pageSize,page*pageSize);
+ const select=(value,setter)=> <select className="grid-select" value={value} onChange={e=>{setter(e.target.value);setPage(1)}}><option>{value.startsWith("All")?value:""}</option></select>;
+ const gridFilter=(value,setter,options,label)=><select className="grid-select" aria-label={label} value={value} onChange={e=>{setter(e.target.value);setPage(1)}}>{options.map(o=>{const item=typeof o==="string"?{value:o,label:o}:o;return <option key={item.value} value={item.value} disabled={item.disabled}>{item.label}{item.count!==undefined?` (${item.count})`:""}</option>})}</select>;
+ return <main className="exam-register"><style>{`
+ .exam-register{min-height:100vh;background:linear-gradient(135deg,#101827,#1d3048);padding:clamp(12px,2.5vw,30px);font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif;color:#14233b;font-size:14px;font-weight:400;line-height:1.55;letter-spacing:normal;text-rendering:optimizeLegibility}.wrap{max-width:1700px;margin:auto}.head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;color:#f8fafc;margin-bottom:18px}.brand{font-size:13px;font-weight:900;letter-spacing:.14em;color:#cbd5e1}.brand small{display:block;font-size:11px;letter-spacing:.05em;font-weight:500;color:#94a3b8;margin-top:5px}.title{font-size:clamp(25px,3vw,36px);font-weight:900;margin:5px 0}.subtitle{color:#aebed2;font-size:13px}.card{background:#f8fafc;border:1px solid #d9e2ed;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px #0002}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px;border-bottom:1px solid #dce4ee;background:white}.tabs{display:flex;padding:4px;background:#edf2f7;border-radius:10px;gap:4px;flex-wrap:wrap}.tabs button{border:0;border-radius:8px;padding:9px 13px;font-weight:800;color:#52657d;background:transparent;cursor:pointer}.tabs button.active{background:#17365f;color:white}.search{flex:1;min-width:200px;border:1px solid #d5deea;border-radius:9px;padding:10px 12px;font-size:14px}.count{font-size:12px;font-weight:800;color:#64748b;white-space:nowrap}.reset-filters{border:1px solid #cbd5e1;background:#f8fafc;color:#1e3a5f;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer}.reset-filters:hover{background:#e8f1fb}.scroll{overflow:auto;max-height:calc(100vh - 300px);min-height:300px}.table{border-collapse:collapse;width:100%;min-width:2300px;font-size:12px;background:white}.table th,.table td{border:1px solid #d6dee8}.table th{position:sticky;top:0;z-index:2;background:#17365f;color:white;text-align:left;padding:10px;font-size:11px;white-space:nowrap}.table td{padding:10px;vertical-align:top;color:#33465f;line-height:1.65;min-width:105px;font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif;font-size:13px;letter-spacing:normal;word-break:normal;overflow-wrap:anywhere}.table td:first-child{min-width:210px}.table thead tr.filter-row th{top:35px;background:#eaf1f8;color:#193b60;padding:5px;z-index:3}.grid-select{width:100%;min-width:95px;border:1px solid #c6d3e2;border-radius:5px;padding:7px 5px;background:#fff;color:#1e344f;font-size:12px;font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif;line-height:1.5}.name{color:#164a91;font-weight:800;font-size:14px;line-height:1.6;font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif}.fee{min-width:220px;max-width:270px}.pill{display:inline-block;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800;background:#edf1f6;color:#66758a;white-space:nowrap}.link{display:inline-block;background:#e7f0ff;color:#1452a1;border:1px solid #cbdfff;padding:7px 9px;border-radius:7px;text-decoration:none;font-weight:800;white-space:nowrap}.link.disabled{background:#f1f4f7;color:#8693a3;border-color:#d8dfe7;cursor:not-allowed}.empty{text-align:center;padding:40px;color:#718096}.pager{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;background:white;border-top:1px solid #e6ebf2}.pager button{border:1px solid #d5deea;border-radius:8px;padding:8px 12px;background:white;font-weight:700;color:#26496e}.pager button:disabled{opacity:.45}.feed{padding:13px 15px;background:#eef6ff;border-bottom:1px solid #dce8f6;font-size:12px;color:#45617e}.live-feed{padding:13px 15px;background:#f0fdf4;border-bottom:1px solid #cfe8d6;color:#164b32}.live-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px}.live-refresh{background:#d1fae5;border-radius:20px;padding:4px 8px;font-weight:800}.live-time{color:#587567}.feed-sources{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.feed-sources span{border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700}.source-ok{background:#dcfce7;color:#166534}.source-down{background:#fee2e2;color:#991b1b}.live-notices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px}.live-notice{display:flex;flex-direction:column;gap:5px;background:white;border:1px solid #d5e6d9;border-radius:8px;padding:9px;text-decoration:none;color:#174b32}.live-notice strong{font-size:12px;line-height:1.5;font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif;letter-spacing:normal;overflow-wrap:anywhere}.live-notice small{font-size:10px;color:#6b8174}.live-kind{font-size:9px;text-transform:uppercase;font-weight:900;color:#277449}.feed-empty,.feed-error{font-size:12px;padding:6px;color:#5e7567}.feed-error{color:#9b2c2c}.feed-disclaimer{font-size:10px;color:#5c7565;margin-top:8px;line-height:1.4}.note{padding:12px 16px;color:#738298;font-size:11px;background:#f8fafc;border-top:1px solid #e6ebf2}@media(max-width:650px){.toolbar{align-items:stretch}.tabs{width:100%}.tabs button{flex:1}.search{width:100%}.count{margin-left:0}.scroll{max-height:70vh}}@media(max-width:650px){.exam-register{padding:10px;font-size:16px;line-height:1.65}.brand{font-size:14px}.brand small{font-size:12px}.title{font-size:28px}.subtitle{font-size:14px}.toolbar{padding:12px}.tabs button{font-size:14px;padding:10px 14px}.search{font-size:16px;min-height:46px}.count{font-size:13px}.feed{font-size:14px;line-height:1.6}.live-feed{padding:14px;font-size:14px;line-height:1.65}.live-head{font-size:15px}.live-refresh,.live-time{font-size:13px}.feed-sources span{font-size:12px;padding:6px 8px}.live-notices{grid-template-columns:1fr;gap:10px}.live-notice{padding:13px}.live-notice strong{font-size:16px;line-height:1.75;font-family:"Noto Sans Devanagari","Nirmala UI",Mangal,Arial,sans-serif;letter-spacing:normal;overflow-wrap:anywhere}.live-notice small{font-size:12px;line-height:1.55}.live-kind{font-size:11px}.feed-empty,.feed-error{font-size:14px}.feed-disclaimer{font-size:12px;line-height:1.6}.table{font-size:14px}.table th{font-size:14px;padding:12px}.table td{font-size:15px;line-height:1.7;padding:12px;min-width:120px}.table td:first-child{min-width:230px}.grid-select{font-size:14px;min-height:42px;line-height:1.5}.name{font-size:16px;line-height:1.6}.pill{font-size:12px;padding:6px 9px}.link{font-size:14px;padding:9px 11px}.pager{font-size:14px}.pager button{font-size:14px;padding:10px 14px}.note{font-size:13px;line-height:1.65}}`}</style>
+ <div className="wrap"><header className="head"><div><div className="brand">CSC SKB ONLINE <small>CAREER DESK · JOBS & EXAMS</small></div><h1 className="title">Exam Register</h1><div className="subtitle">Recruitment, vacancies, admissions & forms — spreadsheet register</div></div><div style={{fontSize:12,color:"#aebed2"}}>Preview build · Production untouched</div></header>
+ <section className="card"><div className="toolbar"><div className="tabs" role="tablist">{["All","Live","Old"].map(t=><button key={t} role="tab" aria-selected={tab===t} className={tab===t?"active":""} onClick={()=>{setTab(t);setPage(1)}}>{t}</button>)}</div><input className="search" value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Search any exam / recruitment / post…" aria-label="Search register"/><button className="reset-filters" onClick={runIntelSearch} disabled={intelBusy||!search.trim()}>{intelBusy?"Searching…":"AI Search"}</button><span className="count">{filtered.length} entries · Page {page}/{totalPages}</span><button className="reset-filters" onClick={()=>{setCategory("All Categories");setStatusFilter("All Statuses");setStateFilter("All States");setCandidateCategory("All Candidate Categories");setAgeFilter("All Ages");setFeeFilter("All Fees");setQualificationFilter("All Qualifications");setDateFilter("All Dates");setSearch("");setIntelResult(null);setIntelError("");setTab("All");setPage(1);}}>Reset all filters</button></div>
+ <div className="feed"><strong>Spreadsheet-style filters:</strong> Dropdowns are inside the table’s filter row. Existing date, notification, admit card, result and action columns are retained. Eligibility filters use notification-extracted criteria only; unknown age/category/fee/qualification/date values are not treated as matches.</div>
+ <div className="live-feed"><div className="live-head"><strong>Official live notices</strong><span className="live-refresh">Auto-refresh: 5 minutes (server cache)</span><span className="live-time">{liveFeed?.checkedAt?("Sources last checked "+new Date(liveFeed.checkedAt).toLocaleString()):"Checking official sources…"}</span></div>{feedError&&<div className="feed-error">{feedError}</div>}<div className="feed-sources">{(liveFeed?.sources||[]).map(s=><span key={s.name} className={s.status==="ok"?"source-ok":"source-down"}>{s.name}: {s.status==="ok"?"OK":"Unavailable"} ({s.noticeCount})</span>)}</div><div className="live-notices">{(liveFeed?.notices||[]).filter(n=>!search.trim()||(n.title+" "+n.board+" "+n.kind+" "+n.url+" "+n.sourceUrl).toLowerCase().includes(search.trim().toLowerCase())).map(n=><a className="live-notice" href={n.url} target="_blank" rel="noopener noreferrer" key={n.id}><span className="live-kind">{n.kind}</span><strong>{String(n.title||"Official recruitment notice").replace(/\{\{[^}]*\}\}/g,"").replace(/\s*\|\s*translate\s*/gi,"").replace(/[_{}]+/g," ").replace(/\s+/g," ").trim()||"Official recruitment notice"}</strong><small>{n.board} · Link found on official portal · {new Date(n.checkedAt).toLocaleTimeString()}</small></a>)}{!(liveFeed?.notices||[]).filter(n=>!search.trim()||(n.title+" "+n.board+" "+n.kind).toLowerCase().includes(search.trim().toLowerCase())).length&&<div className="feed-empty">{liveFeed?"No matching notices found in the current portal scan.":"Loading scanned notices…"}</div>}</div><div className="feed-disclaimer">Five-second refresh updates the display. State filter lists all 28 States + 8 UTs, but the live scanner currently checks only 7 official portals (Central/UP-focused); all-state vacancy coverage is not complete yet. Source unavailable means data unavailable—not zero vacancies. This is not a complete official API or verified vacancy database. Verify dates, fees, eligibility and vacancy counts on the linked notice.</div></div><div style={{padding:"14px",background:"#f3f8ff",borderBottom:"1px solid #dce8f6"}}><div style={{fontWeight:900,color:"#17365f",marginBottom:5}}>AI Recruitment Search · State-aware discovery</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button onClick={runIntelSearch} disabled={intelBusy||!search.trim()} style={{background:"#17365f",color:"white",border:0,borderRadius:8,padding:"10px 14px",fontWeight:800}}>{intelBusy?"Searching…":"Run AI state-aware discovery on the same query"}</button></div><div style={{fontSize:11,color:"#5b7088",marginTop:5}}>Search scope: {stateFilter} · {category}. Results are discovery leads; verify official notifications.</div>{intelError&&<div style={{color:"#a12c2c",paddingTop:8}}>{intelError}</div>}{intelResult&&<div style={{marginTop:10,background:"white",padding:12,border:"1px solid #d5e2ef",borderRadius:10}}><strong>{intelResult.searchProvider==="tavily"?"Tavily search":"Search setup required"}</strong>{intelResult.warning&&<div style={{color:"#875b0b",marginTop:4}}>{intelResult.warning}</div>}{intelResult.analysis&&<div style={{whiteSpace:"pre-wrap",margin:"10px 0",lineHeight:1.6}}>{intelResult.analysis}</div>}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:8}}>{(intelResult.items||[]).map((item,i)=><a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{border:"1px solid #dce5ef",padding:9,borderRadius:8,color:"#174a91",textDecoration:"none"}}><strong>{item.title||item.url}</strong><small style={{display:"block",color:"#60758c",marginTop:4}}>{item.source} · score {typeof item.score==="number"?item.score.toFixed(2):"—"}</small><div style={{fontSize:12,marginTop:6,color:"#465e78"}}>{item.content?.slice(0,350)}</div></a>)}</div>{!intelResult.items?.length&&<div style={{fontSize:12,marginTop:8}}>No results returned. Check Preview environment configuration and try again.</div>}</div>}</div><div className="scroll"><table className="table"><thead><tr><th>Recruitment / Form</th><th>Status</th><th>State</th><th>Candidate Category</th><th>Age</th><th>Fees</th><th>Vacancy</th><th>Qualification</th><th>Start Date</th><th>Last Date / Form Filling</th><th>Correction Date</th><th>Exam Date</th><th>Admit Card</th><th>Result</th><th>Notification</th><th>Apply Online</th><th>OTR</th><th>Correction Link</th></tr>
+ <tr className="filter-row"><th>{gridFilter(category,setCategory,cascade("category",categories,category),"Recruitment category")}</th><th>{gridFilter(statusFilter,setStatusFilter,cascade("status",["All Statuses","Live","Upcoming","Closed","Reference","Old"],statusFilter),"Status")}</th><th>{gridFilter(stateFilter,setStateFilter,cascade("state",["All States","Central",...states.slice(2)],stateFilter),"State")}</th><th>{gridFilter(candidateCategory,setCandidateCategory,cascade("candidateCategory",["All Candidate Categories","General","EWS","OBC","SC","ST","PwD","Female"],candidateCategory),"Candidate category")}</th><th>{gridFilter(ageFilter,setAgeFilter,cascade("age",["All Ages","0–18","18+","18–30","18–35","18–40","18–45","18–50","50–60","60–65","65–70"],ageFilter),"Age")}</th><th>{gridFilter(feeFilter,setFeeFilter,cascade("fee",feeBands,feeFilter),"Application fee")}</th><th>Vacancy count</th><th>{gridFilter(qualificationFilter,setQualificationFilter,cascade("qualification",qualifications,qualificationFilter),"Qualification")}</th><th colSpan="6">{gridFilter(dateFilter,setDateFilter,cascade("date",dateFilters,dateFilter),"Date filter")}</th><th>Notification PDF / AI</th><th>Official link</th><th>OTR link</th><th>Correction link</th></tr></thead><tbody>{pageRows.map((r,i)=><tr key={r.exam+i}><td><strong className="name">{r.exam}</strong><div style={{marginTop:5}}><span className="pill">{r.cat}</span></div></td><td><span className="pill">{recruitmentStatus(r)}</span></td><td>{r.state==="All India"?"Central":r.state}</td><td>{r.notificationCriteria?.eligibleCategories?.join(", ")||"Eligibility not verified"}</td><td>{r.age||"—"}</td><td className="fee">{r.fee||"—"}</td><td>{r.vacancy||"Not verified"}</td><td>{r.qual||"—"}</td><td>{r.start||"—"}</td><td>{r.last||"—"}</td><td>{r.correction||"—"}</td><td>{r.examDate||"—"}</td><td>{r.admit||"Not announced"}</td><td>{r.result||"Not announced"}</td><td>{r.notificationUrl?<div style={{display:"flex",gap:5,flexWrap:"wrap"}}><a className="link" href={r.notificationUrl} target="_blank" rel="noopener noreferrer">Download PDF ↗</a><span className="pill">AI Q&amp;A not connected</span></div>:<span className="pill">PDF not verified</span>}</td><td><a className="link" href={r.url} target="_blank" rel="noopener noreferrer">Apply Online ↗</a></td><td>{r.otrUrl?<a className="link" href={r.otrUrl} target="_blank" rel="noopener noreferrer">OTR ↗</a>:<span className="pill">Not available</span>}</td><td>{r.correctionUrl?<a className="link" href={r.correctionUrl} target="_blank" rel="noopener noreferrer">Correction ↗</a>:<span className="pill">Not available</span>}</td></tr>)}{!pageRows.length&&<tr><td colSpan="18" className="empty">{tab==="Old"?"पुराने भर्ती चक्र का verified archive अभी उपलब्ध नहीं है।":statusFilter==="Live"?"कोई verified Live भर्ती उपलब्ध नहीं है। Scanner notices Reference हैं; आवेदन खुला होने की पुष्टि notification से करें।":"इस filter/search में कोई entry नहीं मिली।"}<div style={{marginTop:8}}><button className="reset-filters" onClick={()=>{setCategory("All Categories");setStatusFilter("All Statuses");setStateFilter("All States");setCandidateCategory("All Candidate Categories");setAgeFilter("All Ages");setFeeFilter("All Fees");setQualificationFilter("All Qualifications");setDateFilter("All Dates");setSearch("");setTab("All");setPage(1);}}>Clear filters and show all</button></div></td></tr>}</tbody></table></div>
+ <div className="pager"><button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>← Previous</button><span>{page} / {totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next →</button></div>
+ <div className="note">Existing register fields are preserved. Scanned portal links are shown as Reference until verified. There is no verified live/upcoming/closed or archived-cycle dataset yet. Vacancy counts, dates, fees, OTR and correction links remain unverified. Scanned notices are discovery references. CriteriaVerified must be true and notificationCriteria populated before eligibility, fees, age or dates can be considered verified. AI notification Q&amp;A integration is not wired in this preview.</div></section></div></main>;
 }
