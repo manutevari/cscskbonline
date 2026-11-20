@@ -69,6 +69,8 @@ export default function PrintEditorPage() {
   const [cropMode, setCropMode] = useState(false);
   const [regionStart, setRegionStart] = useState<RegionStart | null>(null);
   const [busy, setBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{phase:string;current:number;total:number;completed:number;zipPercent:number;results:{page:number;size:number;status:"done"|"failed"}[]}|null>(null);
+  const batchCancelRef = useRef(false);
   const [maxFileSizeKb, setMaxFileSizeKb] = useState("0");
   const [customFileSizeKb, setCustomFileSizeKb] = useState("100");
   const [exportDpi, setExportDpi] = useState("300");
@@ -461,50 +463,25 @@ export default function PrintEditorPage() {
     new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Image export नहीं हो सकी।")),type,quality));
   const formatFileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
   const verifyAndDownload = (blob: Blob, filename: string, limitBytes: number) => {
-    saveBlob(blob, filename);
-    const actual = formatFileSize(blob.size);
     if (limitBytes > 0 && blob.size > limitBytes) {
-      return `${actual} (target ${formatFileSize(limitBytes)} से थोड़ा अधिक; download जारी)`;
+      throw new Error(`Final ${filename} size ${formatFileSize(blob.size)} है, जो चुनी गई ${formatFileSize(limitBytes)} maximum सीमा से अधिक है। File download नहीं की गई; बड़ा limit चुनें या JPEG format इस्तेमाल करें।`);
     }
-    return actual;
+    saveBlob(blob, filename);
+    return formatFileSize(blob.size);
   };
   const compressJpegToLimit = async (canvas: HTMLCanvasElement, targetBytes: number) => {
-    // First lower JPEG quality, then progressively downsample. This is much more
-    // reliable for strict 100/200 KB targets than quality-only compression.
-    const target = Math.max(1024, Math.floor(targetBytes));
-    let scale = 1;
-    let best: Blob | null = null;
-    let working = canvas;
-    for (let pass = 0; pass < 12; pass++) {
-      let low = 0.05, high = 0.94, candidate: Blob | null = null;
-      for (let i = 0; i < 10; i++) {
-        const q = (low + high) / 2;
-        const blob = await canvasBlob(working, "image/jpeg", q);
-        if (blob.size <= target) { candidate = blob; low = q; }
-        else high = q;
-      }
-      if (candidate) return candidate;
-      const lowestQuality = await canvasBlob(working, "image/jpeg", 0.05);
-      if (!best || lowestQuality.size < best.size) best = lowestQuality;
-      const nextScale = scale * 0.82;
-      const nextWidth = Math.max(1, Math.round(canvas.width * nextScale));
-      const nextHeight = Math.max(1, Math.round(canvas.height * nextScale));
-      if (nextScale < 0.08 || Math.min(nextWidth, nextHeight) < 180) break;
-      const next = document.createElement("canvas");
-      next.width = nextWidth; next.height = nextHeight;
-      const ctx = next.getContext("2d");
-      if (!ctx) break;
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, next.width, next.height);
-      ctx.drawImage(canvas, 0, 0, next.width, next.height);
-      working = next; scale = nextScale;
+    let low=0.08, high=0.96, best:Blob|null=null;
+    for(let i=0;i<9;i++){
+      const q=(low+high)/2, blob=await canvasBlob(canvas,"image/jpeg",q);
+      if(blob.size<=targetBytes){best=blob;low=q;}else high=q;
     }
-    // Never silently fail a download just because the exact target is unattainable.
-    return best ?? await canvasBlob(working, "image/jpeg", 0.05);
+    if(!best) best=await canvasBlob(canvas,"image/jpeg",0.08);
+    return best;
   };
   const createPdf = async (pageIds: number[], targetBytes = 0) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
-    const perPageTarget=targetBytes>0?Math.max(1024,Math.floor(targetBytes/pageIds.length)):0;
+    const perPageTarget=targetBytes>0?Math.max(12000,Math.floor(targetBytes/pageIds.length)):0;
     for (const pageId of pageIds) {
       const canvas=await renderPageCanvas(pageId);
       const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
@@ -517,6 +494,8 @@ export default function PrintEditorPage() {
   const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
     if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
     setBusy(true);
+    batchCancelRef.current=false;
+    setBatchProgress(null);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
       const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
@@ -542,14 +521,35 @@ export default function PrintEditorPage() {
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip();
-        for (const id of pageIds) {
-          const canvas=await renderPageCanvas(id,type);
-          const target=limitBytes>0?Math.floor(limitBytes/pageIds.length):0;
-          const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
-          zip.file(`Page-${id}.${ext}`,blob);
+        const isJpgBatch=type==="image/jpeg";
+        setBatchProgress({phase:"Preparing pages",current:0,total:pageIds.length,completed:0,zipPercent:0,results:[]});
+        const results:{page:number;size:number;status:"done"|"failed"}[]=[];
+        for (let index=0;index<pageIds.length;index++) {
+          if(batchCancelRef.current) break;
+          const id=pageIds[index];
+          setBatchProgress({phase:`Page ${id} render/compress`,current:id,total:pageIds.length,completed:index,zipPercent:0,results:[...results]});
+          try {
+            const canvas=await renderPageCanvas(id,type);
+            const target=limitBytes>0?limitBytes:0;
+            const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+            zip.file(`Page-${id}.${ext}`,blob);
+            results.push({page:id,size:blob.size,status:"done"});
+          } catch(pageError) {
+            results.push({page:id,size:0,status:"failed"});
+            setStatus(`Page ${id} process नहीं हुआ; बाकी pages जारी हैं। ${pageError instanceof Error?pageError.message:""}`);
+          }
+          setBatchProgress({phase:"Page processing",current:id,total:pageIds.length,completed:index+1,zipPercent:0,results:[...results]});
         }
-        const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`; const size=verifyAndDownload(blob,filename,limitBytes);
-        setStatus(`सभी pages की images ZIP में download हुई। Final ZIP size: ${size}.`);
+        if(batchCancelRef.current) {
+          setStatus(`Processing cancel कर दी गई। ${results.filter(r=>r.status==="done").length}/${pageIds.length} pages तैयार हुए; ZIP download नहीं बनाई गई।`);
+          return;
+        }
+        if(!results.some(r=>r.status==="done")) throw new Error("कोई page सफलतापूर्वक process नहीं हुआ।");
+        setBatchProgress({phase:"ZIP बन रही है",current:pageIds.length,total:pageIds.length,completed:results.length,zipPercent:0,results:[...results]});
+        const blob=await zip.generateAsync({type:"blob"},meta=>setBatchProgress(old=>old?({...old,phase:"ZIP generation",zipPercent:Math.round(meta.percent)}):old));
+        const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`; saveBlob(blob,filename); const size=formatFileSize(blob.size);
+        setStatus(`ZIP download शुरू हुई। ${results.filter(r=>r.status==="done").length}/${pageIds.length} pages; final ZIP size: ${size}.`);
+        setBatchProgress(old=>old?({...old,phase:"Download started",zipPercent:100}):old);
       }
     } catch(error) {
       setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
@@ -623,8 +623,8 @@ export default function PrintEditorPage() {
       <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Rectangular selection: drag over a photo to extract a separate editable region" aria-label="Rectangular selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setLassoMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Rectangular selection बंद हुआ।":"Rectangular Select चालू: photo के अंदर drag करके area चुनें।");}} disabled={!selected}>▭ Rect Select</button>
       <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
-      <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
-      <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
+      
+      
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
       <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
@@ -633,21 +633,26 @@ export default function PrintEditorPage() {
       <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
       <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
       <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
-      <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
+      
     </section>
     <section className="panel">
       <label className="field">Page size<select value={preset} onChange={e => setPreset(e.target.value as PagePreset)}>{["A4","A3","A5","Legal","Custom"].map(p => <option key={p}>{p}</option>)}</select></label>
       <label className="field">Orientation<select aria-label="Page orientation" value={orientation} onChange={e => setOrientation(e.target.value as "portrait" | "landscape")}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
       {preset === "Custom" && <><label className="field">Width (mm)<input type="number" min="20" value={customW} onChange={e => setCustomW(e.target.value)} /></label><label className="field">Height (mm)<input type="number" min="20" value={customH} onChange={e => setCustomH(e.target.value)} /></label></>}
       <label className="field">Workflow<select value={mode} onChange={e => setMode(e.target.value as "manual" | "grid" | "photo")}><option value="manual">Manual layout</option><option value="grid">Automatic collage</option><option value="photo">Photo sheet</option></select></label>
-      {selected && <div className="field" style={{display:"grid",gap:7}}><strong>Selected photo dimensions</strong><label className="field">Unit<select aria-label="Photo dimension unit" value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm")}><option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option></select></label><label className="field">Width ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.w:dimensionUnit==="cm"?selected.w/794*pageSize.w/10:selected.w/794*pageSize.w).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("w",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*794/pageSize.w:n*794/pageSize.w));}} /></label><label className="field">Height ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.h:dimensionUnit==="cm"?selected.h/1123*pageSize.h/10:selected.h/1123*pageSize.h).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("h",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*1123/pageSize.h:n*1123/pageSize.h));}} /></label></div>}
-      <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>Arrange this page as collage</button>
+      {selected && <div className="field" style={{display:"grid",gap:7}}><strong>Selected photo dimensions</strong><label className="field">Unit<select aria-label="Photo dimension unit" value={dimensionUnit} onChange={e => setDimensionUnit(e.target.value as "px" | "cm" | "mm")}><option value="px">Pixels (px)</option><option value="cm">Centimeters (cm)</option><option value="mm">Millimeters (mm)</option></select></label><label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}<label className="field">Width ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.w:dimensionUnit==="cm"?selected.w/794*pageSize.w/10:selected.w/794*pageSize.w).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("w",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*794/pageSize.w:n*794/pageSize.w));}} /></label><label className="field">Height ({dimensionUnit})<input type="number" min="1" step="0.1" value={(dimensionUnit==="px"?selected.h:dimensionUnit==="cm"?selected.h/1123*pageSize.h/10:selected.h/1123*pageSize.h).toFixed(1)} onChange={e => {const n=Number(e.target.value);if(Number.isFinite(n)&&n>0)updateSelected("h",String(dimensionUnit==="px"?n:dimensionUnit==="cm"?n*10*1123/pageSize.h:n*1123/pageSize.h));}} /></label></div>}
+      
       <label className="field">Copies<input type="number" min="1" max="30" value={photoCopies} onChange={e => setPhotoCopies(e.target.value)} /></label>
       <label className="field">Photo width (mm)<input type="number" min="20" max="100" step="0.1" value={photoWidthMm} onChange={e => setPhotoWidthMm(e.target.value)} /></label>
       <label className="field">Photo height (mm)<input type="number" min="20" max="120" step="0.1" value={photoHeightMm} onChange={e => setPhotoHeightMm(e.target.value)} /></label>
-      <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
+      
     </section>
-    <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    <p className="status" role="status" aria-live="polite">{busy ? (batchProgress? `${batchProgress.phase} · ${batchProgress.completed}/${batchProgress.total} pages` : "Files process हो रही हैं…") : status}</p>
+    {batchProgress && <section aria-live="polite" style={{margin:"4px 14px 10px",padding:10,border:"1px solid #cbd5e1",borderRadius:9,background:"#fff",color:"#243b60"}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{batchProgress.phase}</strong><span>{batchProgress.completed}/{batchProgress.total} pages · ZIP {batchProgress.zipPercent}%</span>{busy&&<button type="button" className="btn secondary" onClick={()=>{batchCancelRef.current=true;setStatus("Cancel requested — current page processing complete होने पर रुकेगा।");}}>Cancel (×)</button>}</div>
+      <div style={{height:8,background:"#e5eaf2",borderRadius:99,overflow:"hidden",margin:"8px 0"}}><div style={{height:"100%",width:`${Math.min(100,Math.round((batchProgress.completed/batchProgress.total)*100))}%`,background:"#1769d2",transition:"width .2s"}} /></div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{batchProgress.results.map(r=><span key={r.page} style={{fontSize:11,padding:"3px 7px",borderRadius:6,background:r.status==="done"?"#dcfce7":"#fee2e2",color:r.status==="done"?"#166534":"#991b1b"}}>Page {r.page}: {r.status==="done"?`${(r.size/1024).toFixed(1)} KB ✓`:"Failed"}</span>)}</div>
+    </section>}
     {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
       <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
         <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
@@ -660,13 +665,6 @@ export default function PrintEditorPage() {
     <div className="print-pages" aria-hidden="true">{pages.map(page => <section className="print-page" key={"print-"+page.id} style={{padding:`${Number(pageMargins.top)||0}mm ${Number(pageMargins.right)||0}mm ${Number(pageMargins.bottom)||0}mm ${Number(pageMargins.left)||0}mm`,boxSizing:"border-box"}}>{items.filter(item => item.pageId === page.id).map(item => <div className="print-item" key={item.id} style={{left:(item.x/794*100)+"%",top:(item.y/1123*100)+"%",width:(item.w/794*100)+"%",height:(item.h/1123*100)+"%"}}><img src={item.src} alt="" style={{filter:`brightness(${item.brightness ?? 100}%) contrast(${item.contrast ?? 100}%) url(#sharpness-${item.sharpness ?? 0})`}} /></div>)}</section>)}</div>
     <div className="workspace">
       <aside className="side">
-        <h2>▣ Document Actions</h2>
-        
-        <button className="btn secondary" onClick={addPage}>＋ Open / Add Page</button>
-        <button className="btn secondary" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage (Multiple Images)</button>
-        <button className="btn secondary" onClick={print} disabled={!items.length || busy}>▣ Print</button>
-        <button className="btn secondary" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo / Reorder</button>
-        <hr />
         <h2>Page setup</h2>
         <label className="field">Page margins
           <select value={marginPreset} onChange={e => {
@@ -794,7 +792,7 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
+            
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
