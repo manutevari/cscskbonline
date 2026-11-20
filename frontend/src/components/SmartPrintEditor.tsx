@@ -681,7 +681,7 @@ export default function PrintEditorPage() {
       <button className="icon-btn" title="Delete current page and its contents" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete page</button>
       {!activePdfPage && <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>}
       {!activePdfPage && <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>}
-      {activePdfPage && <span className="small" style={{padding:"6px 8px",color:"#475569"}}>PDF page: full-page fit · Photo Sheet/Collage disabled</span>
+      {activePdfPage && <span className="small" style={{padding:"6px 8px",color:"#475569"}}>PDF page: full-page fit · Photo Sheet/Collage disabled</span>}
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
       <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
