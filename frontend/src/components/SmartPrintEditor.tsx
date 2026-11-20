@@ -6,7 +6,7 @@ import JSZip from "jszip";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type RegionStart = { itemId: string; startX: number; startY: number };
-type LayoutPage = { id: number; label: string };
+type LayoutPage = { id: number; label: string; pdfPage?: boolean };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
   A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
@@ -85,6 +85,7 @@ export default function PrintEditorPage() {
   const basePageSize = preset === "Custom" ? { w: Math.max(20, Number(customW) || 210), h: Math.max(20, Number(customH) || 297) } : PRESETS[preset];
   const pageSize = orientation === "landscape" ? { w: basePageSize.h, h: basePageSize.w } : basePageSize;
   const pageItems = items.filter(i => i.pageId === activePage);
+  const activePdfPage = pages.some(p => p.id === activePage && p.pdfPage === true);
 
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
 
@@ -131,12 +132,16 @@ export default function PrintEditorPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, clipboardItem, activePage, pageItems]);
 
-  const addImage = async (file: File, pageId = activePage) => {
+  const addImage = async (file: File, pageId = activePage, fitToPage = false) => {
     if (!file.type.startsWith("image/")) return;
     const src = URL.createObjectURL(file); urlsRef.current.push(src);
     const image = new Image();
     await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(file.name + " image load नहीं हुई।")); image.src = src; });
-    const ratio = Math.min(340 / image.naturalWidth, 250 / image.naturalHeight, 1);
+    // Ordinary images start as a manageable object; imported PDF page images
+    // are placed at full-page size while preserving their page aspect ratio.
+    const ratio = fitToPage
+      ? Math.min(794 / image.naturalWidth, 1123 / image.naturalHeight)
+      : Math.min(340 / image.naturalWidth, 250 / image.naturalHeight, 1);
     const w = Math.max(24, image.naturalWidth * ratio), h = Math.max(24, image.naturalHeight * ratio);
     setItems(old => [...old, { id: uid(), name: file.name, src, pageId, x: Math.max(0, (794 - w) / 2), y: Math.max(0, (1123 - h) / 2), w, h }]);
   };
@@ -209,12 +214,12 @@ export default function PrintEditorPage() {
           if (reuseEmptyActivePage) {
             editorPageId = activePage;
             reuseEmptyActivePage = false;
-            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages });
+            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages, pdfPage: true });
           } else {
             editorPageId = ++nextPdfPageId;
             pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages });
           }
-          await addImage(pageFile, editorPageId); added++;
+          await addImage(pageFile, editorPageId, true); added++;
           setActivePage(editorPageId);
         }
         if (pdfPagesToAppend.length) {
@@ -674,8 +679,9 @@ export default function PrintEditorPage() {
       <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
       <button className="icon-btn" title="Delete current page and its contents" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete page</button>
-      <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
-      <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
+      {!activePdfPage && <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>}
+      {!activePdfPage && <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>}
+      {activePdfPage && <span className="small" style={{padding:"6px 8px",color:"#475569"}}>PDF page: full-page fit · Photo Sheet/Collage disabled</span>
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
       <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
