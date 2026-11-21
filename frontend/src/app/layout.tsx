@@ -31,6 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${outfit.variable} ${devanagari.variable}`}>
+      <head>
+        <meta name="google-adsense-account" content="ca-pub-9259849546872526" />
+      </head>
       <body>
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9259849546872526"
