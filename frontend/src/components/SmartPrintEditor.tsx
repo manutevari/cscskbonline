@@ -632,7 +632,9 @@ export default function PrintEditorPage() {
         .workspace>.side:first-child h2,.workspace>.side:first-child hr,.workspace>.side:first-child>.small,.workspace>.side:first-child>p,.workspace>.side:first-child>.edit-controls,.workspace>.side:first-child .margin-grid{grid-column:1}
         .top h1{font-size:16px}
       }
-            /* Refined responsive editor UI */
+            .dpi-top-control{display:inline-flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid #8db8e8;border-radius:11px;background:linear-gradient(135deg,#e5f1ff,#d9fbe8);color:#174c83;font-weight:800;flex:0 0 auto}.dpi-label{font-size:12px;letter-spacing:.3px}.dpi-top-control select,.dpi-top-control input{border:1px solid #b7d0ec;border-radius:8px;padding:6px 8px;background:#fff;color:#174c83;font-weight:700;font-size:12px;min-width:66px}.dpi-top-control input{width:78px}
+      @media(max-width:760px){.dpi-top-control{min-height:36px;padding:5px 7px}.dpi-top-control select,.dpi-top-control input{font-size:12px;min-height:30px}}
+      /* Refined responsive editor UI */
       .editor{background:linear-gradient(180deg,#eef4ff 0,#f7f9fc 240px);color:#17233b}
       .top{background:linear-gradient(120deg,#102b59,#174c83);padding:16px 20px;border-bottom:1px solid #244e7d;box-shadow:0 5px 18px #0b23401a}
       .top h1{letter-spacing:-.35px;font-weight:800}.intro{font-size:13px;color:#d9e8ff}
@@ -664,11 +666,14 @@ export default function PrintEditorPage() {
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
-      <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
-      <button className={"icon-btn "+(zoomMode==="fit-width"?"selected":"")} onClick={()=>setZoomMode("fit-width")}>Fit width</button>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
-      <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
+      <label className="dpi-top-control" title="Export resolution for PDF, PNG and JPG">
+        <span className="dpi-label">DPI</span>
+        <select aria-label="Export resolution in DPI" value={exportDpi} onChange={e=>setExportDpi(e.target.value)}>
+          <option value="0">Auto</option><option value="150">150</option><option value="300">300</option><option value="600">600</option><option value="custom">Custom</option>
+        </select>
+        {exportDpi==="custom"&&<input aria-label="Custom DPI (72–1200)" type="number" min="72" max="1200" step="1" value={customDpi} onChange={e=>setCustomDpi(e.target.value)} />}
+      </label>
+      <button className="icon-btn" onClick={()=>setZoomMode("fit-page")}>Fit page</button>
       <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
@@ -836,7 +841,7 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
+}
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
