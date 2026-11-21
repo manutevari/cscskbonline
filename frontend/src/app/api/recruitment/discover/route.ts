@@ -10,7 +10,7 @@ function isOfficial(url: string) {
   } catch { return false; }
 }
 
-function extractDates(text: string) {
+function extractVacancyCount(text: string): number | null {\n  const patterns = [/(\\d{1,3}(?:,\\d{3})+|\\d{1,6})\\s*(?:vacancies|vacancy|posts?|positions?|पदों?|रिक्तियां|रिक्तियाँ)/ig, /(?:vacancies|vacancy|posts?|positions?|कुल पद|पदों? की संख्या|रिक्तियां|रिक्तियाँ)\\s*[:\\-]?\\s*(\\d{1,3}(?:,\\d{3})+|\\d{1,6})/ig];\n  const nums: number[] = []; for (const p of patterns) { let m: RegExpExecArray | null; while ((m = p.exec(text))) { const n = Number(m[1].replace(/,/g, "")); if (n > 0 && n < 1000000) nums.push(n); } }\n  return nums.length ? Math.max(...nums) : null;\n}\n\nfunction classifyCategory(text: string): string {\n  const t=text.toLowerCase(); if(/\\bssc\\b|staff selection/.test(t)) return "SSC"; if(/railway|\\brrb\\b|\\brrc\\b/.test(t)) return "Railway"; if(/bank|\\bibps\\b|\\bsbi\\b|rbi/.test(t)) return "Banking"; if(/insurance|\\blic\\b|\\bniacl\\b|\\bgic\\b/.test(t)) return "Insurance"; if(/teacher|teaching|\\bctet\\b|\\btet\\b|school|\\bpr(t|g)\\b/.test(t)) return "Teaching"; if(/police|constable|sub.?inspector|\\bsi\\b/.test(t)) return "Police"; if(/army|navy|air force|defence|defense|agniveer/.test(t)) return "Defence"; if(/uppsc|upsssc|up police|uttar pradesh|\\bup\\b/.test(t)) return "UP"; return "Other";\n}\n\nfunction extractDates(text: string) {
   const patterns = [
     /(?:application|apply|registration|form)\s*(?:start|starts|begin|begins|from|opening)?\s*[:\-–]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/ig,
     /(?:last date|closing date|deadline|application end|apply till|ends)\s*[:\-–]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/ig,
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       const url = String(r.url || "");
       const raw = String(r.raw_content || r.content || "");
       const official = isOfficial(url);
-      return { title: String(r.title || "Recruitment notice").slice(0, 250), url, sourceDomain: (() => { try { return new URL(url).hostname; } catch { return ""; } })(), publishedDate: r.published_date || null, retrievedAt: new Date().toISOString(), excerpt: String(r.content || "").slice(0, 900), extractedDates: extractDates(raw), evidenceStatus: official ? "Official domain — verify notice" : "Discovery lead — verify official source", isOfficialDomain: official, score: typeof r.score === "number" ? r.score : null };
+      return { title: String(r.title || "Recruitment notice").slice(0, 250), url, sourceDomain: (() => { try { return new URL(url).hostname; } catch { return ""; } })(), publishedDate: r.published_date || null, retrievedAt: new Date().toISOString(), excerpt: String(r.content || "").slice(0, 900), extractedDates: extractDates(raw), vacancyCount: extractVacancyCount(raw), category: classifyCategory(String(r.title||"")+" "+url+" "+raw), evidenceStatus: official ? "Official domain — verify notice" : "Discovery lead — verify official source", isOfficialDomain: official, score: typeof r.score === "number" ? r.score : null };
     });
     return NextResponse.json({ query: searchQuery, checkedAt: new Date().toISOString(), notices, disclaimer: "Discovery only. Dates and details extracted from search content are unverified until the original official notice is checked." }, { headers: { "Cache-Control": "no-store" } });
   } catch { return NextResponse.json({ error: "Search failed. Retry; no results were marked verified." }, { status: 502 }); }
