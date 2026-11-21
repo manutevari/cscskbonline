@@ -32,6 +32,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${outfit.variable} ${devanagari.variable}`}>
       <body>
+        <Script
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9259849546872526"
+          strategy="afterInteractive"
+          crossOrigin="anonymous"
+        />
         {process.env.NEXT_PUBLIC_GA_ID ? (
           <>
             <Script
