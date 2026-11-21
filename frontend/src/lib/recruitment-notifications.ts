@@ -24,10 +24,39 @@ const SOURCES = [
   { name: "UP Police Recruitment Board", url: "https://uppbpb.gov.in/" },
   { name: "UPESSC Official Website", url: "https://www.upessc.up.gov.in/" },
   { name: "UPESSC OTR / Recruitment Portal", url: "https://apply.upessc.org/" },
+  { name: "Andhra Pradesh PSC", url: "https://psc.ap.gov.in/" },
+  { name: "Arunachal Pradesh PSC", url: "https://appsc.gov.in/" },
+  { name: "Assam PSC", url: "https://apsc.nic.in/" },
+  { name: "Bihar PSC", url: "https://bpsc.bih.nic.in/" },
+  { name: "Chhattisgarh PSC", url: "https://psc.cg.gov.in/" },
+  { name: "Goa PSC", url: "https://gpsc.goa.gov.in/" },
+  { name: "Gujarat PSC", url: "https://gpsc.gujarat.gov.in/" },
+  { name: "Haryana PSC", url: "https://hpsc.gov.in/" },
+  { name: "Himachal Pradesh PSC", url: "https://hppsc.hp.gov.in/" },
+  { name: "Jharkhand PSC", url: "https://jpsc.gov.in/" },
+  { name: "Karnataka PSC", url: "https://kpsc.kar.nic.in/" },
+  { name: "Kerala PSC", url: "https://www.keralapsc.gov.in/" },
+  { name: "Madhya Pradesh PSC", url: "https://mppsc.mp.gov.in/" },
+  { name: "Maharashtra PSC", url: "https://mpsc.gov.in/" },
+  { name: "Manipur PSC", url: "https://mpscmanipur.gov.in/" },
+  { name: "Meghalaya PSC", url: "https://mpsc.meghalaya.gov.in/" },
+  { name: "Mizoram PSC", url: "https://mpsc.mizoram.gov.in/" },
+  { name: "Nagaland PSC", url: "https://npsc.nagaland.gov.in/" },
+  { name: "Odisha PSC", url: "https://opsc.gov.in/" },
+  { name: "Punjab PSC", url: "https://ppsc.gov.in/" },
+  { name: "Rajasthan PSC", url: "https://rpsc.rajasthan.gov.in/" },
+  { name: "Sikkim PSC", url: "https://spsc.sikkim.gov.in/" },
+  { name: "Tamil Nadu PSC", url: "https://tnpsc.gov.in/" },
+  { name: "Telangana PSC", url: "https://tgpsc.gov.in/" },
+  { name: "Tripura PSC", url: "https://tpsc.tripura.gov.in/" },
+  { name: "Uttarakhand PSC", url: "https://psc.uk.gov.in/" },
+  { name: "West Bengal PSC", url: "https://psc.wb.gov.in/" },
+  { name: "Jammu and Kashmir PSC", url: "https://jkpsc.nic.in/" },
+  { name: "Delhi DSSSB", url: "https://dsssb.delhi.gov.in/" },
 ];
 
 const MATCH = /(notification|notice|recruitment|vacanc|advertisement|apply online|admit.?card|answer.?key|result|exam|examination|selection|important date|latest|tgt|pgt|teacher|assistant professor|assistant teacher|lecturer|प्रवक्ता|अध्यापक|शिक्षक|भर्ती|अधिसूचना|विज्ञापन|प्रवेश पत्र|उत्तर कुंजी|परिणाम|परीक्षा|नोटिस)/i;
-const NAVIGATION_TITLE = /^(examinations?|active exam|examcal|online notifications?|interview only|screeningtest|examinationonly|exam calendar|home|login|registration|candidate corner|notice board|latest updates?)$/i;
+const NAVIGATION_TITLE = /^(examinations?|active exam|examcal|forthcomexam|forthcoming exam|online notifications?|onlinenotifications|applyonline|interviewonly|screeningtestint|examinationandinterviewonly|examinationonly|exam calendar|home|login|registration|candidate corner|notice board|latest updates?)$/i;
 const normalizeTitle = (text: string) => text.toLowerCase().replace(/\b(hm|translate)\b/gi, "").replace(/[^a-z0-9\u0900-\u097f]+/g, " ").trim();
 const KIND = (text: string): RecruitmentNotice["kind"] => {
   if (/admit.?card|प्रवेश पत्र/i.test(text)) return "admit-card";
@@ -58,7 +87,7 @@ function parseLinks(html: string, source: typeof SOURCES[number], checkedAt: str
   const seen = new Set<string>();
   const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let match: RegExpExecArray | null;
-  while ((match = anchorRegex.exec(html)) && output.length < 8) {
+  while ((match = anchorRegex.exec(html)) && output.length < 4) {
     const attributes = match[1] || "";
     const hrefMatch = attributes.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
     const href = (hrefMatch && (hrefMatch[1] || hrefMatch[2] || hrefMatch[3]) || "").trim();
@@ -128,7 +157,7 @@ export async function getOfficialRecruitmentFeed(forceRefresh = false): Promise<
   }));
 
   const sources = settled.map((item) => item.source);
-  const notices = settled.flatMap((item) => item.notices).slice(0, 30);
+  const notices = settled.flatMap((item) => item.notices).slice(0, 100);
   const value: RecruitmentFeed = {
     checkedAt,
     mode: "official-portal-link-scan",
