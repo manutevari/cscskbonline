@@ -1,103 +1,60 @@
 "use client";
-
 import { useMemo, useState } from "react";
 
-const boards = {
-  SSC: { exams: ["CGL", "CHSL", "MTS / Havaldar", "GD Constable", "CPO SI", "JE", "Stenographer", "Selection Post", "JHT"], url: "https://ssc.gov.in/" },
-  UPPSC: { exams: ["Combined State / Upper Subordinate", "RO / ARO", "Assistant Professor", "Other UPPSC recruitment"], url: "https://uppsc.up.nic.in/" },
-  UPSSSC: { exams: ["PET", " लेखपाल", "Junior Assistant", " अन्य भर्तियाँ"], url: "https://upsssc.gov.in/" },
-  RRB: { exams: ["NTPC", "Group D", "ALP", "Technician", "JE"], url: "https://www.rrbapply.gov.in/" },
-  "UP Police": { exams: ["Constable", "Sub Inspector", " अन्य भर्तियाँ"], url: "https://uppbpb.gov.in/" },
-};
-
-const shortcuts = [
-  { title: "Latest Jobs", desc: "नई भर्ती और आवेदन की जानकारी", icon: "▤", id: "latest-jobs" },
-  { title: "Admit Cards", desc: "परीक्षा प्रवेश पत्र", icon: "▣", id: "admit-cards" },
-  { title: "Results", desc: "परीक्षा परिणाम और मेरिट", icon: "✓", id: "results" },
-  { title: "Answer Keys", desc: "उत्तर कुंजी और आपत्ति", icon: "≡", id: "answer-keys" },
-  { title: "Syllabus", desc: "पाठ्यक्रम और परीक्षा पैटर्न", icon: "▥", id: "syllabus" },
-  { title: "Exam Calendar", desc: "आगामी परीक्षा कार्यक्रम", icon: "▦", id: "exam-calendar" },
+const rowsAll = [
+{exam:"SSC CGL",cat:"SSC",age:"18–32",fee:"UR/OBC/EWS ₹100 · SC/ST/PwBD/Women exempt",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC CHSL",cat:"SSC",age:"18–27",fee:"₹100 · exemptions as notified",qual:"12th",url:"https://ssc.gov.in/"},
+{exam:"SSC MTS / Havaldar",cat:"SSC",age:"18–25 / 18–27",fee:"₹100 · exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"SSC GD Constable",cat:"SSC",age:"18–23",fee:"₹100 · exemptions as notified",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"SSC CPO",cat:"SSC",age:"20–25",fee:"₹100 · exemptions as notified",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC Stenographer",cat:"SSC",age:"Notice-based",fee:"See notice",qual:"12th + skill test",url:"https://ssc.gov.in/"},
+{exam:"RRB NTPC",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://www.rrbapply.gov.in/"},
+{exam:"RRB Group D",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"10th / ITI",url:"https://www.rrbapply.gov.in/"},
+{exam:"RRB ALP / Technician",cat:"Railway",age:"Notice-based",fee:"Category-wise; see notice",qual:"ITI / Diploma",url:"https://www.rrbapply.gov.in/"},
+{exam:"SBI PO / Clerk",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://sbi.co.in/web/careers"},
+{exam:"IBPS PO / Clerk",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://www.ibps.in/"},
+{exam:"RBI Assistant / Grade B",cat:"Banking",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.rbi.org.in/"},
+{exam:"LIC AAO / Assistant",cat:"Insurance",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://licindia.in/"},
+{exam:"UPPSC PCS",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"Graduate",url:"https://uppsc.up.nic.in/"},
+{exam:"UPSSSC PET",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"As notified",url:"https://upsssc.gov.in/"},
+{exam:"UPSSSC Lekhpal / Junior Assistant",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://upsssc.gov.in/"},
+{exam:"UP Police Constable / SI",cat:"UP",age:"Notice-based",fee:"Category-wise; see notice",qual:"12th / Graduate by post",url:"https://uppbpb.gov.in/"},
+{exam:"CTET",cat:"Teaching",age:"Verify notice",fee:"Category-wise; see notice",qual:"Teacher qualification",url:"https://ctet.nic.in/"},
+{exam:"UPTET / State TET",cat:"Teaching",age:"Notice-based",fee:"Category-wise; see notice",qual:"D.El.Ed / B.Ed etc.",url:"https://updeled.gov.in/"},
+{exam:"PRT / TGT / PGT Recruitment",cat:"Teaching",age:"Recruitment-specific",fee:"Category-wise; see notice",qual:"Relevant degree + teacher qualification",url:"https://www.cbse.gov.in/"},
+{exam:"Army Agniveer / TES",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"10th / 12th / PCM by entry",url:"https://joinindianarmy.nic.in/"},
+{exam:"Navy / Agniveer",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"Entry-specific",url:"https://joinindiannavy.gov.in/"},
+{exam:"Air Force / Agniveer Vayu",cat:"Defence",age:"Entry-specific",fee:"See notice",qual:"Entry-specific",url:"https://agnipathvayu.cdac.in/"},
+{exam:"NDA / CDS",cat:"Defence",age:"Entry-specific",fee:"Exemptions as notified",qual:"12th / Graduate by entry",url:"https://upsc.gov.in/"},
+{exam:"NEET / JEE / CUET",cat:"Entrance",age:"Exam-specific",fee:"Category-wise; see notice",qual:"12th / subject-specific",url:"https://nta.ac.in/"},
+{exam:"NVS / JNVST",cat:"Entrance",age:"Class-specific",fee:"See notice",qual:"Class-specific",url:"https://navodaya.gov.in/"},
+{exam:"UP Board / CBSE / ICSE",cat:"School",age:"Student-specific",fee:"Board-specific",qual:"Class 9–12",url:"https://upmsp.edu.in/"},
+{exam:"CCC / CPCT / RSCIT",cat:"Computer",age:"Exam-specific",fee:"Exam-specific",qual:"Exam-specific",url:"https://www.nielit.gov.in/"},
+{exam:"High Court / District Court",cat:"Courts",age:"Post-specific",fee:"Category-wise; see notice",qual:"Post-specific",url:"https://www.sci.gov.in/"},
 ];
+const rowsOld = [
+{exam:"SSC CGL — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"Graduate",url:"https://ssc.gov.in/"},
+{exam:"SSC CHSL — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"12th",url:"https://ssc.gov.in/"},
+{exam:"SSC MTS — Previous cycles",cat:"SSC",age:"Cycle-specific",fee:"Historical notice",qual:"10th",url:"https://ssc.gov.in/"},
+{exam:"RRB NTPC — Previous cycles",cat:"Railway",age:"Cycle-specific",fee:"Historical notice",qual:"12th / Graduate",url:"https://www.rrbapply.gov.in/"},
+{exam:"UP Police — Previous recruitment",cat:"UP",age:"Cycle-specific",fee:"Historical notice",qual:"Post-specific",url:"https://uppbpb.gov.in/"},
+{exam:"UPSSSC — Previous recruitments",cat:"UP",age:"Cycle-specific",fee:"Historical notice",qual:"Post-specific",url:"https://upsssc.gov.in/"},
+{exam:"CTET — Previous sessions",cat:"Teaching",age:"Session-specific",fee:"Historical notice",qual:"Teacher qualification",url:"https://ctet.nic.in/"},
+{exam:"UPTET — Previous sessions",cat:"Teaching",age:"Session-specific",fee:"Historical notice",qual:"Teacher qualification",url:"https://updeled.gov.in/"},
+];
+const cats=["All Categories","SSC","Railway","Banking","Insurance","UP","Teaching","Defence","Entrance","School","Computer","Courts"];
+const blank="—";
 
-const ink = "#14233f";
-const muted = "#64748b";
-const border = "#e2e8f0";
-const card = { background: "#fff", border: "1px solid " + border, borderRadius: 16, padding: 18, minWidth: 0 };
-
-export default function JobsExamDashboard() {
-  const [board, setBoard] = useState("SSC");
-  const [exam, setExam] = useState("CGL");
-  const [section, setSection] = useState("latest-jobs");
-  const [query, setQuery] = useState("");
-  const selected = boards[board];
-  const filtered = useMemo(() => shortcuts.filter(x => (x.title + " " + x.desc).toLowerCase().includes(query.toLowerCase())), [query]);
-
-  function changeBoard(value) { setBoard(value); setExam(boards[value].exams[0]); }
-
-  return (
-    <main style={{ color: ink, background: "#f5f7fb", minHeight: "100vh", fontFamily: "Arial, 'Noto Sans Devanagari', sans-serif" }}>
-      <div style={{ background: "linear-gradient(120deg,#102a56 0%,#174b91 58%,#2476bd 100%)", color: "#fff", padding: "clamp(24px,5vw,52px) clamp(18px,4vw,48px)" }}>
-        <div style={{ maxWidth: 1240, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <a href="/" style={{ color: "#fff", textDecoration: "none", fontWeight: 900, letterSpacing: ".04em" }}>CSC SKB <span style={{ opacity: .7, fontWeight: 500 }}>/ CAREER DESK</span></a>
-            <span style={{ border: "1px solid #ffffff55", background: "#ffffff14", borderRadius: 30, padding: "7px 12px", fontSize: 12 }}>Jobs &amp; Exams Portal</span>
-          </div>
-          <div style={{ maxWidth: 760, paddingTop: 38 }}>
-            <p style={{ margin: 0, color: "#b9d8ff", fontSize: 12, fontWeight: 800, letterSpacing: ".16em" }}>YOUR CAREER, ONE PLACE</p>
-            <h1 style={{ fontSize: "clamp(30px,5vw,52px)", lineHeight: 1.08, margin: "12px 0", letterSpacing: "-.035em" }}>Find your next <span style={{ color: "#8ed5ff" }}>opportunity.</span></h1>
-            <p style={{ color: "#e1edff", fontSize: 16, lineHeight: 1.7, margin: "0 0 22px" }}>सरकारी नौकरी, प्रतियोगी परीक्षाएँ और जरूरी परीक्षा अपडेट — साफ, सरल और एक ही जगह।</p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href="#latest-jobs" style={{ background: "#fff", color: "#16477f", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 800 }}>भर्ती देखें ↓</a>
-              <a href={selected.url} target="_blank" rel="noreferrer" style={{ border: "1px solid #ffffff80", color: "#fff", borderRadius: 9, padding: "12px 17px", textDecoration: "none", fontWeight: 750 }}>Official {board} website ↗</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "22px clamp(14px,3vw,28px) 44px" }}>
-        <section style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,230px),1fr))", gap: 16, alignItems: "end", boxShadow: "0 8px 28px #14233f0a" }}>
-          <div><label htmlFor="recruiting-board" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>RECRUITING BOARD</label><select id="recruiting-board" value={board} onChange={e => changeBoard(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{Object.keys(boards).map(x => <option key={x}>{x}</option>)}</select></div>
-          <div><label htmlFor="exam-choice" style={{ display: "block", fontSize: 12, fontWeight: 800, color: muted, marginBottom: 8 }}>EXAM / RECRUITMENT</label><select id="exam-choice" value={exam} onChange={e => setExam(e.target.value)} style={{ width: "100%", padding: 13, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }}>{selected.exams.map(x => <option key={x}>{x}</option>)}</select></div>
-          <a href={selected.url} target="_blank" rel="noreferrer" style={{ textAlign: "center", padding: 13, borderRadius: 9, background: "#155eef", color: "#fff", textDecoration: "none", fontWeight: 800 }}>Official notification ↗</a>
-        </section>
-
-        <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "30px 0 14px" }}>
-          <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".13em" }}>EXPLORE THE PORTAL</p><h2 style={{ margin: "5px 0 0", fontSize: 25 }}>What are you looking for?</h2></div>
-          <input aria-label="Search portal sections" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search jobs, results, syllabus…" style={{ width: "min(100%,330px)", padding: 12, border: "1px solid " + border, borderRadius: 9, background: "#fff", color: ink }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,175px),1fr))", gap: 12 }}>
-          {filtered.map(item => <button key={item.id} onClick={() => { setSection(item.id); document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{ textAlign: "left", cursor: "pointer", ...card, transition: "transform .15s", borderColor: section === item.id ? "#8bb8ff" : border, boxShadow: section === item.id ? "0 0 0 2px #dceaff" : "none" }}>
-            <span style={{ width: 40, height: 40, display: "grid", placeItems: "center", background: "#edf4ff", color: "#155eef", borderRadius: 11, fontSize: 20, fontWeight: 900 }}>{item.icon}</span>
-            <strong style={{ display: "block", marginTop: 13, fontSize: 15 }}>{item.title}</strong><span style={{ display: "block", marginTop: 5, color: muted, fontSize: 12, lineHeight: 1.5 }}>{item.desc}</span>
-          </button>)}
-        </div>
-
-        <section id="latest-jobs" style={{ ...card, marginTop: 26, scrollMarginTop: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "start" }}>
-            <div><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>RECRUITMENT UPDATES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}>Latest {board} Jobs</h2><p style={{ margin: 0, color: muted, fontSize: 13 }}>Selected exam: {exam}</p></div>
-            <a href={selected.url} target="_blank" rel="noreferrer" style={{ color: "#155eef", textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Visit official board ↗</a>
-          </div>
-          <div style={{ marginTop: 18, padding: 18, borderRadius: 12, background: "#f8fafc", border: "1px dashed #cbd5e1" }}>
-            <strong style={{ display: "block", fontSize: 15 }}>Live verified vacancy feed is not connected yet.</strong>
-            <p style={{ color: muted, fontSize: 13, lineHeight: 1.7, margin: "7px 0 12px" }}>इसलिए यहाँ कोई अपुष्ट भर्ती, तारीख या vacancy count नहीं दिखाया जा रहा है। नवीनतम और सही आवेदन तिथियों के लिए संबंधित भर्ती बोर्ड की आधिकारिक सूचना देखें।</p>
-            <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", padding: "10px 13px", background: "#155eef", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 13 }}>Open {board} official website ↗</a>
-          </div>
-        </section>
-
-        <section style={{ marginTop: 26 }}>
-          <div style={{ marginBottom: 12 }}><p style={{ margin: 0, color: "#155eef", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" }}>EXAM RESOURCES</p><h2 style={{ margin: "6px 0", fontSize: 23 }}> परीक्षा से जुड़ी जानकारी</h2></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,250px),1fr))", gap: 12 }}>
-            {shortcuts.slice(1).map(item => <article id={item.id} key={item.id} style={{ ...card, scrollMarginTop: 18 }}>
-              <span style={{ color: "#155eef", fontSize: 21, fontWeight: 900 }}>{item.icon}</span><h3 style={{ margin: "10px 0 5px", fontSize: 16 }}>{item.title}</h3><p style={{ color: muted, fontSize: 13, lineHeight: 1.6, margin: 0 }}>{item.desc} के लिए आधिकारिक बोर्ड की सूचना देखें।</p>
-              <a href={selected.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 13, color: "#155eef", fontWeight: 800, textDecoration: "none", fontSize: 13 }}>Official updates ↗</a>
-            </article>)}
-          </div>
-        </section>
-
-        <footer style={{ marginTop: 28, padding: "18px 2px", borderTop: "1px solid " + border, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: muted, fontSize: 12 }}>
-          <span>CSC SKB Online · Jobs &amp; Exams</span><span>सूचनाओं की अंतिम पुष्टि संबंधित official notification से करें।</span>
-        </footer>
-      </div>
-    </main>
-  );
+export default function JobsExamDashboard(){
+ const [section,setSection]=useState("All"),[category,setCategory]=useState("All Categories"),[search,setSearch]=useState(""),[selected,setSelected]=useState("");
+ const base=section==="Old"?rowsOld:rowsAll;
+ const filtered=useMemo(()=>base.filter(r=>(category==="All Categories"||r.cat===category)&&(!search.trim()||(r.exam+" "+r.cat+" "+r.qual).toLowerCase().includes(search.trim().toLowerCase()))),[base,category,search]);
+ const item=filtered.find(r=>r.exam===selected);
+ return <main className="exam-register"><style>{`
+ .exam-register{min-height:100vh;background:linear-gradient(135deg,#101827,#1d3048);padding:clamp(12px,2.5vw,30px);font-family:Arial,'Noto Sans Devanagari',sans-serif;color:#14233b}.wrap{max-width:1600px;margin:auto}.head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;color:#f8fafc;margin-bottom:18px}.brand{font-size:13px;font-weight:900;letter-spacing:.14em;color:#cbd5e1}.brand small{display:block;font-size:11px;letter-spacing:.05em;font-weight:500;color:#94a3b8;margin-top:5px}.title{font-size:clamp(25px,3vw,36px);font-weight:900;letter-spacing:-.04em;margin:5px 0}.subtitle{color:#aebed2;font-size:13px}.card{background:#f8fafc;border:1px solid #d9e2ed;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px #0002}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:16px;border-bottom:1px solid #dce4ee;background:white}.tabs{display:flex;padding:4px;background:#edf2f7;border-radius:10px;gap:4px}.tabs button{border:0;border-radius:8px;padding:9px 18px;font-weight:800;color:#52657d;background:transparent;cursor:pointer}.tabs button.active{background:#17365f;color:white}.search{flex:1;min-width:180px;border:1px solid #d5deea;border-radius:9px;padding:10px 12px;font-size:14px}.select{border:1px solid #d5deea;border-radius:9px;padding:10px 12px;background:white;color:#1e344f;font-size:13px}.count{font-size:12px;font-weight:800;color:#64748b;margin-left:auto;white-space:nowrap}.scroll{overflow:auto;max-height:calc(100vh - 255px);min-height:350px}.table{border-collapse:separate;border-spacing:0;width:100%;min-width:1500px;font-size:12px;background:white}.table th{position:sticky;top:0;z-index:2;background:#17365f;color:white;text-align:left;padding:13px 12px;font-size:11px;white-space:nowrap}.table td{padding:12px;border-bottom:1px solid #e8edf3;vertical-align:top;color:#33465f;line-height:1.45}.table tbody tr:nth-child(even){background:#f7f9fc}.table tbody tr:hover,.table tbody tr.selected{background:#edf5ff}.name{border:0;background:none;padding:0;color:#164a91;font-weight:900;font-size:13px;text-align:left;cursor:pointer}.sub{font-size:10px;color:#8090a5;margin-top:4px}.fee{min-width:220px;max-width:270px}.pill{display:inline-block;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800;background:#edf1f6;color:#66758a;white-space:nowrap}.link{display:inline-block;background:#e7f0ff;color:#1452a1;border:1px solid #cbdfff;padding:7px 9px;border-radius:7px;text-decoration:none;font-weight:800;white-space:nowrap}.empty{text-align:center!important;padding:45px!important;color:#718096!important}.detail{padding:16px;background:#eef5ff;border-top:1px solid #d7e5f8;display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap}.detail strong{display:block;color:#183c69;margin-bottom:5px}.detail p{margin:0;color:#5c6f87;font-size:12px;line-height:1.5}.note{padding:12px 16px;color:#738298;font-size:11px;background:#f8fafc;border-top:1px solid #e6ebf2}@media(max-width:650px){.toolbar{align-items:stretch}.tabs{width:100%}.tabs button{flex:1}.search,.select{width:100%}.count{margin-left:0}.scroll{max-height:70vh}}`}</style>
+ <div className="wrap"><header className="head"><div><div className="brand">CSC SKB ONLINE <small>CAREER DESK · JOBS & EXAMS</small></div><h1 className="title">Exam Register</h1><div className="subtitle">भर्ती और परीक्षाओं की साफ़ spreadsheet-style सूची</div></div><div style={{fontSize:12,color:"#aebed2"}}>Preview only · Production untouched</div></header>
+ <section className="card"><div className="toolbar"><div className="tabs" role="tablist">{["All","Old"].map(t=><button key={t} role="tab" aria-selected={section===t} className={section===t?"active":""} onClick={()=>{setSection(t);setSelected("");}}>{t}</button>)}</div><input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search SSC, Railway, TGT, exam…" aria-label="Search exams"/><select className="select" value={category} onChange={e=>setCategory(e.target.value)} aria-label="Category filter">{cats.map(c=><option key={c}>{c}</option>)}</select><span className="count">{filtered.length} entries</span></div>
+ <div className="scroll"><table className="table"><thead><tr><th>Exam / Recruitment</th><th>Age</th><th>Category-wise Fees</th><th>Qualification</th><th>Form Start</th><th>Last Date</th><th>Correction</th><th>Exam Date</th><th>Admit Card</th><th>Result</th><th>Action</th></tr></thead><tbody>{filtered.map(r=><tr key={r.exam} className={selected===r.exam?"selected":""}><td><button className="name" onClick={()=>setSelected(selected===r.exam?"":r.exam)}>{r.exam}</button><div className="sub">{r.cat}</div></td><td>{r.age||blank}</td><td className="fee">{r.fee||blank}</td><td>{r.qual||blank}</td><td>{r.start||blank}</td><td>{r.last||blank}</td><td>{r.correction||blank}</td><td>{r.examDate||blank}</td><td><span className="pill">{r.admit||"Not announced"}</span></td><td><span className="pill">{r.result||"Not announced"}</span></td><td><a className="link" href={r.url} target="_blank" rel="noopener noreferrer">{section==="Old"?"Archive / Official":"Official portal"} ↗</a></td></tr>)}{!filtered.length&&<tr><td colSpan="11" className="empty">इस category में कोई entry नहीं मिली।</td></tr>}</tbody></table></div>
+ {item&&<div className="detail"><div><strong>{item.exam}</strong><p>Category: {item.cat} · Qualification: {item.qual} · Age: {item.age}. Dates/status केवल official notice verify होने पर अपडेट होंगे।</p></div><a className="link" href={item.url} target="_blank" rel="noopener noreferrer">Official source ↗</a></div>}
+ <div className="note">यह directory/reference list है। Form dates, exam dates, admit card और result status अभी verified notice के बिना खाली/Not announced हैं। Old में previous-cycle references हैं; cycle-wise archive data बाद में सत्यापित entries से भरेगा।</div></section></div></main>;
 }
