@@ -8,6 +8,7 @@ type LayoutItem = { id: string; name: string; src: string; pageId: number; x: nu
 type RegionStart = { itemId: string; startX: number; startY: number };
 type LayoutPage = { id: number; label: string };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
+type ExportPageProgress = { pageId: number; status: "pending" | "processing" | "done" | "error"; label: string };
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
   A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
 };
@@ -61,6 +62,7 @@ export default function PrintEditorPage() {
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
+  const [exportProgress, setExportProgress] = useState<ExportPageProgress[]>([]);
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
   const [lassoMode, setLassoMode] = useState(false);
@@ -501,57 +503,74 @@ export default function PrintEditorPage() {
     // Never silently fail a download just because the exact target is unattainable.
     return best ?? await canvasBlob(working, "image/jpeg", 0.05);
   };
-  const createPdf = async (pageIds: number[], targetBytes = 0) => {
+  const createPdf = async (pageIds: number[], targetBytes = 0, onPageProgress?: (pageId: number, status: ExportPageProgress["status"]) => void) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
     const perPageTarget=targetBytes>0?Math.max(1024,Math.floor(targetBytes/pageIds.length)):0;
     for (const pageId of pageIds) {
+      onPageProgress?.(pageId, "processing");
+      setStatus(`Page ${pageId} — rendering / compressing…`);
       const canvas=await renderPageCanvas(pageId);
       const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
       const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
       const pdfPage=pdf.addPage([widthPt,heightPt]);
       pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
+      onPageProgress?.(pageId, "done");
     }
     return new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
   };
   const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
     if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
     setBusy(true);
+    setExportProgress([]);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
+      setExportProgress(pageIds.map(pageId=>({pageId,status:"pending" as const,label:`Page ${pageId}`})));
+      const updatePageProgress=(pageId:number,pageStatus:ExportPageProgress["status"])=>setExportProgress(old=>old.map(p=>p.pageId===pageId?{...p,status:pageStatus}:p));
       const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
       if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
       const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
       if (kind==="all-pdf") {
-        const blob=await createPdf(pageIds,limitBytes); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
+        const blob=await createPdf(pageIds,limitBytes,updatePageProgress); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
         setStatus(`सभी pages की PDF download शुरू हुई। Final file size: ${size}. Downloaded bytes are the same as this verified file.`);
       } else if (kind==="current-pdf") {
-        const blob=await createPdf([activePage],limitBytes); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
+        setExportProgress([{pageId:activePage,status:"pending",label:`Page ${activePage}`}]);
+        const blob=await createPdf([activePage],limitBytes,updatePageProgress); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
         setStatus(`चुने हुए page की PDF download शुरू हुई। Final file size: ${size}.`);
       } else if (kind==="separate-pdf") {
         const zip=new JSZip();
-        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0));
+        for (const id of pageIds) {
+          const pdfBlob=await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0,updatePageProgress);
+          zip.file(`Page-${id}.pdf`,pdfBlob);
+        }
         const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",limitBytes);
         setStatus(`हर page की अलग PDF ZIP में download हुई। Final ZIP size: ${size}.`);
       } else if (kind==="current-png" || kind==="current-jpg") {
         const type=kind==="current-png"?"image/png":"image/jpeg";
+        setExportProgress([{pageId:activePage,status:"processing",label:`Page ${activePage}`}]);
+        setStatus(`Page ${activePage} — rendering / compressing…`);
         const canvas=await renderPageCanvas(activePage,type);
         const blob=limitBytes>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+        setExportProgress([{pageId:activePage,status:"done",label:`Page ${activePage}`}]);
         const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`; const size=verifyAndDownload(blob,filename,limitBytes);
         setStatus(`चुने हुए page की image download हुई। Final file size: ${size}.`);
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip();
         for (const id of pageIds) {
+          updatePageProgress(id,"processing");
+          setStatus(`Page ${id} — rendering / compressing…`);
           const canvas=await renderPageCanvas(id,type);
           const target=limitBytes>0?Math.floor(limitBytes/pageIds.length):0;
           const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
           zip.file(`Page-${id}.${ext}`,blob);
+          updatePageProgress(id,"done");
         }
         const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`; const size=verifyAndDownload(blob,filename,limitBytes);
         setStatus(`सभी pages की images ZIP में download हुई। Final ZIP size: ${size}.`);
       }
     } catch(error) {
+      setExportProgress(old=>old.map(p=>p.status==="processing"?{...p,status:"error"}:p));
       setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
     } finally { setBusy(false); }
   };
@@ -647,7 +666,12 @@ export default function PrintEditorPage() {
       <label className="field">Photo height (mm)<input type="number" min="20" max="120" step="0.1" value={photoHeightMm} onChange={e => setPhotoHeightMm(e.target.value)} /></label>
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
-    <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    <p className="status" role="status" aria-live="polite">{status}</p>
+    {exportProgress.length>0 && <section aria-label="Page-wise export progress" style={{margin:"4px 10px 10px",padding:"10px 12px",border:"1px solid #dce3ef",borderRadius:10,background:"#fff",fontSize:12}}>
+      <strong>Page-wise progress</strong> · {exportProgress.filter(p=>p.status==="done").length}/{exportProgress.length} completed
+      <div style={{height:6,background:"#e5eaf2",borderRadius:99,overflow:"hidden",margin:"7px 0"}}><div style={{height:"100%",width:`${exportProgress.filter(p=>p.status==="done").length/exportProgress.length*100}%`,background:"#1769d2",transition:"width .2s"}} /></div>
+      {exportProgress.map(p=><div key={p.pageId} style={{display:"flex",gap:8,alignItems:"center",padding:"3px 0"}}><span>{p.status==="done"?"✓":p.status==="processing"?"⏳":p.status==="error"?"✕":"○"}</span><span style={{flex:1}}>{p.label}</span><span>{p.status==="done"?"Completed":p.status==="processing"?"Compressing…":p.status==="error"?"Failed":"Pending"}</span></div>)}
+    </section>}
     {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
       <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
         <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
