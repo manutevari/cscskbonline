@@ -3,21 +3,21 @@ name: CSCSKB Quality Checks
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main, "repair/**"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   frontend:
-    name: Frontend install, audit, and build
+    name: Frontend install, security audit, and build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -31,21 +31,37 @@ jobs:
       - name: Apply safe dependency updates
         run: npm audit fix
         continue-on-error: true
+      - name: Upgrade PDF.js to patched release
+        run: npm install pdfjs-dist@^6.2.108
+      - name: Security audit
+        run: npm audit --audit-level=high
+      - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: dependency-lock-repair
-          path: frontend/package-lock.json
+          path: |
+            frontend/package.json
+            frontend/package-lock.json
           retention-days: 3
-      - name: Dependency vulnerability report
-        run: npm audit --audit-level=high
-        continue-on-error: true
-      - run: npm run build
+      - name: Commit tested dependency updates to repair branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+          else
+            git commit -m "Fix dependency security vulnerabilities"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
 
   python:
     name: Python syntax validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
