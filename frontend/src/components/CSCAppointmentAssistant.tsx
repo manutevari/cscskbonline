@@ -10,6 +10,12 @@ type Appointment = {
   date: string;
   time: string;
   status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+  verificationUrl?: string;
+  notifications?: {
+    customerWhatsApp?: { sent: boolean; reason?: string };
+    ownerWhatsApp?: { sent: boolean; reason?: string };
+    customerSMS?: { sent: boolean; reason?: string };
+  };
 };
 
 const SERVICES = [
@@ -109,7 +115,7 @@ export default function CSCAppointmentAssistant() {
     return Array.from({ length: 7 }, (_, i) => addDaysISO(start, i));
   }, []);
 
-  const verifyUrl = appointment ? `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}` : "";
+  const verifyUrl = appointment?.verificationUrl || "";
   const primaryQr = verifyUrl
     ? `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verifyUrl)}`
     : "";
@@ -194,6 +200,7 @@ export default function CSCAppointmentAssistant() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Booking failed");
       const next = payload.appointment as Appointment;
+      next.notifications = payload.notifications;
       setAppointment(next);
       localStorage.setItem("cscskb-last-appointment", JSON.stringify(next));
       setQrSrc(payload.qrUrl || primaryQr);
@@ -301,6 +308,12 @@ export default function CSCAppointmentAssistant() {
                   <div className="csc-appt-qr">
                     {qrSrc ? <img src={qrSrc} alt="Appointment verification QR code" onError={() => setQrSrc(fallbackQr)} /> : <div className="csc-appt-qr-placeholder">Generating QR…</div>}
                     <small>Scan to verify • {verifyUrl}</small>
+                    {appointment.notifications && <div className="csc-appt-notification-status" role="status">
+                      <p><strong>Notification status</strong></p>
+                      <p>Customer WhatsApp: {appointment.notifications.customerWhatsApp?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                      <p>CSC WhatsApp: {appointment.notifications.ownerWhatsApp?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                      <p>SMS: {appointment.notifications.customerSMS?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                    </div>}
                   </div>
                 </div>
                 <div className="csc-appt-actions">
