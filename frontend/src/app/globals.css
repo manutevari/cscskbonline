@@ -1550,3 +1550,38 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .hero-section *, .services-grid *, .csc-appt-fab { animation: none !important; transition: none !important; }
 }
+
+
+/* Platform foundation: viewport, safe areas, accessibility and mobile reliability */
+html { scroll-padding-top: 5rem; -webkit-text-size-adjust: 100%; }
+body { min-height: 100dvh; overflow-x: clip; }
+button, input, select, textarea, a { touch-action: manipulation; }
+button, [role="button"], .btn { min-height: 44px; }
+img, video, canvas, iframe { max-width: 100%; }
+:focus-visible { outline: 3px solid #ffae00; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .track { animation: none !important; }
+}
+.csc-appt-availability-alert {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  margin: 8px 0; padding: 12px; border: 1px solid rgba(248,113,113,.32);
+  border-radius: 12px; background: rgba(127,29,29,.22);
+}
+.csc-appt-availability-alert .csc-appt-error { border: 0; background: transparent; padding: 0; margin: 0; }
+.csc-appt-retry {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 8px 14px; border: 1px solid rgba(59,158,255,.65);
+  border-radius: 10px; background: #12335f; color: #f8fbff; font: inherit;
+  font-weight: 700; cursor: pointer; white-space: normal;
+}
+.csc-appt-retry:hover:not(:disabled) { background: #0b72e7; }
+.csc-appt-retry:disabled { opacity: .6; cursor: wait; }
+.csc-appt-availability-alert > small { color: #b7c7df; line-height: 1.5; }
+.csc-appt-slot-grid-unavailable { display: none !important; }
+@media (max-width: 600px) {
+  .csc-appt-backdrop { padding: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)); }
+  .csc-appt-modal { max-height: calc(100dvh - 16px); }
+  .csc-appt-actions { position: sticky; bottom: 0; padding-bottom: max(8px, env(safe-area-inset-bottom)); background: #07183a; }
+  .csc-appt-slot { min-height: 44px; font-size: 12px; }
+}
