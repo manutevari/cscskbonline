@@ -92,7 +92,9 @@ def render_css() -> None:
   .panel{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.5rem;backdrop-filter:blur(14px);box-shadow:0 12px 40px rgba(0,0,0,.3)}.panel:hover{border-color:rgba(255,255,255,.22)}
   h1{font-size:clamp(2.5rem,6vw,4.5rem)!important;color:#fff!important;line-height:.95!important;margin:0!important}h2,h3{color:#fff!important}p,li{color:var(--muted)!important}.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .65rem;border-radius:999px;font-size:.72rem;font-weight:800;text-transform:uppercase}.btn-link{display:inline-block;padding:.75rem 1.3rem;border-radius:10px;text-decoration:none!important;font-weight:800;transition:all .25s}.svc-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;text-align:center;cursor:pointer;transition:all .25s;height:100%}.svc-card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.22)}.review-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.2rem}.stat-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1.1rem;text-align:center}.chat-msg-user{background:linear-gradient(135deg,var(--blue),#0f5bc7);border-radius:14px 14px 4px 14px;padding:.7rem 1rem;color:#fff;font-size:.88rem;margin-left:auto;max-width:82%;width:fit-content;animation:fade .3s ease-out}.chat-msg-bot{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:14px 14px 14px 4px;padding:.75rem 1rem;color:var(--text);font-size:.88rem;max-width:90%;animation:fade .3s ease-out;white-space:pre-wrap}@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}footer{text-align:center;padding:1.5rem;color:var(--muted);border-top:1px solid var(--border);margin-top:2rem}#MainMenu{visibility:hidden!important}.stDeployButton,[data-testid="stStatusWidget"]{display:none!important}
   @media(max-width:760px){.mobile-stack{grid-template-columns:1fr!important}.updates-shell{padding:.6rem .8rem!important;align-items:flex-start!important}.updates-cta{display:none!important}}
-
+</style>
+""",
+        <style>
           :root{--navy:#06142d;--blue:#0b72e7;--orange:#ff8a00;--green:#78d64b;--text:#f8fbff;--muted:#b7c7df;--card:rgba(255,255,255,.09)}
           .stApp{background:radial-gradient(circle at top left,rgba(255,138,0,.18),transparent 28%),linear-gradient(135deg,#06142d,#082449 48%,#06142d);color:var(--text)}
           [data-testid="stHeader"]{background:rgba(2,8,23,.72)}
@@ -102,8 +104,8 @@ def render_css() -> None:
           .panel{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:1.5rem;backdrop-filter:blur(10px);height:100%;box-shadow:0 18px 50px rgba(0,0,0,.22)}h1{font-size:clamp(2rem,5vw,4.5rem)!important;line-height:1!important;margin:.25rem 0!important;color:white!important} h2,h3{color:white!important} p, li{color:var(--muted);font-size:1.05rem}.cta{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem}.btn{display:inline-block;padding:.85rem 1rem;border-radius:999px;text-decoration:none!important;font-weight:800}.primary{background:var(--orange);color:#120800!important}.secondary{background:#12335f;color:white!important;border:1px solid rgba(255,255,255,.2)}
           .card{background:var(--card);border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:1rem;min-height:210px}.badge{display:inline-flex;border-radius:999px;background:rgba(120,214,75,.15);color:#9cf56f;padding:.3rem .55rem;font-size:.8rem;font-weight:800}.review{border-left:4px solid var(--orange)}.metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1rem}.mini{background:rgba(2,8,23,.62);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:.8rem;text-align:center}.mini b{display:block;color:white;font-size:1.35rem}.footer{text-align:center;padding:2rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.12);margin-top:2rem}
           @media(max-width:700px){.metric-row{grid-template-columns:1fr}.marquee{border-radius:18px;align-items:flex-start}.track{animation:none;overflow:auto}.card{min-height:auto}}
-</style>
-""",
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -180,22 +182,6 @@ def render_hero() -> None:
             """
 <div class="panel"><p style="font-size:.85rem;color:#b7c7df;font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.2rem;">Welcome to</p><h1 style="font-size:clamp(3rem,7vw,5rem)!important;font-weight:900!important;color:#fff!important;line-height:.9!important;letter-spacing:-.03em;">CSC</h1><h2 style="font-size:1.4rem!important;font-weight:700!important;color:#ff8a00!important;margin:.4rem 0 .8rem!important;">Ankit Tiwari CSC Center</h2><p style="color:#b7c7df;font-size:1rem;margin-bottom:1.5rem;max-width:480px;line-height:1.6;">Your trusted partner for Digital India services, Government schemes, and online solutions.</p><div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:1.5rem;"><div style="display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:.8rem;color:#f8fbff;font-weight:600;">🛡️ <div><b style="display:block;font-size:.95rem;color:#fff;">Trusted</b><span style="font-size:.7rem;color:#b7c7df;">CSC Center</span></div></div><div style="display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:.8rem;color:#f8fbff;font-weight:600;">📋 <div><b style="display:block;font-size:.95rem;color:#fff;">100+</b><span style="font-size:.7rem;color:#b7c7df;">Services</span></div></div><div style="display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:.8rem;color:#f8fbff;font-weight:600;">⚡ <div><b style="display:block;font-size:.95rem;color:#fff;">Fast & Easy</b><span style="font-size:.7rem;color:#b7c7df;">Solutions</span></div></div><div style="display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:.8rem;color:#f8fbff;font-weight:600;">🔒 <div><b style="display:block;font-size:.95rem;color:#fff;">Secure</b><span style="font-size:.7rem;color:#b7c7df;">& Reliable</span></div></div></div><div style="display:flex;gap:.7rem;flex-wrap:wrap;"><a href="#services" class="btn-link" style="background:linear-gradient(135deg,#ff8a00,#ffae00);color:#120800;">🗂️ Explore Services</a><a href="https://maps.app.goo.gl/WNidZh1cEukiXna88" target="_blank" class="btn-link" style="background:rgba(18,51,95,.6);color:#fff;border:1px solid rgba(255,255,255,.15);">📍 Get Directions</a><a href="#ai-assistant" class="btn-link" style="background:rgba(18,51,95,.6);color:#fff;border:1px solid rgba(255,255,255,.15);">🤖 Ask AI Assistant</a></div></div>
 """,
-            <section class="panel">
-              <span class="badge">Streamlit Cloud ready</span>
-              <h1>Fast, trusted CSC help with AI guidance.</h1>
-              <p>Deploy this CSCSKB Online landing page on Streamlit Cloud and Vercel with highlighted CSC live feed links, service shortcuts, local trust proof, and map route actions.</p>
-              <div class="cta">
-                <a class="btn primary" href="#services">Explore Services</a>
-                <a class="btn secondary" href="https://maps.app.goo.gl/WNidZh1cEukiXna88" target="_blank">Get Directions</a>
-                <a class="btn secondary" href="#ai-assistant">Ask AI Assistant</a>
-              </div>
-              <div class="metric-row">
-                <div class="mini"><b>4+</b>Service groups</div>
-                <div class="mini"><b>24/7</b>Online guidance</div>
-                <div class="mini"><b>1-tap</b>Map route</div>
-              </div>
-            </section>
-            """,
             unsafe_allow_html=True,
         )
     with aside_col:
