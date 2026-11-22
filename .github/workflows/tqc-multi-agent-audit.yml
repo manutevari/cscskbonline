@@ -1,0 +1,204 @@
+name: CSCSKB TQC Multi-Agent Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - repair/phase-1-security-appointment
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  accessibility-agent:
+    name: Accessibility QA Agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install app and browser audit tools
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --no-save @axe-core/playwright playwright
+      - name: Build and start preview server
+        working-directory: frontend
+        run: |
+          npm run build
+          npm run start -- --port 3100 > /tmp/next.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3100/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/next.log
+          exit 1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run axe on key routes and save machine-readable evidence
+        working-directory: frontend
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+          import AxeBuilder from '@axe-core/playwright';
+          const routes = ['/', '/jobs-exams'];
+          const browser = await chromium.launch({ headless: true });
+          const report = [];
+          let failed = false;
+          try {
+            for (const route of routes) {
+              const page = await browser.newPage();
+              const url = 'http://127.0.0.1:3100' + route;
+              const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+              if (!response || response.status() >= 400) {
+                report.push({ route, httpStatus: response?.status() ?? null, error: 'Route did not load successfully' });
+                failed = true;
+                await page.close();
+                continue;
+              }
+              const results = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa']).analyze();
+              report.push({
+                route,
+                httpStatus: response.status(),
+                violations: results.violations.map(v => ({ id: v.id, impact: v.impact, description: v.description, help: v.help, nodes: v.nodes.map(n => ({ target: n.target, failureSummary: n.failureSummary })) })),
+                passes: results.passes.length,
+                incomplete: results.incomplete.length
+              });
+              if (results.violations.length) failed = true;
+              await page.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          fs.writeFileSync('/tmp/axe-report.json', JSON.stringify(report, null, 2));
+          console.log(fs.readFileSync('/tmp/axe-report.json', 'utf8'));
+          if (failed) process.exit(1);
+          NODE
+      - name: Upload accessibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-agent-report
+          path: |
+            /tmp/axe-report.json
+            /tmp/next.log
+          if-no-files-found: ignore
+
+  frontend-agent:
+    name: Front-end QA Agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Route and PWA smoke tests
+        run: |
+          npm run start -- --port 3101 > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3101/ >/dev/null; then break; fi
+            sleep 2
+          done
+          SMOKE_BASE_URL=http://127.0.0.1:3101 npm run smoke
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-agent-report
+          path: /tmp/frontend.log
+          if-no-files-found: ignore
+
+  security-agent:
+    name: Security Engineer Agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: High and critical dependency audit
+        run: npm audit --audit-level=high
+      - name: High-confidence secret-pattern scan (tracked source; values not printed)
+        working-directory: .
+        run: |
+          if git grep -nE 'AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----' -- ':!*.lock' ':!*.md'; then
+            echo '::error::Potential secret pattern detected. Review privately; do not expose values in logs.'
+            exit 1
+          else
+            echo 'No configured high-confidence secret patterns detected.'
+          fi
+
+  backend-integration-agent:
+    name: Backend Integration Engineer Agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: API contract smoke checks
+        run: |
+          npm run start -- --port 3102 > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3102/ >/dev/null; then break; fi
+            sleep 2
+          done
+          node --input-type=module <<'NODE'
+          const base='http://127.0.0.1:3102';
+          const r=await fetch(base+'/api/appointments/availability?date=bad-date');
+          if(r.status!==400){console.error('Expected HTTP 400 for invalid date, got',r.status);process.exit(1)}
+          console.log('PASS invalid date returns HTTP 400');
+          NODE
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-agent-report
+          path: /tmp/backend.log
+          if-no-files-found: ignore
+
+  tqc-orchestrator:
+    name: Central TQC Orchestrator — Gate
+    runs-on: ubuntu-latest
+    needs: [accessibility-agent, frontend-agent, security-agent, backend-integration-agent]
+    if: always()
+    steps:
+      - name: Evaluate specialist results
+        run: |
+          echo 'Accessibility: ${{ needs.accessibility-agent.result }}'
+          echo 'Frontend: ${{ needs.frontend-agent.result }}'
+          echo 'Security: ${{ needs.security-agent.result }}'
+          echo 'Backend Integration: ${{ needs.backend-integration-agent.result }}'
+          if [ '${{ needs.accessibility-agent.result }}' != 'success' ] || [ '${{ needs.frontend-agent.result }}' != 'success' ] || [ '${{ needs.security-agent.result }}' != 'success' ] || [ '${{ needs.backend-integration-agent.result }}' != 'success' ]; then
+            echo '::error::TQC gate failed or specialist blocked. Remediation required.'
+            exit 1
+          fi
+          echo 'Automated specialist gates passed; this is not manual QA or release approval.'

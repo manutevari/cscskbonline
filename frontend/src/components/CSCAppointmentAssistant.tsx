@@ -10,6 +10,12 @@ type Appointment = {
   date: string;
   time: string;
   status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+  verificationUrl?: string;
+  notifications?: {
+    customerWhatsApp?: { sent: boolean; reason?: string };
+    ownerWhatsApp?: { sent: boolean; reason?: string };
+    customerSMS?: { sent: boolean; reason?: string };
+  };
 };
 
 const SERVICES = [
@@ -100,6 +106,7 @@ export default function CSCAppointmentAssistant() {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
+  const [availabilityRetry, setAvailabilityRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [qrSrc, setQrSrc] = useState("");
@@ -109,7 +116,7 @@ export default function CSCAppointmentAssistant() {
     return Array.from({ length: 7 }, (_, i) => addDaysISO(start, i));
   }, []);
 
-  const verifyUrl = appointment ? `https://cscskb.online/verify/${encodeURIComponent(appointment.id)}` : "";
+  const verifyUrl = appointment?.verificationUrl || "";
   const primaryQr = verifyUrl
     ? `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verifyUrl)}`
     : "";
@@ -158,7 +165,13 @@ export default function CSCAppointmentAssistant() {
       })
       .finally(() => { if (!cancelled) setLoadingSlots(false); });
     return () => { cancelled = true; };
-  }, [open, mode, date]);
+  }, [open, mode, date, availabilityRetry]);
+
+  useEffect(() => {
+    if (!open || mode !== "book" || !availabilityError) return;
+    const timer = window.setTimeout(() => setAvailabilityRetry((n) => n + 1), 30000);
+    return () => window.clearTimeout(timer);
+  }, [open, mode, availabilityError, availabilityRetry]);
 
   useEffect(() => {
     if (qrSrc === primaryQr) return;
@@ -194,6 +207,7 @@ export default function CSCAppointmentAssistant() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Booking failed");
       const next = payload.appointment as Appointment;
+      next.notifications = payload.notifications;
       setAppointment(next);
       localStorage.setItem("cscskb-last-appointment", JSON.stringify(next));
       setQrSrc(payload.qrUrl || primaryQr);
@@ -268,14 +282,18 @@ export default function CSCAppointmentAssistant() {
 
                 <div className="csc-appt-calendar">
                   <div className="csc-appt-section-label">🕘 Choose 15-Minute Time Slot {loadingSlots && <small>Checking availability…</small>}</div>
-                  {availabilityError && <p className="csc-appt-error" role="alert">{availabilityError} Booking is paused until availability can be confirmed.</p>}
-                  <div className="csc-appt-slot-grid">
+                  {availabilityError && <div className="csc-appt-availability-alert" role="alert">
+                    <p className="csc-appt-error">{availabilityError} Booking is paused until availability can be confirmed.</p>
+                    <button type="button" className="csc-appt-retry" onClick={() => { setAvailabilityError(""); setAvailabilityRetry((n) => n + 1); }} disabled={loadingSlots}>↻ Retry availability</button>
+                    <small>We’ll also check again automatically.</small>
+                  </div>}
+                  <div className={availabilityError ? "csc-appt-slot-grid csc-appt-slot-grid-unavailable" : "csc-appt-slot-grid"}>
                     {SLOTS.map((slot) => {
                       const disabled = slotDisabled(slot);
                       return <button type="button" key={slot} disabled={disabled} className={slot === time && !disabled ? "csc-appt-slot active" : "csc-appt-slot"} onClick={() => { setTime(slot); setSubmitError(""); }}>{slot}{bookedSlots.includes(slot) && <small>Booked</small>}</button>;
                     })}
                   </div>
-                  <div className="csc-appt-legend"><span>● Available</span><span>● Booked</span><span>● Past</span></div>
+                  {!availabilityError && <div className="csc-appt-legend"><span>● Available</span><span>● Booked</span><span>● Past</span></div>}
                 </div>
 
                 <label>Remarks<textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} /></label>
@@ -301,6 +319,12 @@ export default function CSCAppointmentAssistant() {
                   <div className="csc-appt-qr">
                     {qrSrc ? <img src={qrSrc} alt="Appointment verification QR code" onError={() => setQrSrc(fallbackQr)} /> : <div className="csc-appt-qr-placeholder">Generating QR…</div>}
                     <small>Scan to verify • {verifyUrl}</small>
+                    {appointment.notifications && <div className="csc-appt-notification-status" role="status">
+                      <p><strong>Notification status</strong></p>
+                      <p>Customer WhatsApp: {appointment.notifications.customerWhatsApp?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                      <p>CSC WhatsApp: {appointment.notifications.ownerWhatsApp?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                      <p>SMS: {appointment.notifications.customerSMS?.sent ? "Sent ✓" : "Not sent ⚠"}</p>
+                    </div>}
                   </div>
                 </div>
                 <div className="csc-appt-actions">

@@ -5,203 +5,135 @@ type Booking = {
   id: string; name: string; mobile: string; service: string; date: string; time: string;
   remarks?: string; status: "BOOKED" | "CONFIRMED" | "COMPLETED" | "CANCELLED"; created_at: string;
 };
-
 const OWNER_WHATSAPP = process.env.CSC_OWNER_WHATSAPP || "918937887070";
 const GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION || "v23.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
-const SLOT_START = 9 * 60;
-const SLOT_END = 18 * 60;
-const SLOT_STEP = 15;
+const SLOT_START = 9 * 60, SLOT_END = 18 * 60, SLOT_STEP = 15;
 
 function cleanPhone(value: string) { return value.replace(/\D/g, "").replace(/^0+/, ""); }
-
-// WhatsApp Cloud API expects the recipient in international format. The booking form collects 10-digit Indian mobile numbers.
 function toWhatsAppPhone(value: string) {
   const digits = cleanPhone(value);
-  if (digits.length === 10) return `91${digits}`;
-  if (digits.length === 12 && digits.startsWith("91")) return digits;
-  return digits;
+  return digits.length === 10 ? `91${digits}` : digits;
 }
-
 function istDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   return Object.fromEntries(parts.map(({ type, value }) => [type, value]));
 }
-
-function todayIST() {
-  const p = istDateParts();
-  return `${p.year}-${p.month}-${p.day}`;
-}
-
+function todayIST() { const p = istDateParts(); return `${p.year}-${p.month}-${p.day}`; }
 function addDaysISO(iso: string, days: number) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10);
 }
-
 function makeSlots() {
   return Array.from({ length: (SLOT_END - SLOT_START) / SLOT_STEP }, (_, index) => {
-    const start = SLOT_START + index * SLOT_STEP;
-    const end = start + SLOT_STEP;
-    const fmt = (minutes: number) => {
-      const h24 = Math.floor(minutes / 60), h = h24 % 12 || 12, m = String(minutes % 60).padStart(2, "0");
-      return `${String(h).padStart(2, "0")}:${m} ${h24 >= 12 ? "PM" : "AM"}`;
-    };
+    const start = SLOT_START + index * SLOT_STEP, end = start + SLOT_STEP;
+    const fmt = (minutes: number) => { const h24 = Math.floor(minutes / 60), h = h24 % 12 || 12, m = String(minutes % 60).padStart(2, "0"); return `${String(h).padStart(2, "0")}:${m} ${h24 >= 12 ? "PM" : "AM"}`; };
     return `${fmt(start)} - ${fmt(end)}`;
   });
 }
 const SLOTS = makeSlots();
-
-function makeId() {
-  const d = todayIST().replaceAll("-", "");
-  return `CSC-${d}-${randomUUID().toUpperCase()}`;
+function makeId() { return `CSC-${todayIST().replaceAll("-", "")}-${randomUUID().toUpperCase()}`; }
+function slotStartMinutes(time: string) {
+  const match = time.match(/^(\d{2}):(\d{2}) (AM|PM)/); if (!match) return -1;
+  let hour = Number(match[1]) % 12; if (match[3] === "PM") hour += 12; return hour * 60 + Number(match[2]);
 }
-
+function currentISTMinutes() {
+  const parts = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  return Number(parts.find(x => x.type === "hour")?.value || 0) * 60 + Number(parts.find(x => x.type === "minute")?.value || 0);
+}
+function isValidDate(date: string) {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
 async function supabase(path: string, init: RequestInit = {}) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Supabase is not configured");
   const response = await fetch(`${url}/rest/v1/${path}`, {
-    ...init, headers: {
-      apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json",
-      Prefer: "return=representation", ...(init.headers || {}),
-    }, cache: "no-store",
+    ...init, headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=representation", ...(init.headers || {}) },
+    cache: "no-store", signal: init.signal || AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 409 || errorText.includes("appointments_date_time_unique")) throw new Error("SLOT_CONFLICT");
+    throw new Error(`Supabase request failed (${response.status})`);
+  }
   return response.json();
 }
-
-async function sendWhatsApp(to: string, appointment: Booking, role: "customer" | "owner", verificationToken: string) {
+type SendResult = { sent: boolean; reason?: string };
+async function safeSend(send: () => Promise<SendResult>): Promise<SendResult> {
+  try { return await send(); } catch (error) { console.error("Appointment notification error:", error instanceof Error ? error.message : "unknown"); return { sent: false, reason: "send_failed" }; }
+}
+async function sendWhatsApp(to: string, appointment: Booking, role: "customer" | "owner", verificationUrl: string): Promise<SendResult> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN, phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const template = role === "customer" ? process.env.WHATSAPP_CUSTOMER_TEMPLATE : process.env.WHATSAPP_OWNER_TEMPLATE;
   if (!token || !phoneNumberId || !template) return { sent: false, reason: "whatsapp_not_configured" };
-  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
   const parameters = role === "customer"
     ? [appointment.name, appointment.id, appointment.service, appointment.date, appointment.time, verificationUrl]
     : [appointment.id, appointment.name, appointment.mobile, appointment.service, appointment.date, appointment.time, appointment.status];
   const response = await fetch(`${GRAPH_URL}/${phoneNumberId}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp", to: toWhatsAppPhone(to), type: "template",
+    body: JSON.stringify({ messaging_product: "whatsapp", to: toWhatsAppPhone(to), type: "template",
       template: { name: template, language: { code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en_US" },
-        components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text: String(text) })) }] },
-    }),
+        components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text: String(text) })) }] } }),
+    signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) return { sent: false, reason: await response.text() };
+  if (!response.ok) { console.error(`WhatsApp ${role} send failed: HTTP ${response.status}`); return { sent: false, reason: `whatsapp_http_${response.status}` }; }
   return { sent: true };
 }
-
-async function sendSMS(to: string, appointment: Booking, verificationToken: string) {
-  const authKey = process.env.MSG91_AUTH_KEY;
-  const templateId = process.env.MSG91_SMS_TEMPLATE_ID;
+async function sendSMS(to: string, appointment: Booking, verificationUrl: string): Promise<SendResult> {
+  const authKey = process.env.MSG91_AUTH_KEY, templateId = process.env.MSG91_SMS_TEMPLATE_ID;
   if (!authKey || !templateId) return { sent: false, reason: "sms_not_configured" };
-
-  const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
   const response = await fetch("https://control.msg91.com/api/v5/flow", {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authkey: authKey,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      template_id: templateId,
-      recipients: [{
-        mobiles: to.startsWith("91") ? to : `91${to}`,
-        VAR1: appointment.name,
-        VAR2: appointment.id,
-        VAR3: appointment.service,
-        VAR4: appointment.date,
-        VAR5: appointment.time,
-        VAR6: verificationUrl,
-      }],
-    }),
+    method: "POST", headers: { accept: "application/json", authkey: authKey, "content-type": "application/json" },
+    body: JSON.stringify({ template_id: templateId, recipients: [{ mobiles: to.startsWith("91") ? to : `91${to}`,
+      VAR1: appointment.name, VAR2: appointment.id, VAR3: appointment.service, VAR4: appointment.date, VAR5: appointment.time, VAR6: verificationUrl }] }),
+    signal: AbortSignal.timeout(10000),
   });
-
-  if (!response.ok) return { sent: false, reason: await response.text() };
+  if (!response.ok) { console.error(`SMS send failed: HTTP ${response.status}`); return { sent: false, reason: `sms_http_${response.status}` }; }
   return { sent: true };
 }
-
-function slotIsValid(time: string) { return SLOTS.includes(time); }
-
-function slotStartMinutes(time: string) {
-  const match = time.match(/^(\d{2}):(\d{2}) (AM|PM)/);
-  if (!match) return -1;
-  let hour = Number(match[1]) % 12;
-  if (match[3] === "PM") hour += 12;
-  return hour * 60 + Number(match[2]);
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const name = String(body.name || "").trim().slice(0, 100);
     const mobile = cleanPhone(String(body.mobile || ""));
     const service = String(body.service || "").trim().slice(0, 120);
-    const date = String(body.date || "").trim();
-    const time = String(body.time || "").trim();
+    const date = String(body.date || "").trim(), time = String(body.time || "").trim();
     const remarks = String(body.remarks || "").trim().slice(0, 500);
-
-    if (!name || !/^\d{10}$/.test(mobile) || !service || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !slotIsValid(time)) {
+    if (!name || !/^\d{10}$/.test(mobile) || !service || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidDate(date) || !SLOTS.includes(time)) {
       return NextResponse.json({ error: "Invalid appointment details" }, { status: 400 });
     }
-
-    const today = todayIST();
-    const lastBookableDate = addDaysISO(today, 6);
-    if (date < today || date > lastBookableDate) {
-      return NextResponse.json({ error: "Please choose a date within the next 7 days." }, { status: 400 });
-    }
-
-    if (date === today && slotStartMinutes(time) <= (() => {
-      const p = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
-      return Number(p.find(x => x.type === "hour")?.value || 0) * 60 + Number(p.find(x => x.type === "minute")?.value || 0);
-    })()) {
-      return NextResponse.json({ error: "That time slot has already started or passed. Please choose another slot." }, { status: 400 });
-    }
-
-    const existing = await supabase(`appointments?date=eq.${encodeURIComponent(date)}&time=eq.${encodeURIComponent(time)}&status=in.(BOOKED,CONFIRMED)&select=id&limit=1`);
-    if (existing.length) {
-      return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409 });
-    }
+    const today = todayIST(), lastBookableDate = addDaysISO(today, 6);
+    if (date < today || date > lastBookableDate) return NextResponse.json({ error: "Please choose a date within the next 7 days." }, { status: 400 });
+    if (date === today && slotStartMinutes(time) <= currentISTMinutes()) return NextResponse.json({ error: "That time slot has already started or passed. Please choose another slot." }, { status: 400 });
 
     const verificationToken = randomBytes(32).toString("base64url");
     const verificationTokenHash = createHash("sha256").update(verificationToken).digest("hex");
-    const appointment: Booking = {
-      id: makeId(), name, mobile, service, date, time, remarks, status: "BOOKED", created_at: new Date().toISOString(),
-    };
-
+    const appointment: Booking = { id: makeId(), name, mobile, service, date, time, remarks, status: "BOOKED", created_at: new Date().toISOString() };
     let inserted: Booking[];
     try {
       inserted = await supabase("appointments", { method: "POST", body: JSON.stringify({ ...appointment, verification_token_hash: verificationTokenHash }) });
     } catch (error) {
-      const message = String(error);
-      if (message.includes("appointments_date_time_unique")) {
+      if (String(error).includes("SLOT_CONFLICT") || String(error).includes("appointments_date_time_unique")) {
         return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409 });
       }
       throw error;
     }
     const saved = inserted[0] || appointment;
-    const [customerWhatsApp, ownerWhatsApp, customerSMS] = await Promise.all([
-      sendWhatsApp(mobile, saved, "customer", verificationToken),
-      sendWhatsApp(OWNER_WHATSAPP, saved, "owner", verificationToken),
-      sendSMS(mobile, saved, verificationToken),
-    ]);
-
     const verificationUrl = `https://cscskb.online/verify/${encodeURIComponent(verificationToken)}`;
+    const [customerWhatsApp, ownerWhatsApp, customerSMS] = await Promise.all([
+      safeSend(() => sendWhatsApp(mobile, saved, "customer", verificationUrl)),
+      safeSend(() => sendWhatsApp(OWNER_WHATSAPP, saved, "owner", verificationUrl)),
+      safeSend(() => sendSMS(mobile, saved, verificationUrl)),
+    ]);
     const qrUrl = `https://quickchart.io/qr?size=260&margin=2&text=${encodeURIComponent(verificationUrl)}`;
-    // Return only the fields needed for the receipt; never echo contact details or remarks.
-    const receipt = { id: saved.id, name: saved.name, service: saved.service, date: saved.date, time: saved.time, status: saved.status };
-    return NextResponse.json({
-      appointment: receipt, qrUrl, verificationUrl,
-      notifications: {
-        customerWhatsApp: { sent: customerWhatsApp.sent },
-        ownerWhatsApp: { sent: ownerWhatsApp.sent },
-        customerSMS: { sent: customerSMS.sent },
-      },
-    });
+    const receipt = { id: saved.id, name: saved.name, service: saved.service, date: saved.date, time: saved.time, status: saved.status, verificationUrl };
+    return NextResponse.json({ appointment: receipt, qrUrl, verificationUrl, notifications: {
+      customerWhatsApp: { sent: customerWhatsApp.sent, reason: customerWhatsApp.reason },
+      ownerWhatsApp: { sent: ownerWhatsApp.sent, reason: ownerWhatsApp.reason },
+      customerSMS: { sent: customerSMS.sent, reason: customerSMS.reason },
+    } }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Appointment booking failed:", error);
-    return NextResponse.json({ error: "Unable to create appointment" }, { status: 500 });
+    console.error("Appointment booking failed:", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "Unable to create appointment. Please try again." }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
