@@ -1,3 +1,15 @@
 .vercel
 
 cscskbonline/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python generated files
+__pycache__/
+*.py[cod]

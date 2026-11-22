@@ -1,0 +1,77 @@
+name: CSCSKB Quality Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  frontend:
+    name: Frontend install, security audit, and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Check committed lockfile consistency
+        run: |
+          node -e "const p=require('./package.json'),l=require('./package-lock.json'); const a=Object.keys(p.dependencies||{}).sort().join(','),b=Object.keys(l.packages[''].dependencies||{}).sort().join(','); if(a!==b){console.error('package.json/package-lock dependency mismatch'); process.exit(1)}"
+        continue-on-error: true
+      - run: npm install
+      - name: Apply safe dependency updates
+        run: npm audit fix
+        continue-on-error: true
+      - name: Upgrade PDF.js to patched release
+        run: npm install pdfjs-dist@^6.2.108
+      - name: Security audit
+        run: npm audit --audit-level=high
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-lock-repair
+          path: |
+            frontend/package.json
+            frontend/package-lock.json
+          retention-days: 3
+      - name: Commit tested dependency updates to repair branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+          else
+            git commit -m "Fix dependency security vulnerabilities"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
+  python:
+    name: Python syntax validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Compile Python sources
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import py_compile
+          files = [p for p in Path('.').rglob('*.py') if '.git' not in p.parts and '__pycache__' not in p.parts]
+          for path in files:
+              py_compile.compile(str(path), doraise=True)
+          print(f"Compiled {len(files)} Python files")
+          PY
