@@ -61,3 +61,31 @@ Scope:
 
 ## Current state
 This file defines the agent operating model only. The agents are not yet deployed as continuously running autonomous services. Agent runtime, tool permissions, scheduling, test infrastructure, and credentials need to be configured. The existing accessibility baseline PR remains subject to specialist testing and evidence.
+
+## Human-in-the-loop (HITL) and confidence policy — mandatory
+
+Every agent output must include three distinct confidence scores, each 0–100:
+- Finding confidence: confidence the issue exists and is correctly characterized, supported by reproducible evidence.
+- Fix confidence: confidence the proposed change addresses the root cause without unacceptable regression risk, supported by tests/review.
+- Verification confidence: confidence the retest covers acceptance criteria; cite test/evidence, not model intuition.
+
+### Confidence bands
+- 90–100 (High): strong reproducible evidence; reversible, low-risk branch-only actions may proceed within permission. Tests and independent verification remain mandatory before closure.
+- 75–89 (Medium): agent may prepare patch/PR and test plan; Orchestrator requests HITL review before applying/merging.
+- 0–74 (Low): no autonomous remediation or closure; escalate for human review, mark uncertain, and do not guess.
+
+Confidence thresholds never override risk approval. Critical/High severity, security/auth/RLS/privacy, DB migrations, production config, credentials, payments, customer-facing messages, irreversible actions, merge to main, and production deployment always require explicit human approval regardless of score.
+
+### HITL checkpoints
+1. Audit scope, access and production-test approval.
+2. Critical/High findings triage and risk acceptance.
+3. Proposed remediation for high-impact or low-confidence findings.
+4. PR review and merge authorization.
+5. Database migrations, secret rotation, external notifications, payment/data changes and production deployment.
+6. Closure exceptions and release sign-off.
+
+### Required finding/action record
+Each record must include finding_confidence, fix_confidence, verification_confidence (0–100), score rationale/evidence, risk/severity, agent, proposed action, HITL-required flag, approval decision/approver/time, test evidence, reviewer, and final status. Scores without evidence/rationale are invalid. Agents must not invent or claim human approval.
+
+### Decision rule
+Confidence informs the next action; it never substitutes for evidence or authorization. Independent verification is mandatory. Material disagreement between scores (for example, high finding confidence but low verification confidence) keeps the finding OPEN or BLOCKED.
