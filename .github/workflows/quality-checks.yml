@@ -28,6 +28,13 @@ jobs:
           node -e "const p=require('./package.json'),l=require('./package-lock.json'); const a=Object.keys(p.dependencies||{}).sort().join(','),b=Object.keys(l.packages[''].dependencies||{}).sort().join(','); if(a!==b){console.error('package.json/package-lock dependency mismatch'); process.exit(1)}"
         continue-on-error: true
       - run: npm install
+      - name: Apply safe dependency updates
+        run: npm audit fix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-lock-repair
+          path: frontend/package-lock.json
+          retention-days: 3
       - name: Dependency vulnerability report
         run: npm audit --audit-level=high
         continue-on-error: true
