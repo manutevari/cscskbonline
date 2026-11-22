@@ -310,18 +310,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-        st.title("CSCSKB Online")
-        st.caption("Streamlit deployment controls")
-        st.link_button("Official CSC Portal", "https://csc.gov.in/", use_container_width=True)
-        st.link_button("Digital Seva", "https://digitalseva.csc.gov.in/", use_container_width=True)
-        st.link_button("Get Directions", "https://maps.app.goo.gl/WNidZh1cEukiXna88", use_container_width=True)
-        st.info("Deploy on Streamlit Cloud with main file path: `streamlit_app.py`.")
-
-
-inject_css()
-render_sidebar()
-render_header()
-render_hero()
-render_services()
-render_assistant()
-st.markdown('<div class="footer">Streamlit deployment build — ready for Streamlit Cloud from <code>streamlit_app.py</code>; Vercel build is ready from <code>frontend/</code>.</div>', unsafe_allow_html=True)
