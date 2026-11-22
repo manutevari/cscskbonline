@@ -35,11 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${devanagari.variable}`}>
+    <html lang="hi-IN" className={`${outfit.variable} ${devanagari.variable}`}>
       <head>
         <meta name="google-adsense-account" content="ca-pub-9259849546872526" />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">मुख्य सामग्री पर जाएँ / Skip to main content</a>
         <ServiceWorkerRegistration />
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9259849546872526"
@@ -57,7 +58,9 @@ export default function RootLayout({
             </Script>
           </>
         ) : null}
-        {children}
+        <div id="main-content" tabIndex={-1}>
+          {children}
+        </div>
         <GlobalAssistants />
         <DocumentToolsShortcut />
       </body>
