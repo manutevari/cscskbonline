@@ -151,6 +151,10 @@ def render_updates_bar() -> None:
         f'<span style="display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;color:#f8fbff;font-weight:500;"><span style="width:6px;height:6px;border-radius:50%;background:{color};display:inline-block;flex-shrink:0;"></span>{html.escape(text)}</span>'
         for color, text in UPDATES * 3
     )
+    links = "".join(
+        f'<a href="{url}" target="_blank">{html.escape(label)} <span>{html.escape(tag)}</span></a>'
+        for label, url, tag in [*CSC_LIVE_FEEDS, *CSC_LIVE_FEEDS]
+    )
     st.markdown(
         f"""
 <div class="updates-shell" style="background:rgba(2,8,23,.85);border-bottom:1px solid rgba(255,255,255,.07);padding:.5rem 2rem;display:flex;align-items:center;gap:1rem;overflow:hidden;">
@@ -159,8 +163,7 @@ def render_updates_bar() -> None:
   <a class="updates-cta" href="https://csc.gov.in/" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .85rem;border-radius:6px;background:#ff8a00;color:#120800;font-size:.75rem;font-weight:800;text-decoration:none;flex-shrink:0;">View All →</a>
 </div>
 """,
-        f'<a href="{url}" target="_blank">{html.escape(label)} <span>{html.escape(tag)}</span></a>'
-        for label, url, tag in [*CSC_LIVE_FEEDS, *CSC_LIVE_FEEDS]
+        unsafe_allow_html=True,
     )
     st.markdown(
         f"""
