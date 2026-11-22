@@ -106,6 +106,7 @@ export default function CSCAppointmentAssistant() {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
+  const [availabilityRetry, setAvailabilityRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [qrSrc, setQrSrc] = useState("");
@@ -164,7 +165,13 @@ export default function CSCAppointmentAssistant() {
       })
       .finally(() => { if (!cancelled) setLoadingSlots(false); });
     return () => { cancelled = true; };
-  }, [open, mode, date]);
+  }, [open, mode, date, availabilityRetry]);
+
+  useEffect(() => {
+    if (!open || mode !== "book" || !availabilityError) return;
+    const timer = window.setTimeout(() => setAvailabilityRetry((n) => n + 1), 30000);
+    return () => window.clearTimeout(timer);
+  }, [open, mode, availabilityError, availabilityRetry]);
 
   useEffect(() => {
     if (qrSrc === primaryQr) return;
@@ -275,14 +282,18 @@ export default function CSCAppointmentAssistant() {
 
                 <div className="csc-appt-calendar">
                   <div className="csc-appt-section-label">🕘 Choose 15-Minute Time Slot {loadingSlots && <small>Checking availability…</small>}</div>
-                  {availabilityError && <p className="csc-appt-error" role="alert">{availabilityError} Booking is paused until availability can be confirmed.</p>}
-                  <div className="csc-appt-slot-grid">
+                  {availabilityError && <div className="csc-appt-availability-alert" role="alert">
+                    <p className="csc-appt-error">{availabilityError} Booking is paused until availability can be confirmed.</p>
+                    <button type="button" className="csc-appt-retry" onClick={() => { setAvailabilityError(""); setAvailabilityRetry((n) => n + 1); }} disabled={loadingSlots}>↻ Retry availability</button>
+                    <small>We’ll also check again automatically.</small>
+                  </div>}
+                  <div className={availabilityError ? "csc-appt-slot-grid csc-appt-slot-grid-unavailable" : "csc-appt-slot-grid"}>
                     {SLOTS.map((slot) => {
                       const disabled = slotDisabled(slot);
                       return <button type="button" key={slot} disabled={disabled} className={slot === time && !disabled ? "csc-appt-slot active" : "csc-appt-slot"} onClick={() => { setTime(slot); setSubmitError(""); }}>{slot}{bookedSlots.includes(slot) && <small>Booked</small>}</button>;
                     })}
                   </div>
-                  <div className="csc-appt-legend"><span>● Available</span><span>● Booked</span><span>● Past</span></div>
+                  {!availabilityError && <div className="csc-appt-legend"><span>● Available</span><span>● Booked</span><span>● Past</span></div>}
                 </div>
 
                 <label>Remarks<textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional — tell us what you need" rows={3} /></label>
