@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import GlobalAssistants from "@/components/GlobalAssistants";
 import DocumentToolsShortcut from "@/components/DocumentToolsShortcut";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -22,6 +23,10 @@ export const metadata: Metadata = {
   title: "CSC Shikohabad | Ankit Tiwari CSC Center — AI Knowledge Platform",
   description:
     "Your trusted CSC center in Shikohabad (Purana Bijli Office). AI-powered guidance for government services, Ayushman, PAN, PM-KISAN, Aadhaar, certificates, and more.",
+  manifest: "/manifest.webmanifest",
+  applicationName: "CSCSKB Online",
+  appleWebApp: { capable: true, title: "CSCSKB", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icon.svg", shortcut: "/icon.svg", apple: "/icon.svg" },
 };
 
 export default function RootLayout({
@@ -35,6 +40,7 @@ export default function RootLayout({
         <meta name="google-adsense-account" content="ca-pub-9259849546872526" />
       </head>
       <body>
+        <ServiceWorkerRegistration />
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9259849546872526"
           strategy="afterInteractive"
