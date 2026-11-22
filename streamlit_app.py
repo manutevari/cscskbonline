@@ -104,7 +104,6 @@ def render_css() -> None:
           @media(max-width:700px){.metric-row{grid-template-columns:1fr}.marquee{border-radius:18px;align-items:flex-start}.track{animation:none;overflow:auto}.card{min-height:auto}}
 </style>
 """,
-        """,
         unsafe_allow_html=True,
     )
 
