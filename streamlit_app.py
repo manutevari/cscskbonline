@@ -29,6 +29,8 @@ NAV_LINKS = [
     ("💻", "Digital Seva Portal", "https://digitalseva.csc.gov.in/"),
     ("🗂️", "CSC Services", "#services"),
     ("📞", "Contact Us", "#contact"),
+]
+
 CSC_LIVE_FEEDS = [
     ("CSC Official Portal", "https://csc.gov.in/", "Official"),
     ("Digital Seva live services", "https://digitalseva.csc.gov.in/", "Live"),
