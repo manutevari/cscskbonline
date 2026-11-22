@@ -1,0 +1,49 @@
+name: CSCSKB Quality Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "repair/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend install, audit, and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Dependency vulnerability report
+        run: npm audit --audit-level=high
+        continue-on-error: true
+      - run: npm run build
+
+  python:
+    name: Python syntax validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python sources
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import py_compile
+          files = [p for p in Path('.').rglob('*.py') if '.git' not in p.parts and '__pycache__' not in p.parts]
+          for path in files:
+              py_compile.compile(str(path), doraise=True)
+          print(f"Compiled {len(files)} Python files")
+          PY
