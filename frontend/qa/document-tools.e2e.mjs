@@ -23,7 +23,7 @@ async function downloadAndAssert(label, expectedExtension) {
   assert.ok(path, "download should materialize");
   const details = await stat(path);
   assert.ok(details.size > 100, "download should not be empty");
-  return { file: download.suggestedFilename(), bytes: details.size };
+  return { file: download.suggestedFilename(), bytes: details.size, path };
 }
 
 try {
@@ -57,12 +57,33 @@ try {
   // Validate all single-page export formats and ZIP packaging.
   await page.locator(".download-menu summary").click();
   const downloads = [];
-  downloads.push(await downloadAndAssert("Current page — PDF", ".pdf"));
+  const exportedPdf = await downloadAndAssert("Current page — PDF", ".pdf");
+  downloads.push(exportedPdf);
+
+  // PDF round-trip: reopen the exact exported file through the PDF.js import path.
+  const beforePdfImport = await page.locator(".thumb").count();
+  await page.locator('input[type="file"]').first().setInputFiles(exportedPdf.path);
+  await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(".thumb").count() > beforePdfImport, "exported PDF should reopen and render at least one page");
+  assert.equal(await page.locator(".placed img").count(), 1, "PDF page should be rendered into the editor canvas");
   downloads.push(await downloadAndAssert("Current page — PNG", ".png"));
   downloads.push(await downloadAndAssert("Current page — JPG", ".jpg"));
   downloads.push(await downloadAndAssert("Separate PDFs — ZIP", ".zip"));
   downloads.push(await downloadAndAssert("All pages — PNG ZIP", ".zip"));
   downloads.push(await downloadAndAssert("All pages — JPG ZIP", ".zip"));
+
+  // Encrypted PDF password regression: wrong password retry, then exact whitespace-preserving password.
+  const encryptedPdfPath = new URL("./fixtures/encrypted-whitespace.pdf", import.meta.url).pathname;
+  const beforeEncryptedPdf = await page.locator(".thumb").count();
+  await page.locator('input[type="file"]').first().setInputFiles(encryptedPdfPath);
+  await page.getByRole("dialog", { name: "Unlock password-protected PDF" }).waitFor({ timeout: 15000 });
+  await page.locator('input[type="password"]').fill("wrong-password");
+  await page.getByRole("button", { name: "Unlock PDF" }).click();
+  await page.getByRole("alert").getByText("Password incorrect. Please try again.").waitFor({ timeout: 15000 });
+  await page.locator('input[type="password"]').fill("   ");
+  await page.getByRole("button", { name: "Unlock PDF" }).click();
+  await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(".thumb").count() > beforeEncryptedPdf, "all-whitespace password should unlock and render PDF");
 
   // Verify configured compression reports actual output size.
   await page.getByLabel("Max file size").selectOption("100");

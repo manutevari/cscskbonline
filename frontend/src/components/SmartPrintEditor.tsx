@@ -205,14 +205,25 @@ export default function PrintEditorPage() {
       setStatus(added + " image/PDF page(s) layout में जोड़ दिए गए। अब page assignment और layout mode चुनें।");
     } catch (error) {
       const e = error as { name?: string; message?: string; code?: number };
-      if (e.name === "PasswordException" || e.code === 1 || e.code === 2) setStatus("यह PDF password-protected है। सही password डालकर फिर से चुनें।");
-      else setStatus(e.message || "कुछ files process नहीं हो सकीं।");
+      if (e.name === "PasswordException" || e.code === 1 || e.code === 2) {
+        setStatus(e.code === 2
+          ? "PDF password गलत है। सही password डालें और Unlock PDF फिर दबाएँ।"
+          : "इस PDF को खोलने के लिए password आवश्यक है।");
+      } else if (e.name === "InvalidPDFException") {
+        setStatus("यह PDF file damaged या invalid है। Original file को दोबारा download करके कोशिश करें।");
+      } else if (e.name === "MissingPDFException") {
+        setStatus("PDF file नहीं मिली। कृपया file दोबारा चुनें।");
+      } else if (e.name === "UnexpectedResponseException") {
+        setStatus("PDF data load नहीं हो सका। File की integrity जाँचें और फिर कोशिश करें।");
+      } else {
+        setStatus("PDF खोलने में समस्या: " + (e.message || "अज्ञात त्रुटि"));
+      }
     } finally { setBusy(false); }
   };
 
   const submitPdfPassword = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!pdfPassword.trim()) { setStatus("PDF password दर्ज करें।"); return; }
+    if (pdfPassword.length === 0) { setStatus("PDF password दर्ज करें।"); return; }
     passwordResolverRef.current?.(pdfPassword); setPdfPassword("");
   };
   const cancelPdfPassword = () => { passwordResolverRef.current?.(null); setPdfPassword(""); };
