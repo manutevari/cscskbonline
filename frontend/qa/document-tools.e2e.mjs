@@ -23,7 +23,7 @@ async function downloadAndAssert(label, expectedExtension) {
   assert.ok(path, "download should materialize");
   const details = await stat(path);
   assert.ok(details.size > 100, "download should not be empty");
-  return { file: download.suggestedFilename(), bytes: details.size };
+  return { file: download.suggestedFilename(), bytes: details.size, path };
 }
 
 try {
@@ -57,7 +57,15 @@ try {
   // Validate all single-page export formats and ZIP packaging.
   await page.locator(".download-menu summary").click();
   const downloads = [];
-  downloads.push(await downloadAndAssert("Current page — PDF", ".pdf"));
+  const exportedPdf = await downloadAndAssert("Current page — PDF", ".pdf");
+  downloads.push(exportedPdf);
+
+  // PDF round-trip: reopen the exact exported file through the PDF.js import path.
+  const beforePdfImport = await page.locator(".thumb").count();
+  await page.locator('input[type="file"]').first().setInputFiles(exportedPdf.path);
+  await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(".thumb").count() > beforePdfImport, "exported PDF should reopen and render at least one page");
+  assert.equal(await page.locator(".placed img").count(), 1, "PDF page should be rendered into the editor canvas");
   downloads.push(await downloadAndAssert("Current page — PNG", ".png"));
   downloads.push(await downloadAndAssert("Current page — JPG", ".jpg"));
   downloads.push(await downloadAndAssert("Separate PDFs — ZIP", ".zip"));
