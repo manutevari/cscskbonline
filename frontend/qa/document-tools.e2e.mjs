@@ -72,6 +72,16 @@ try {
   downloads.push(await downloadAndAssert("All pages — PNG ZIP", ".zip"));
   downloads.push(await downloadAndAssert("All pages — JPG ZIP", ".zip"));
 
+  // Encrypted PDF regression with a conventional numeric password (common Aadhaar-style pattern).
+  const standardPdfPath = new URL("./fixtures/encrypted-standard.pdf", import.meta.url).pathname;
+  const beforeStandardPdf = await page.locator(".thumb").count();
+  await page.locator('input[type="file"]').first().setInputFiles(standardPdfPath);
+  await page.getByRole("dialog", { name: "Unlock password-protected PDF" }).waitFor({ timeout: 15000 });
+  await page.locator('input[type="password"]').fill("1234");
+  await page.getByRole("button", { name: "Unlock PDF" }).click();
+  await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(".thumb").count() > beforeStandardPdf, "numeric password should unlock and render PDF");
+
   // Encrypted PDF password regression: wrong password retry, then exact whitespace-preserving password.
   const encryptedPdfPath = new URL("./fixtures/encrypted-whitespace.pdf", import.meta.url).pathname;
   const beforeEncryptedPdf = await page.locator(".thumb").count();
