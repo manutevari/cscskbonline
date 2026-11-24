@@ -35,6 +35,12 @@ jobs:
         run: npm install --no-save --package-lock=false playwright@latest
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Install qpdf for encrypted-PDF regression fixture
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf
+      - name: Generate encrypted PDF password fixture
+        run: node qa/create-password-pdf-fixture.mjs
       - name: Start production server
         run: |
           npm run start > /tmp/cscskb-next.log 2>&1 &
