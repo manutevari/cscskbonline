@@ -77,6 +77,8 @@ function makeSlots() {
 
 const SLOTS = makeSlots();
 
+const CSC_MAP_URL = "https://maps.app.goo.gl/aByXyAKacX4xkG9a8";
+
 function currentISTMinutes() {
   const parts = new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
@@ -248,6 +250,12 @@ export default function CSCAppointmentAssistant() {
                 <div className="csc-appt-form-title">
                   <h3>Appointment Details</h3>
                   <p>Book any available slot within the next 7 days • 15-minute slots • CSC hours 9:00 AM–6:00 PM.</p>
+                </div>
+
+                <div className="csc-appt-location" aria-label="CSC center location">
+                  <span className="csc-appt-location-pin" aria-hidden="true">📍</span>
+                  <div className="csc-appt-location-copy"><strong>CSC</strong><small>Visit our CSC center in Shikohabad</small></div>
+                  <a href={CSC_MAP_URL} target="_blank" rel="noopener noreferrer">Open map ↗</a>
                 </div>
 
                 <label>Applicant Name *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" required /></label>
