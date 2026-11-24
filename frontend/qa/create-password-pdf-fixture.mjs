@@ -24,5 +24,5 @@ for (let i = 1; i < offsets.length; i++) pdf += `${String(offsets[i]).padStart(1
 pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
 await mkdir(dirname(output), { recursive: true });
 await writeFile(temp, pdf);
-execFileSync("qpdf", ["--encrypt", "  pass  ", "owner-pass", "256", "--", temp, output]);
+execFileSync("qpdf", ["--encrypt", "   ", "owner-pass", "256", "--", temp, output]);
 console.log("Created encrypted whitespace-password fixture:", output);
