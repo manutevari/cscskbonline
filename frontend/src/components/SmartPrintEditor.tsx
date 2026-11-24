@@ -454,6 +454,40 @@ export default function PrintEditorPage() {
         context.drawImage(image,-w/2,-h/2,w,h);
       } else context.drawImage(image,x,y,w,h);
       context.restore();
+
+      // Match the sharpness filter used by the on-screen preview and print output.
+      // Apply a bounded 3×3 convolution only to this item's rendered rectangle.
+      const strength = Math.max(0, Math.min(5, Number(item.sharpness ?? 0)));
+      if (strength > 0) {
+        const left = Math.max(0, Math.floor(x));
+        const top = Math.max(0, Math.floor(y));
+        const right = Math.min(canvas.width, Math.ceil(x + w));
+        const bottom = Math.min(canvas.height, Math.ceil(y + h));
+        const regionWidth = right - left;
+        const regionHeight = bottom - top;
+        if (regionWidth > 2 && regionHeight > 2) {
+          const pixels = context.getImageData(left, top, regionWidth, regionHeight);
+          const input = new Uint8ClampedArray(pixels.data);
+          const centerWeight = 1 + 4 * strength;
+          for (let py = 1; py < regionHeight - 1; py++) {
+            for (let px = 1; px < regionWidth - 1; px++) {
+              const index = (py * regionWidth + px) * 4;
+              for (let channel = 0; channel < 3; channel++) {
+                const value =
+                  input[index + channel] * centerWeight -
+                  strength * (
+                    input[index - 4 + channel] +
+                    input[index + 4 + channel] +
+                    input[index - regionWidth * 4 + channel] +
+                    input[index + regionWidth * 4 + channel]
+                  );
+                pixels.data[index + channel] = Math.max(0, Math.min(255, value));
+              }
+            }
+          }
+          context.putImageData(pixels, left, top);
+        }
+      }
     }
     return canvas;
   };
