@@ -77,7 +77,7 @@ function makeSlots() {
 
 const SLOTS = makeSlots();
 
-const CSC_MAP_URL = "https://maps.app.goo.gl/aByXyAKacX4xkG9a8";
+const CSC_DIRECTIONS_URL = "https://www.google.com/maps/dir/?api=1&destination=Purana%20Bijli%20Office%2C%20Agra%20Road%2C%20near%20Roadways%20Bus%20Stand%2C%20Shikohabad%2C%20Uttar%20Pradesh%20283135%2C%20India&destination_place_id=ChIJC_Vje4xLdDkR4uborTIZACM";
 
 function currentISTMinutes() {
   const parts = new Intl.DateTimeFormat("en-IN", {
@@ -255,7 +255,7 @@ export default function CSCAppointmentAssistant() {
                 <div className="csc-appt-location" aria-label="CSC center location">
                   <span className="csc-appt-location-pin" aria-hidden="true">📍</span>
                   <div className="csc-appt-location-copy"><strong>CSC</strong><small>Visit our CSC center in Shikohabad</small></div>
-                  <a href={CSC_MAP_URL} target="_blank" rel="noopener noreferrer">Open map ↗</a>
+                  <a href={CSC_DIRECTIONS_URL} target="_blank" rel="noopener noreferrer">Get Directions ↗</a>
                 </div>
 
                 <label>Applicant Name *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" required /></label>
