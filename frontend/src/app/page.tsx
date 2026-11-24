@@ -470,7 +470,7 @@ export default function Home() {
                   { icon: "📘", bg: "#1877f2", href: "https://www.facebook.com/profile.php?id=61581329466166", label: "Facebook" },
                   { icon: "💬", bg: "#25d366", href: "#" },
                   { icon: "▶️", bg: "#ff0000", href: "#" },
-                  { icon: "📸", bg: "#e1306c", href: "#" },
+                  { icon: "📸", bg: "#e1306c", href: "https://www.instagram.com/cscmitr/", label: "Instagram" },
                 ].map((s, i) => (
                   <a key={i} href={s.href} aria-label={s.label || `Social link ${i + 1}`} target="_blank" rel="noopener noreferrer" className="social-btn" style={{ background: s.bg + "22" }}>
                     {s.icon}
