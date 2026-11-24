@@ -212,7 +212,7 @@ export default function PrintEditorPage() {
 
   const submitPdfPassword = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!pdfPassword.trim()) { setStatus("PDF password दर्ज करें।"); return; }
+    if (pdfPassword.length === 0) { setStatus("PDF password दर्ज करें।"); return; }
     passwordResolverRef.current?.(pdfPassword); setPdfPassword("");
   };
   const cancelPdfPassword = () => { passwordResolverRef.current?.(null); setPdfPassword(""); };
