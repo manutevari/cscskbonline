@@ -1271,6 +1271,27 @@ footer {
 .csc-appt-secondary:hover { background: rgba(255,255,255,.1); }
 
 .csc-appt-menu > button { width: 100%; margin-top: 9px; }
+.csc-appt-location {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #dbe5f2;
+  border-radius: 12px;
+  background: #f7faff;
+}
+.csc-appt-location-pin { font-size: 22px; line-height: 1; }
+.csc-appt-location-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.csc-appt-location-copy strong { color: #15365b; font-size: 15px; }
+.csc-appt-location-copy small { color: #64748b; font-size: 12px; }
+.csc-appt-location a { color: #155eef; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.csc-appt-location a:hover { text-decoration: underline; }
+@media (max-width: 420px) {
+  .csc-appt-location { gap: 8px; padding: 10px; }
+  .csc-appt-location a { font-size: 12px; }
+}
+
 .csc-appt-form-title { margin-bottom: 14px; }
 .csc-appt-form-title h3 { margin: 0 0 2px; font-size: 17px; }
 .csc-appt-form-title p { margin: 0; color: #7a94b8; font-size: 10px; }
