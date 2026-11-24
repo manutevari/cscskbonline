@@ -80,10 +80,10 @@ try {
   await page.locator('input[type="password"]').fill("wrong-password");
   await page.getByRole("button", { name: "Unlock PDF" }).click();
   await page.getByRole("alert").getByText("Password incorrect. Please try again.").waitFor({ timeout: 15000 });
-  await page.locator('input[type="password"]').fill("  pass  ");
+  await page.locator('input[type="password"]').fill("   ");
   await page.getByRole("button", { name: "Unlock PDF" }).click();
   await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
-  assert.ok(await page.locator(".thumb").count() > beforeEncryptedPdf, "correct password with leading/trailing spaces should unlock and render PDF");
+  assert.ok(await page.locator(".thumb").count() > beforeEncryptedPdf, "all-whitespace password should unlock and render PDF");
 
   // Verify configured compression reports actual output size.
   await page.getByLabel("Max file size").selectOption("100");
