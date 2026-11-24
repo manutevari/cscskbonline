@@ -467,12 +467,12 @@ export default function Home() {
               <h4>Follow Us</h4>
               <div className="social-links">
                 {[
-                  { icon: "📘", bg: "#1877f2", href: "#" },
+                  { icon: "📘", bg: "#1877f2", href: "https://www.facebook.com/profile.php?id=61581329466166", label: "Facebook" },
                   { icon: "💬", bg: "#25d366", href: "#" },
                   { icon: "▶️", bg: "#ff0000", href: "#" },
                   { icon: "📸", bg: "#e1306c", href: "#" },
                 ].map((s, i) => (
-                  <a key={i} href={s.href} className="social-btn" style={{ background: s.bg + "22" }}>
+                  <a key={i} href={s.href} aria-label={s.label || `Social link ${i + 1}`} target="_blank" rel="noopener noreferrer" className="social-btn" style={{ background: s.bg + "22" }}>
                     {s.icon}
                   </a>
                 ))}
