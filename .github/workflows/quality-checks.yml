@@ -11,7 +11,7 @@ permissions:
 jobs:
   frontend:
     name: Frontend install, security audit, build and Document Tools E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -32,7 +32,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Install pinned Playwright runner
-        run: npm install --no-save --package-lock=false playwright@1.55.0
+        run: npm install --no-save --package-lock=false playwright@latest
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Start production server
