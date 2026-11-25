@@ -1,5 +1,6 @@
 import { NextRequest,NextResponse } from "next/server";
 import { authenticateMarketingActor,unauthorized } from "@/lib/marketing-auth";
+import { syncZohoLead } from "@/lib/zoho-crm";
 const VERTICALS=["csc_services","tata_water","food_safety","insurance_banking"] as const;
 type Vertical=(typeof VERTICALS)[number];
 async function db(path:string,init:RequestInit={}){
@@ -16,8 +17,20 @@ export async function POST(req:NextRequest){
   const source=String(b.source||"website").trim().slice(0,80),consent_to_contact=b.consent_to_contact===true;
   if(!VERTICALS.includes(vertical)||full_name.length<2||!/^\d{10}$/.test(phone)||!consent_to_contact)return NextResponse.json({error:"Valid name, 10-digit phone, business interest and contact consent are required."},{status:400});
   const rows=await db("marketing_leads",{method:"POST",body:JSON.stringify({vertical,full_name,phone,email,city,service_interest,message,source,consent_to_contact,lead_score:score({service_interest:service_interest||undefined,message:message||undefined,email:email||undefined})})});
-  const lead=rows[0];await db("marketing_activities",{method:"POST",body:JSON.stringify({lead_id:lead.id,activity_type:"lead_created",details:{vertical,source},actor:"lead_capture"})});
-  return NextResponse.json({success:true,lead_id:lead.id,message:"Your enquiry has been received. Our team will contact you."},{status:201});
+  const lead=rows[0];
+  await db("marketing_activities",{method:"POST",body:JSON.stringify({lead_id:lead.id,activity_type:"lead_created",details:{vertical,source},actor:"lead_capture"})});
+  await db("zoho_lead_sync",{method:"POST",body:JSON.stringify({lead_id:lead.id,status:"PENDING",attempt_count:1,last_attempt_at:new Date().toISOString()})});
+  let zohoSync:"SYNCED"|"FAILED"="FAILED",zohoLeadId:string|null=null;
+  let syncError:string|null=null;
+  try{
+   const result=await syncZohoLead({full_name,phone,email,city,vertical,service_interest,message,source,consent_to_contact});
+   zohoSync="SYNCED";zohoLeadId=result.id;
+   await db("zoho_lead_sync?lead_id=eq."+encodeURIComponent(lead.id),{method:"PATCH",body:JSON.stringify({status:"SYNCED",zoho_lead_id:zohoLeadId,synced_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()})});
+  }catch(error){
+   syncError=error instanceof Error?error.message:"Zoho CRM sync failed";
+   await db("zoho_lead_sync?lead_id=eq."+encodeURIComponent(lead.id),{method:"PATCH",body:JSON.stringify({status:"FAILED",last_error:syncError.slice(0,500),updated_at:new Date().toISOString()})});
+  }
+  return NextResponse.json({success:true,lead_id:lead.id,zoho_sync:zohoSync,zoho_lead_id:zohoLeadId,message:zohoSync==="SYNCED"?"Your enquiry has been received. Our team will contact you.":"Your enquiry is safely received. CRM sync is pending and will need retry.",...(syncError?{sync_error:syncError}: {})},{status:201});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Unable to save lead"},{status:500});}
 }
 export async function GET(req:NextRequest){
