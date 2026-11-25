@@ -8,6 +8,7 @@ type LayoutItem = { id: string; name: string; src: string; pageId: number; x: nu
 type RegionStart = { itemId: string; startX: number; startY: number };
 type LayoutPage = { id: number; label: string };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
+type ExportPageProgress = { pageId: number; status: "pending" | "processing" | "done" | "error"; label: string };
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
   A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
 };
@@ -61,6 +62,7 @@ export default function PrintEditorPage() {
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
+  const [exportProgress, setExportProgress] = useState<ExportPageProgress[]>([]);
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
   const [lassoMode, setLassoMode] = useState(false);
@@ -546,57 +548,74 @@ export default function PrintEditorPage() {
     // Never silently fail a download just because the exact target is unattainable.
     return best ?? await canvasBlob(working, "image/jpeg", 0.05);
   };
-  const createPdf = async (pageIds: number[], targetBytes = 0) => {
+  const createPdf = async (pageIds: number[], targetBytes = 0, onPageProgress?: (pageId: number, status: ExportPageProgress["status"]) => void) => {
     const pdf=await PDFDocument.create();
     const widthPt=pageSize.w*72/25.4, heightPt=pageSize.h*72/25.4;
     const perPageTarget=targetBytes>0?Math.max(1024,Math.floor(targetBytes/pageIds.length)):0;
     for (const pageId of pageIds) {
+      onPageProgress?.(pageId, "processing");
+      setStatus(`Page ${pageId} — rendering / compressing…`);
       const canvas=await renderPageCanvas(pageId);
       const imageBlob=perPageTarget>0?await compressJpegToLimit(canvas,perPageTarget):await canvasBlob(canvas,"image/png");
       const embedded=imageBlob.type==="image/jpeg"?await pdf.embedJpg(await imageBlob.arrayBuffer()):await pdf.embedPng(await imageBlob.arrayBuffer());
       const pdfPage=pdf.addPage([widthPt,heightPt]);
       pdfPage.drawImage(embedded,{x:0,y:0,width:widthPt,height:heightPt});
+      onPageProgress?.(pageId, "done");
     }
     return new Blob([await pdf.save() as BlobPart],{type:"application/pdf"});
   };
   const runDownload = async (kind: "all-pdf" | "current-pdf" | "separate-pdf" | "current-png" | "current-jpg" | "all-png" | "all-jpg") => {
     if (!items.length) { setStatus("Download से पहले files जोड़ें।"); return; }
     setBusy(true);
+    setExportProgress([]);
     try {
       const pageIds=pages.filter(page=>items.some(item=>item.pageId===page.id)).map(page=>page.id);
+      setExportProgress(pageIds.map(pageId=>({pageId,status:"pending" as const,label:`Page ${pageId}`})));
+      const updatePageProgress=(pageId:number,pageStatus:ExportPageProgress["status"])=>setExportProgress(old=>old.map(p=>p.pageId===pageId?{...p,status:pageStatus}:p));
       const selectedLimitKb=maxFileSizeKb==="custom"?Number(customFileSizeKb):Number(maxFileSizeKb);
       if(maxFileSizeKb==="custom"&&(!Number.isFinite(selectedLimitKb)||selectedLimitKb<1)){setStatus("Custom maximum file size कम से कम 1 KB होना चाहिए।");return;}
       const limitBytes=selectedLimitKb>0?Math.floor(selectedLimitKb*1024):0;
       if (kind==="all-pdf") {
-        const blob=await createPdf(pageIds,limitBytes); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
+        const blob=await createPdf(pageIds,limitBytes,updatePageProgress); const size=verifyAndDownload(blob,"CSCSKB-Smart-Editor.pdf",limitBytes);
         setStatus(`सभी pages की PDF download शुरू हुई। Final file size: ${size}. Downloaded bytes are the same as this verified file.`);
       } else if (kind==="current-pdf") {
-        const blob=await createPdf([activePage],limitBytes); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
+        setExportProgress([{pageId:activePage,status:"pending",label:`Page ${activePage}`}]);
+        const blob=await createPdf([activePage],limitBytes,updatePageProgress); const size=verifyAndDownload(blob,`CSCSKB-Page-${activePage}.pdf`,limitBytes);
         setStatus(`चुने हुए page की PDF download शुरू हुई। Final file size: ${size}.`);
       } else if (kind==="separate-pdf") {
         const zip=new JSZip();
-        for (const id of pageIds) zip.file(`Page-${id}.pdf`,await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0));
+        for (const id of pageIds) {
+          const pdfBlob=await createPdf([id],limitBytes?Math.floor(limitBytes/pageIds.length):0,updatePageProgress);
+          zip.file(`Page-${id}.pdf`,pdfBlob);
+        }
         const blob=await zip.generateAsync({type:"blob"}); const size=verifyAndDownload(blob,"CSCSKB-Separate-PDFs.zip",limitBytes);
         setStatus(`हर page की अलग PDF ZIP में download हुई। Final ZIP size: ${size}.`);
       } else if (kind==="current-png" || kind==="current-jpg") {
         const type=kind==="current-png"?"image/png":"image/jpeg";
+        setExportProgress([{pageId:activePage,status:"processing",label:`Page ${activePage}`}]);
+        setStatus(`Page ${activePage} — rendering / compressing…`);
         const canvas=await renderPageCanvas(activePage,type);
         const blob=limitBytes>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,limitBytes):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
+        setExportProgress([{pageId:activePage,status:"done",label:`Page ${activePage}`}]);
         const filename=`CSCSKB-Page-${activePage}.${type==="image/png"?"png":"jpg"}`; const size=verifyAndDownload(blob,filename,limitBytes);
         setStatus(`चुने हुए page की image download हुई। Final file size: ${size}.`);
       } else {
         const type=kind==="all-png"?"image/png":"image/jpeg", ext=type==="image/png"?"png":"jpg";
         const zip=new JSZip();
         for (const id of pageIds) {
+          updatePageProgress(id,"processing");
+          setStatus(`Page ${id} — rendering / compressing…`);
           const canvas=await renderPageCanvas(id,type);
           const target=limitBytes>0?Math.floor(limitBytes/pageIds.length):0;
           const blob=target>0&&type==="image/jpeg"?await compressJpegToLimit(canvas,target):await canvasBlob(canvas,type,type==="image/jpeg"?0.94:undefined);
           zip.file(`Page-${id}.${ext}`,blob);
+          updatePageProgress(id,"done");
         }
         const blob=await zip.generateAsync({type:"blob"}); const filename=`CSCSKB-Pages-${ext.toUpperCase()}.zip`; const size=verifyAndDownload(blob,filename,limitBytes);
         setStatus(`सभी pages की images ZIP में download हुई। Final ZIP size: ${size}.`);
       }
     } catch(error) {
+      setExportProgress(old=>old.map(p=>p.status==="processing"?{...p,status:"error"}:p));
       setStatus(error instanceof Error?"Download नहीं हो सका: "+error.message:"Download नहीं हो सका।");
     } finally { setBusy(false); }
   };
@@ -658,7 +677,27 @@ export default function PrintEditorPage() {
         .workspace>.side:first-child h2,.workspace>.side:first-child hr,.workspace>.side:first-child>.small,.workspace>.side:first-child>p,.workspace>.side:first-child>.edit-controls,.workspace>.side:first-child .margin-grid{grid-column:1}
         .top h1{font-size:16px}
       }
-      @media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
+            .dpi-top-control{display:inline-flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid #8db8e8;border-radius:11px;background:linear-gradient(135deg,#e5f1ff,#d9fbe8);color:#174c83;font-weight:800;flex:0 0 auto}.dpi-label{font-size:12px;letter-spacing:.3px}.dpi-top-control select,.dpi-top-control input{border:1px solid #b7d0ec;border-radius:8px;padding:6px 8px;background:#fff;color:#174c83;font-weight:700;font-size:12px;min-width:66px}.dpi-top-control input{width:78px}
+      @media(max-width:760px){.dpi-top-control{min-height:36px;padding:5px 7px}.dpi-top-control select,.dpi-top-control input{font-size:12px;min-height:30px}}
+      /* Refined responsive editor UI */
+      .editor{background:linear-gradient(180deg,#eef4ff 0,#f7f9fc 240px);color:#17233b}
+      .top{background:linear-gradient(120deg,#102b59,#174c83);padding:16px 20px;border-bottom:1px solid #244e7d;box-shadow:0 5px 18px #0b23401a}
+      .top h1{letter-spacing:-.35px;font-weight:800}.intro{font-size:13px;color:#d9e8ff}
+      .toolbar,.panel{border:1px solid #d9e4f3;box-shadow:0 3px 12px #19365a0a;border-radius:14px;padding:10px;margin:9px 12px}
+      .compact-toolbar{gap:7px;background:#fdfefe}.icon-btn{border-color:#d6e1ef;border-radius:10px;background:#f8fbff;color:#29466b;transition:background .15s,border-color .15s,transform .15s}.icon-btn:hover:not(:disabled){background:#eaf3ff;border-color:#8fb5e7;transform:translateY(-1px)}.icon-btn.selected{background:#dcecff;border-color:#78a8e5;color:#174c83}
+      .btn{border-radius:10px;padding:9px 12px;background:linear-gradient(135deg,#1769d2,#2585dc);box-shadow:0 2px 6px #1769d222}.btn.secondary{box-shadow:none;background:#f8fbff;border-color:#d7e2f0;color:#29466b}
+      .panel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;background:#fff}.panel .field{min-width:0}
+      .workspace{grid-template-columns:minmax(230px,270px) minmax(0,1fr) minmax(280px,320px);gap:12px;padding:0 12px}
+      .side,.side-details>summary,.stage-wrap{border-radius:14px;border-color:#d9e4f3;box-shadow:0 4px 16px #19365a0a}
+      .side{padding:14px;gap:10px}.side h2{font-size:15px;color:#183b67}.stage-wrap{background:#e9f0fa;padding:12px}.stage{border-radius:4px;box-shadow:0 8px 26px #102b5930}
+      .pages{gap:7px}.pagebtn{border-radius:9px;border-color:#d3dfef;background:#fff;color:#345579}.pagebtn.active{background:#1d65b8;border-color:#1d65b8;color:white}
+      .field{color:#425b78}.field input,.field select{border-color:#d3dfef;border-radius:9px;background:#fbfdff}.field input:focus,.field select:focus{outline:2px solid #b6d4f8;outline-offset:1px}
+      .edit-controls{border-color:#d7e3f1;border-radius:12px;background:#f8fbff}.thumb{border-color:#dbe5f2;border-radius:10px}.thumb.chosen{background:#edf5ff;border-color:#6fa5e5}
+      .status{background:#edf7f0;border:1px solid #d5eadb;padding:7px 10px;border-radius:9px;color:#24603b}
+      @media(max-width:1180px){.workspace{grid-template-columns:minmax(220px,260px) minmax(0,1fr)}.workspace>.side:first-child{grid-template-columns:repeat(2,minmax(0,1fr))}.side-details>.side{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(max-width:760px){.top{padding:12px 14px}.toolbar,.panel{margin:7px;padding:9px}.panel{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.workspace{gap:9px;padding:0 8px}.workspace>.stage-wrap{padding:9px}.workspace>.side:first-child{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.workspace>.side:first-child>.btn{min-height:42px}.side-details>summary{padding:12px}.stage-wrap{background:#e8eff9}.status{font-size:12px;line-height:1.45}}
+      @media(max-width:380px){.panel{grid-template-columns:1fr}.compact-toolbar .icon-btn{padding:6px 8px}.workspace>.side:first-child{grid-template-columns:1fr}}
+@media print{@page{size:${pageSize.w}mm ${pageSize.h}mm;margin:0}:global(body){margin:0!important}:global(body *){visibility:hidden!important}.editor,.editor *{visibility:visible!important}.editor{position:absolute!important;inset:0!important;padding:0!important;margin:0!important;max-width:none!important;width:100%!important}.editor>:not(.print-pages){display:none!important}.print-pages{display:block!important;visibility:visible!important}.print-page{position:relative;width:${pageSize.w}mm;height:${pageSize.h}mm;overflow:hidden;page-break-after:always;break-after:page}.print-page:last-child{page-break-after:auto;break-after:auto}.print-item{position:absolute;box-sizing:border-box}.print-item img{display:block;width:100%;height:100%;object-fit:fill}}
     `}</style>
     <div className="top"><a className="back" href="/document-tools">← Document Actions</a><div><h1>CSCSKB Online | Smart AI Editor ✨</h1><p className="intro">Document · Photo · PDF · Image Editor</p></div><span className="small" style={{color:"#dbe6f7"}}>{preset} · {pageSize.w} × {pageSize.h} mm · {orientation === "portrait" ? "Portrait" : "Landscape"}</span></div>
     <section className="toolbar compact-toolbar" aria-label="Editor tools">
@@ -672,11 +711,14 @@ export default function PrintEditorPage() {
       <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
-      <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
-      <button className={"icon-btn "+(zoomMode==="fit-width"?"selected":"")} onClick={()=>setZoomMode("fit-width")}>Fit width</button>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.max(40,v-10));}}>−</button>
-      <strong className="small">{zoomMode==="fit-page"?"Fit Page":zoomMode==="fit-width"?"Fit Width":zoomPercent+"%"}</strong>
-      <button className="icon-btn" onClick={()=>{setZoomMode("custom");setZoomPercent(v=>Math.min(180,v+10));}}>＋</button>
+      <label className="dpi-top-control" title="Export resolution for PDF, PNG and JPG">
+        <span className="dpi-label">DPI</span>
+        <select aria-label="Export resolution in DPI" value={exportDpi} onChange={e=>setExportDpi(e.target.value)}>
+          <option value="0">Auto</option><option value="150">150</option><option value="300">300</option><option value="600">600</option><option value="custom">Custom</option>
+        </select>
+        {exportDpi==="custom"&&<input aria-label="Custom DPI (72–1200)" type="number" min="72" max="1200" step="1" value={customDpi} onChange={e=>setCustomDpi(e.target.value)} />}
+      </label>
+      <button className="icon-btn" onClick={()=>setZoomMode("fit-page")}>Fit page</button>
       <details className="download-menu"><summary className="icon-btn" aria-disabled={!items.length || busy}>↓ Download options ▾</summary><div className="download-options"><label className="field">Max file size<select value={maxFileSizeKb} onChange={e=>setMaxFileSizeKb(e.target.value)}><option value="0">No limit (best quality)</option>{Array.from({length:10},(_,i)=>(i+1)*100).map(kb=><option key={kb} value={String(kb)}>{kb} KB</option>)}<option value="custom">Custom…</option></select></label>{maxFileSizeKb==="custom"&&<label className="field">Custom maximum (KB)<input type="number" min="1" step="1" value={customFileSizeKb} onChange={e=>setCustomFileSizeKb(e.target.value)} placeholder="Enter size in KB"/><span className="small">Final downloaded file will be checked against this maximum.</span></label>}<strong>PDF</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-pdf")}>All pages — one PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-pdf")}>Current page — PDF</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("separate-pdf")}>Separate PDFs — ZIP</button><strong>Image</strong><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-png")}>Current page — PNG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("current-jpg")}>Current page — JPG</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-png")}>All pages — PNG ZIP</button><button type="button" disabled={!items.length||busy} onClick={()=>void runDownload("all-jpg")}>All pages — JPG ZIP</button></div></details>
       <button className="btn print-btn" onClick={print} disabled={!items.length || busy}>▣ Print</button>
     </section>
@@ -692,7 +734,12 @@ export default function PrintEditorPage() {
       <label className="field">Photo height (mm)<input type="number" min="20" max="120" step="0.1" value={photoHeightMm} onChange={e => setPhotoHeightMm(e.target.value)} /></label>
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
-    <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    <p className="status" role="status" aria-live="polite">{status}</p>
+    {exportProgress.length>0 && <section aria-label="Page-wise export progress" style={{margin:"4px 10px 10px",padding:"10px 12px",border:"1px solid #dce3ef",borderRadius:10,background:"#fff",fontSize:12}}>
+      <strong>Page-wise progress</strong> · {exportProgress.filter(p=>p.status==="done").length}/{exportProgress.length} completed
+      <div style={{height:6,background:"#e5eaf2",borderRadius:99,overflow:"hidden",margin:"7px 0"}}><div style={{height:"100%",width:`${exportProgress.filter(p=>p.status==="done").length/exportProgress.length*100}%`,background:"#1769d2",transition:"width .2s"}} /></div>
+      {exportProgress.map(p=><div key={p.pageId} style={{display:"flex",gap:8,alignItems:"center",padding:"3px 0"}}><span>{p.status==="done"?"✓":p.status==="processing"?"⏳":p.status==="error"?"✕":"○"}</span><span style={{flex:1}}>{p.label}</span><span>{p.status==="done"?"Completed":p.status==="processing"?"Compressing…":p.status==="error"?"Failed":"Pending"}</span></div>)}
+    </section>}
     {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
       <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
         <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
@@ -839,7 +886,7 @@ export default function PrintEditorPage() {
             <label className="field">Y (mm)<input type="number" step="0.1" value={(selected.y / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("y",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
             <label className="field">Width (mm)<input type="number" min="1" step="0.1" value={(selected.w / 794 * pageSize.w).toFixed(1)} onChange={e => updateSelected("w",String(Number(e.target.value) * 794 / pageSize.w))} /></label>
             <label className="field">Height (mm)<input type="number" min="1" step="0.1" value={(selected.h / 1123 * pageSize.h).toFixed(1)} onChange={e => updateSelected("h",String(Number(e.target.value) * 1123 / pageSize.h))} /></label>
-            <label className="field">Export DPI<select aria-label="Export resolution in DPI" value={exportDpi} onChange={e => setExportDpi(e.target.value)}><option value="0">0 DPI — Auto / Native resolution</option><option value="150">150 DPI — Standard</option><option value="300">300 DPI — Print (Recommended)</option><option value="600">600 DPI — High quality</option><option value="custom">Custom DPI</option></select></label>{exportDpi === "custom" && <label className="field">Custom DPI (72–1200)<input type="number" min="72" max="1200" step="1" value={customDpi} onChange={e => setCustomDpi(e.target.value)} /></label>}
+}
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
