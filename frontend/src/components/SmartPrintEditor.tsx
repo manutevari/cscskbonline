@@ -6,7 +6,7 @@ import JSZip from "jszip";
 
 type LayoutItem = { id: string; name: string; src: string; pageId: number; x: number; y: number; w: number; h: number; brightness?: number; contrast?: number; sharpness?: number; rotation?: number; originalSrc?: string };
 type RegionStart = { itemId: string; startX: number; startY: number };
-type LayoutPage = { id: number; label: string };
+type LayoutPage = { id: number; label: string; pdfPage?: boolean };
 type PagePreset = "A4" | "A3" | "A5" | "Legal" | "Custom";
 const PRESETS: Record<Exclude<PagePreset, "Custom">, { w: number; h: number }> = {
   A4: { w: 210, h: 297 }, A3: { w: 297, h: 420 }, A5: { w: 148, h: 210 }, Legal: { w: 216, h: 356 },
@@ -61,6 +61,7 @@ export default function PrintEditorPage() {
   const [cropRatio, setCropRatio] = useState("free");
   const [resizeState, setResizeState] = useState<{id:string; handle:string; startX:number; startY:number; startW:number; startH:number; startItemX:number; startItemY:number} | null>(null);
   const [status, setStatus] = useState("एक या कई image/PDF चुनें। PDF के pages को preview करके layout में जोड़ें।");
+  const [pendingDownload, setPendingDownload] = useState<{url:string; filename:string} | null>(null);
   const [assistantCommand, setAssistantCommand] = useState("");
   const [regionMode, setRegionMode] = useState(false);
   const [lassoMode, setLassoMode] = useState(false);
@@ -85,6 +86,7 @@ export default function PrintEditorPage() {
   const basePageSize = preset === "Custom" ? { w: Math.max(20, Number(customW) || 210), h: Math.max(20, Number(customH) || 297) } : PRESETS[preset];
   const pageSize = orientation === "landscape" ? { w: basePageSize.h, h: basePageSize.w } : basePageSize;
   const pageItems = items.filter(i => i.pageId === activePage);
+  const activePdfPage = pages.some(p => p.id === activePage && p.pdfPage === true);
 
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
 
@@ -131,12 +133,16 @@ export default function PrintEditorPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, clipboardItem, activePage, pageItems]);
 
-  const addImage = async (file: File, pageId = activePage) => {
+  const addImage = async (file: File, pageId = activePage, fitToPage = false) => {
     if (!file.type.startsWith("image/")) return;
     const src = URL.createObjectURL(file); urlsRef.current.push(src);
     const image = new Image();
     await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(file.name + " image load नहीं हुई।")); image.src = src; });
-    const ratio = Math.min(340 / image.naturalWidth, 250 / image.naturalHeight, 1);
+    // Ordinary images start as a manageable object; imported PDF page images
+    // are placed at full-page size while preserving their page aspect ratio.
+    const ratio = fitToPage
+      ? Math.min(794 / image.naturalWidth, 1123 / image.naturalHeight)
+      : Math.min(340 / image.naturalWidth, 250 / image.naturalHeight, 1);
     const w = Math.max(24, image.naturalWidth * ratio), h = Math.max(24, image.naturalHeight * ratio);
     setItems(old => [...old, { id: uid(), name: file.name, src, pageId, x: Math.max(0, (794 - w) / 2), y: Math.max(0, (1123 - h) / 2), w, h }]);
   };
@@ -190,6 +196,11 @@ export default function PrintEditorPage() {
           }
         }
         const highQualityPrint = !permissions || permissions.includes(permissionFlags.PRINT_HIGH_QUALITY);
+        // Each imported PDF page becomes its own editor page, not an image stacked
+        // with other pages on the currently selected canvas.
+        let nextPdfPageId = Math.max(0, ...pages.map(p => p.id), ...items.map(i => i.pageId));
+        const pdfPagesToAppend: LayoutPage[] = [];
+        let reuseEmptyActivePage = !items.some(i => i.pageId === activePage) && added === 0;
         for (let n = 1; n <= pdf.numPages; n++) {
           const page = await pdf.getPage(n), viewport = page.getViewport({ scale: highQualityPrint ? 2.5 : 1.5 });
           const canvas = document.createElement("canvas");
@@ -198,11 +209,29 @@ export default function PrintEditorPage() {
           if (!ctx) throw new Error("PDF canvas उपलब्ध नहीं है।");
           await page.render({ canvasContext: ctx, viewport }).promise;
           const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PDF page render failed")), "image/png"));
-          const pageFile = new File([blob], file.name.replace(/\.pdf$/i, "") + "-page-" + n + ".png", { type: "image/png" });
-          await addImage(pageFile); added++;
+          const baseName = file.name.replace(/\.pdf$/i, "");
+          const pageFile = new File([blob], baseName + "-page-" + n + ".png", { type: "image/png" });
+          let editorPageId: number;
+          if (reuseEmptyActivePage) {
+            editorPageId = activePage;
+            reuseEmptyActivePage = false;
+            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages, pdfPage: true });
+          } else {
+            editorPageId = ++nextPdfPageId;
+            pdfPagesToAppend.push({ id: editorPageId, label: baseName + " · " + n + "/" + pdf.numPages });
+          }
+          await addImage(pageFile, editorPageId, true); added++;
+          setActivePage(editorPageId);
+        }
+        if (pdfPagesToAppend.length) {
+          setPages(old => {
+            const replaceLabels = new Map(pdfPagesToAppend.filter(p => old.some(existing => existing.id === p.id)).map(p => [p.id, p.label]));
+            const updated = old.map(p => replaceLabels.has(p.id) ? { ...p, label: replaceLabels.get(p.id)! } : p);
+            return [...updated, ...pdfPagesToAppend.filter(p => !old.some(existing => existing.id === p.id))];
+          });
         }
       }
-      setStatus(added + " image/PDF page(s) layout में जोड़ दिए गए। अब page assignment और layout mode चुनें।");
+      setStatus(added + " image/PDF page(s) जोड़ दिए गए। PDF के हर पेज को अलग editor page में रखा गया है।");
     } catch (error) {
       const e = error as { name?: string; message?: string; code?: number };
       if (e.name === "PasswordException" || e.code === 1 || e.code === 2) {
@@ -237,6 +266,33 @@ export default function PrintEditorPage() {
   const deleteItem = () => {
     if (!selected) return;
     setItems(old => old.filter(i => i.id !== selected.id)); setSelectedId(null);
+  };
+  const deleteActivePage = () => {
+    if (pages.length <= 1) {
+      setItems(old => old.filter(i => i.pageId !== activePage));
+      setSelectedId(null); setSelectedIds([]);
+      setStatus("आखिरी page हटाया नहीं जा सकता; उसका content साफ कर दिया गया है।");
+      return;
+    }
+    const remaining = pages.filter(p => p.id !== activePage);
+    const nextPage = remaining[0];
+    setPages(remaining);
+    setItems(old => old.filter(i => i.pageId !== activePage));
+    setActivePage(nextPage.id);
+    setSelectedId(null); setSelectedIds([]);
+    setStatus("Page और उसका content delete कर दिया गया।");
+  };
+  const fitSelectedToPage = (mode: "fit" | "fill" | "stretch") => {
+    if (!selected) return;
+    if (mode === "stretch") {
+      setItems(old => old.map(i => i.id === selected.id ? { ...i, x: 0, y: 0, w: 794, h: 1123 } : i));
+      setStatus("Selected image पूरे page में stretch कर दी गई।");
+      return;
+    }
+    const scale = mode === "fit" ? Math.min(794 / selected.w, 1123 / selected.h) : Math.max(794 / selected.w, 1123 / selected.h);
+    const w = selected.w * scale, h = selected.h * scale;
+    setItems(old => old.map(i => i.id === selected.id ? { ...i, x: (794 - w) / 2, y: (1123 - h) / 2, w, h } : i));
+    setStatus(mode === "fit" ? "Image पूरे page में fit की गई; aspect ratio सुरक्षित है।" : "Image page भरने के लिए scale की गई; किनारे crop हो सकते हैं।");
   };
   const updateSelected = (key: "x" | "y" | "w" | "h", value: string) => {
     if (!selected || value.trim() === "") return;
@@ -432,12 +488,11 @@ export default function PrintEditorPage() {
   };
   const print = () => { if (!items.length) { setStatus("Print से पहले files जोड़ें।"); return; } window.print(); };
   const saveBlob = (blob: Blob, filename: string) => {
-    // The displayed size and downloaded file both use this exact finalized Blob.
+    // On mobile webviews, automatic downloads after async processing can be blocked.
+    // Offer a second, explicit user-tap download link instead.
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = filename;
-    document.body.appendChild(anchor); anchor.click(); anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setPendingDownload(old => { if (old?.url) URL.revokeObjectURL(old.url); return { url, filename }; });
+    setStatus(`File तैयार है (${formatFileSize(blob.size)}). नीचे “Download file” पर tap करें।`);
   };
   const renderPageCanvas = async (pageId: number, format: "image/png" | "image/jpeg" = "image/png") => {
     // 794 × 1123 is the editor's A4-like logical canvas at approximately 96 DPI.
@@ -668,8 +723,10 @@ export default function PrintEditorPage() {
       <button type="button" className={"icon-btn "+(regionMode?"selected":"")} title="Rectangular selection: drag over a photo to extract a separate editable region" aria-label="Rectangular selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setLassoMode(false);setRegionStart(null);setCropRect({left:"0",top:"0",width:"100",height:"100"});setRegionMode(v=>!v);setStatus(regionMode?"Rectangular selection बंद हुआ।":"Rectangular Select चालू: photo के अंदर drag करके area चुनें।");}} disabled={!selected}>▭ Rect Select</button>
       <button type="button" className={"icon-btn "+(lassoMode?"selected":"")} title="Freehand lasso: draw around an area to extract it as a separate editable layer" aria-label="Freehand lasso selection" onClick={()=>{if(!selected){setStatus("पहले एक photo select करें।");return;}setCropMode(false);setRegionMode(false);setRegionStart(null);lassoPointsRef.current=[];setLassoPoints([]);setLassoMode(v=>!v);setStatus(lassoMode?"Lasso selection बंद हुआ।":"Freehand Lasso चालू: photo के अंदर mouse या finger से मनचाहा आकार बनाएं।");}} disabled={!selected}>〰 Lasso</button>
       <button className="icon-btn" title="Add page" onClick={addPage}>▧ Page</button>
-      <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>
-      <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>
+      <button className="icon-btn" title="Delete current page and its contents" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete page</button>
+      {!activePdfPage && <button className="icon-btn" title="Arrange collage" onClick={arrangeGrid} disabled={!pageItems.length}>▦ Collage</button>}
+      {!activePdfPage && <button className="icon-btn" title="Create photo sheet" onClick={createPhotoSheet} disabled={!selected}>▤ Photo sheet</button>}
+      {activePdfPage && <span className="small" style={{padding:"6px 8px",color:"#475569"}}>PDF page: full-page fit · Photo Sheet/Collage disabled</span>}
       <button className="icon-btn" title="Undo" onClick={undoEdit} disabled={!editHistory.length}>↶ Undo</button>
       <span className="toolbar-spacer" />
       <button className={"icon-btn "+(zoomMode==="fit-page"?"selected":"")} onClick={()=>setZoomMode("fit-page")}>Fit page</button>
@@ -693,6 +750,7 @@ export default function PrintEditorPage() {
       <button className="btn secondary" onClick={createPhotoSheet} disabled={!selected}>Create passport / ID photo sheet</button>
     </section>
     <p className="status" role="status" aria-live="polite">{busy ? "Files process हो रही हैं…" : status}</p>
+    {pendingDownload && <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"center",padding:"12px",margin:"8px 0",border:"1px solid #b6d4fe",borderRadius:10,background:"#eff6ff"}}><a href={pendingDownload.url} download={pendingDownload.filename} onClick={() => window.setTimeout(() => { if (pendingDownload?.url) URL.revokeObjectURL(pendingDownload.url); setPendingDownload(null); }, 60000)} style={{display:"inline-block",padding:"12px 18px",background:"#155eef",color:"#fff",borderRadius:8,fontWeight:700,textDecoration:"none"}}>⬇ Download file</a><span style={{fontSize:13,color:"#334155"}}>{pendingDownload.filename} · tap this button to save on your device</span></div>
     {passwordPrompt && <div role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) cancelPdfPassword(); }} style={{position:"fixed",inset:0,zIndex:10000,background:"#10201899",display:"grid",placeItems:"center",padding:16}}>
       <form role="dialog" aria-modal="true" aria-labelledby="pdf-password-title" onSubmit={submitPdfPassword} style={{width:"min(100%,420px)",background:"white",borderRadius:14,padding:22,boxShadow:"0 18px 60px #0005",display:"grid",gap:12}}>
         <h2 id="pdf-password-title" style={{margin:0,fontSize:21,color:"#17251f"}}>Unlock password-protected PDF</h2>
@@ -768,7 +826,7 @@ export default function PrintEditorPage() {
         )}
       </aside>
       <div className="stage-wrap">
-        <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}</div>
+        <div className="pages">{pages.map(p => <button key={p.id} className={"pagebtn " + (activePage === p.id ? "active" : "")} onClick={() => setActivePage(p.id)}>{p.label} ({items.filter(i => i.pageId === p.id).length})</button>)}<button className="pagebtn" onClick={deleteActivePage} disabled={pages.length<=1 && !pageItems.length}>🗑 Delete active page</button></div>
         <div className="stage" ref={stageRef} style={{ width: zoomMode==="fit-page" ? `min(100%, calc((100vh - 340px) * ${pageSize.w/pageSize.h}))` : zoomMode==="fit-width" ? "100%" : `${zoomPercent}%`, aspectRatio: pageSize.w + "/" + pageSize.h }} onWheel={()=>{setDragId(null);setResizeState(null);}}
           onPointerCancel={()=>{setDragId(null);setResizeState(null);setRegionStart(null);setCropMode(false);}}
           onPointerMove={e => {
@@ -843,6 +901,12 @@ export default function PrintEditorPage() {
           </div>
           <p className="small">DPI controls the resolution of downloaded PDF, PNG and JPG files. 0 DPI (Auto) uses the editor's native page resolution without DPI upscaling. Higher DPI creates larger files and may use more memory.</p>
 
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("fit")}>Fit page</button>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("fill")}>Fill page</button>
+            <button className="btn secondary" onClick={() => fitSelectedToPage("stretch")}>Stretch</button>
+          </div>
+          <p className="small">Fit: पूरी photo दिखेगी, ratio सुरक्षित। Fill: page भरता है, किनारे crop हो सकते हैं। Stretch: पूरा page, लेकिन ratio बदल सकता है।</p>
           <button className="btn secondary" onClick={() => moveToPage(selected.id, activePage)}>Move to current page</button>
           <button className="btn secondary" onClick={() => {setClipboardItem({...selected});setStatus("Photo copied. Press Ctrl+V to paste.");}}>Copy (Ctrl+C)</button>
           <button className="btn secondary" onClick={() => {const copy={...selected,id:uid(),name:selected.name+" copy",pageId:activePage,x:Math.min(794-selected.w,selected.x+24),y:Math.min(1123-selected.h,selected.y+24)};setItems(old=>[...old,copy]);setSelectedId(copy.id);}}>Duplicate</button>
