@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 function todayIST() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
@@ -29,13 +31,18 @@ async function supabase(path: string) {
 export async function GET(request: NextRequest) {
   try {
     const date = request.nextUrl.searchParams.get("date") || "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    }
+
+    const parsedDate = new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     const today = todayIST();
     if (date < today || date > addDaysISO(today, 6)) {
-      return NextResponse.json({ error: "Date is outside the 7-day booking window." }, { status: 400 });
+      return NextResponse.json({ error: "Date is outside the 7-day booking window." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     const rows = await supabase(
@@ -45,9 +52,9 @@ export async function GET(request: NextRequest) {
       .filter((row: { status: string }) => row.status === "BOOKED" || row.status === "CONFIRMED")
       .map((row: { time: string }) => row.time);
 
-    return NextResponse.json({ date, bookedSlots });
+    return NextResponse.json({ date, bookedSlots }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Appointment availability failed:", error);
-    return NextResponse.json({ error: "Unable to load slot availability" }, { status: 500 });
+    console.error("Appointment availability failed:", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "Unable to load slot availability" }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
