@@ -68,7 +68,7 @@ try {
     beforePdfImport,
     { timeout: 30000 }
   );
-  await page.getByText(/image\\/PDF page\\(s\\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
+  await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
   assert.ok(await page.locator(".thumb").count() > beforePdfImport, "exported PDF should reopen and render at least one page");
   assert.equal(await page.locator(".placed img").count(), 1, "PDF page should be rendered into the editor canvas");
   downloads.push(await downloadAndAssert("Current page — PNG", ".png"));
