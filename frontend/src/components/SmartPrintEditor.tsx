@@ -150,6 +150,7 @@ export default function PrintEditorPage() {
     if (invalid.length || tooLarge.length) { setStatus("केवल images/PDF स्वीकार हैं; हर file की सीमा 30 MB है। गलत या बड़ी files छोड़ दी गई हैं।"); }
     setBusy(true);
     let added = 0;
+    const skippedReasons: string[] = [];
     try {
       for (const file of files) {
         if (invalid.includes(file) || tooLarge.includes(file)) continue;
@@ -173,7 +174,7 @@ export default function PrintEditorPage() {
         try { pdf = await loadingTask.promise; }
         catch (pdfError) {
           if (passwordCancelled) {
-            setStatus(file.name + " हटाई गई — password नहीं दिया गया, इसलिए कोई page या खाली column नहीं जोड़ा गया.");
+            skippedReasons.push(file.name + " हटाई गई — password नहीं दिया गया, इसलिए कोई page या खाली column नहीं जोड़ा गया.");
             continue;
           }
           throw pdfError;
@@ -185,7 +186,9 @@ export default function PrintEditorPage() {
           const canCopy = permissions.includes(permissionFlags.COPY);
           if (!canPrint || !canCopy) {
             const restricted = [!canPrint ? "printing" : "", !canCopy ? "copying/editing" : ""].filter(Boolean).join(" and ");
-            setStatus(file.name + " — PDF permissions restrict " + restricted + ". The file was not added to the editor.");
+            const reason = file.name + " — PDF permissions restrict " + restricted + ". The file was not added to the editor.";
+            skippedReasons.push(reason);
+            setStatus(reason);
             continue;
           }
         }
@@ -202,7 +205,14 @@ export default function PrintEditorPage() {
           await addImage(pageFile); added++;
         }
       }
-      setStatus(added + " image/PDF page(s) layout में जोड़ दिए गए। अब page assignment और layout mode चुनें।");
+      if (added > 0) {
+        const skippedNote = skippedReasons.length ? " " + skippedReasons.join(" ") : "";
+        setStatus(added + " image/PDF page(s) layout में जोड़ दिए गए। अब page assignment और layout mode चुनें।" + skippedNote);
+      } else if (skippedReasons.length) {
+        setStatus(skippedReasons.join(" "));
+      } else {
+        setStatus("कोई image/PDF page import नहीं हुआ। File type और PDF contents जाँचें।");
+      }
     } catch (error) {
       const e = error as { name?: string; message?: string; code?: number };
       if (e.name === "PasswordException" || e.code === 1 || e.code === 2) {
