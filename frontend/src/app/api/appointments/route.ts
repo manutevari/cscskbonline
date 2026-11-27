@@ -144,25 +144,25 @@ export async function POST(request: NextRequest) {
     const remarks = String(body.remarks || "").trim().slice(0, 500);
 
     if (!name || !/^\d{10}$/.test(mobile) || !service || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !slotIsValid(time)) {
-      return NextResponse.json({ error: "Invalid appointment details" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid appointment details" }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     const today = todayIST();
     const lastBookableDate = addDaysISO(today, 6);
     if (date < today || date > lastBookableDate) {
-      return NextResponse.json({ error: "Please choose a date within the next 7 days." }, { status: 400 });
+      return NextResponse.json({ error: "Please choose a date within the next 7 days." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     if (date === today && slotStartMinutes(time) <= (() => {
       const p = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
       return Number(p.find(x => x.type === "hour")?.value || 0) * 60 + Number(p.find(x => x.type === "minute")?.value || 0);
     })()) {
-      return NextResponse.json({ error: "That time slot has already started or passed. Please choose another slot." }, { status: 400 });
+      return NextResponse.json({ error: "That time slot has already started or passed. Please choose another slot." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     const existing = await supabase(`appointments?date=eq.${encodeURIComponent(date)}&time=eq.${encodeURIComponent(time)}&status=in.(BOOKED,CONFIRMED)&select=id&limit=1`);
     if (existing.length) {
-      return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409 });
+      return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
 
     const verificationToken = randomBytes(32).toString("base64url");
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const message = String(error);
       if (message.includes("appointments_date_time_unique")) {
-        return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409 });
+        return NextResponse.json({ error: "That time slot has just been booked. Please choose another slot.", code: "SLOT_BOOKED" }, { status: 409, headers: { "Cache-Control": "no-store" } });
       }
       throw error;
     }
@@ -199,9 +199,9 @@ export async function POST(request: NextRequest) {
         ownerWhatsApp: { sent: ownerWhatsApp.sent },
         customerSMS: { sent: customerSMS.sent },
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Appointment booking failed:", error);
-    return NextResponse.json({ error: "Unable to create appointment" }, { status: 500 });
+    console.error("Appointment booking failed:", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "Unable to create appointment" }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
