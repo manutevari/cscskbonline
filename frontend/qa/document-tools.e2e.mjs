@@ -63,11 +63,20 @@ try {
   // PDF round-trip: reopen the exact exported file through the PDF.js import path.
   const beforePdfImport = await page.locator(".thumb").count();
   await page.locator('input[type="file"]').first().setInputFiles(exportedPdf.path);
-  await page.waitForFunction(
-    previousCount => document.querySelectorAll(".thumb").length > previousCount,
-    beforePdfImport,
-    { timeout: 30000 }
-  );
+  try {
+    await page.waitForFunction(
+      previousCount => document.querySelectorAll(".thumb").length > previousCount,
+      beforePdfImport,
+      { timeout: 30000 }
+    );
+  } catch (error) {
+    const diagnostics = {
+      thumbnailCount: await page.locator(".thumb").count(),
+      status: await page.locator(".status").innerText().catch(() => "status unavailable"),
+      browserErrors: failures.slice(-20),
+    };
+    throw new Error("PDF import produced no thumbnail: " + JSON.stringify(diagnostics) + "; " + String(error));
+  }
   await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
   assert.ok(await page.locator(".thumb").count() > beforePdfImport, "exported PDF should reopen and render at least one page");
   assert.equal(await page.locator(".placed img").count(), 1, "PDF page should be rendered into the editor canvas");
