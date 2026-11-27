@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
 const browser = await chromium.launch({ headless: true });
@@ -62,7 +62,14 @@ try {
 
   // PDF round-trip: reopen the exact exported file through the PDF.js import path.
   const beforePdfImport = await page.locator(".thumb").count();
-  await page.locator('input[type="file"]').first().setInputFiles(exportedPdf.path);
+  // Playwright's temporary download path has no guaranteed extension. Supply the
+  // original PDF filename and MIME type explicitly so the app's file validator
+  // exercises the PDF importer rather than silently rejecting an octet-stream.
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: exportedPdf.file,
+    mimeType: "application/pdf",
+    buffer: await readFile(exportedPdf.path),
+  });
   try {
     await page.waitForFunction(
       previousCount => document.querySelectorAll(".thumb").length > previousCount,
