@@ -2,7 +2,7 @@
 
 ## Scope and safety boundary
 
-This branch is based on main commit `b2c5070877aa65c3422b88e8369a7a561bf71618`.
+This branch is based on main commit `99012f8bff45ab27c7214906ce269812c84a581b`.
 It is a review branch only. No production migration, merge, branch-protection update,
 or production deployment is authorized by this work.
 
@@ -32,8 +32,9 @@ projects. The latest inspected PR quality workflow had successful dependency
 consistency, npm ci, npm audit, production build, and server startup steps.
 It failed in the Document Tools browser E2E round-trip at
 `frontend/qa/document-tools.e2e.mjs:67`: exported PDF import did not increase
-the thumbnail count. This is a separate existing regression and must be diagnosed
-and fixed before calling the full quality gate green.
+the thumbnail count. The failure is consistent with a stale-status race in the test: it waited for a status
+message that could still belong to the earlier SVG import. The test now waits for the
+thumbnail count to increase before checking the status. CI must confirm this correction.
 
 The prepared contract test is intentionally deterministic and does not contact
 production services. It validates that the source and proposed migration retain
