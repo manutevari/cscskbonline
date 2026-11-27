@@ -1,5 +1,5 @@
 -- CSCSKB Phases 1-3 security repair.
--- Prepared on repair/phases-1-3-2026-11-28 from current main.
+-- Prepared on repair/phases-1-3-2026-11-28-main from current main.
 -- REVIEW ONLY: this file is not applied by this change.
 -- Apply to a staging project first, after API compatibility review.
 
