@@ -27,14 +27,20 @@ Validation still required in staging:
 
 ## Phase 2 — repository quality gates
 
-The inspected latest-main status checks were successful for both connected Vercel
-projects. The latest inspected PR quality workflow had successful dependency
-consistency, npm ci, npm audit, production build, and server startup steps.
-It failed in the Document Tools browser E2E round-trip at
-`frontend/qa/document-tools.e2e.mjs:67`: exported PDF import did not increase
-the thumbnail count. The failure is consistent with a stale-status race in the test: it waited for a status
-message that could still belong to the earlier SVG import. The test now waits for the
-thumbnail count to increase before checking the status. CI must confirm this correction.
+The latest completed PR quality workflow passed dependency consistency,
+security contract checks, `npm ci`, `npm audit`, production build, Python syntax,
+Playwright setup, encrypted-PDF fixture generation, and server startup. The
+Document Tools browser E2E still failed at the PDF round-trip: the exported PDF
+produced no new thumbnail, the status read `0 image/PDF page(s) layout में जोड़ दिए गए`,
+and no browser console/page errors were captured.
+
+Code inspection found a diagnostic-masking defect: PDF permission rejection and
+password-cancel paths set a specific status, but the unconditional final success
+status overwrote it with a misleading `0 image/PDF page(s)` message. The editor
+now retains and reports skipped-file reasons and emits an explicit no-pages
+message when nothing is imported. This is a diagnostic and user-feedback repair;
+it does not yet prove the underlying PDF import works. The next CI run must
+identify the exact rejection reason or demonstrate a successful PDF round-trip.
 
 The prepared contract test is intentionally deterministic and does not contact
 production services. It validates that the source and proposed migration retain
