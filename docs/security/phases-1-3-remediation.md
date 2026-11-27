@@ -34,13 +34,14 @@ Document Tools browser E2E still failed at the PDF round-trip: the exported PDF
 produced no new thumbnail, the status read `0 image/PDF page(s) layout में जोड़ दिए गए`,
 and no browser console/page errors were captured.
 
-Code inspection found a diagnostic-masking defect: PDF permission rejection and
-password-cancel paths set a specific status, but the unconditional final success
-status overwrote it with a misleading `0 image/PDF page(s)` message. The editor
-now retains and reports skipped-file reasons and emits an explicit no-pages
-message when nothing is imported. This is a diagnostic and user-feedback repair;
-it does not yet prove the underlying PDF import works. The next CI run must
-identify the exact rejection reason or demonstrate a successful PDF round-trip.
+The diagnostic repair exposed the actual test defect: Playwright's download
+temporary path was uploaded as a bare path, so the browser supplied no reliable
+`.pdf` filename/MIME type. The editor correctly rejected it as an unsupported
+file, but the old test did not preserve the downloaded filename on re-upload.
+The E2E test now uploads the exact downloaded bytes with the original PDF filename
+and explicit `application/pdf` MIME type. The editor also retains skipped-file
+reasons rather than overwriting them. CI must verify the corrected round-trip and
+the subsequent encrypted-PDF, export, print-dispatch, and mobile cases.
 
 The prepared contract test is intentionally deterministic and does not contact
 production services. It validates that the source and proposed migration retain
