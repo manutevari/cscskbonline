@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
 const browser = await chromium.launch({ headless: true });
@@ -62,10 +62,31 @@ try {
 
   // PDF round-trip: reopen the exact exported file through the PDF.js import path.
   const beforePdfImport = await page.locator(".thumb").count();
-  await page.locator('input[type="file"]').first().setInputFiles(exportedPdf.path);
+  // Playwright's temporary download path has no guaranteed extension. Supply the
+  // original PDF filename and MIME type explicitly so the app's file validator
+  // exercises the PDF importer rather than silently rejecting an octet-stream.
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: exportedPdf.file,
+    mimeType: "application/pdf",
+    buffer: await readFile(exportedPdf.path),
+  });
+  try {
+    await page.waitForFunction(
+      previousCount => document.querySelectorAll(".thumb").length > previousCount,
+      beforePdfImport,
+      { timeout: 30000 }
+    );
+  } catch (error) {
+    const diagnostics = {
+      thumbnailCount: await page.locator(".thumb").count(),
+      status: await page.locator(".status").innerText().catch(() => "status unavailable"),
+      browserErrors: failures.slice(-20),
+    };
+    throw new Error("PDF import produced no thumbnail: " + JSON.stringify(diagnostics) + "; " + String(error));
+  }
   await page.getByText(/image\/PDF page\(s\) layout में जोड़ दिए गए/i).waitFor({ timeout: 30000 });
   assert.ok(await page.locator(".thumb").count() > beforePdfImport, "exported PDF should reopen and render at least one page");
-  assert.equal(await page.locator(".placed img").count(), 1, "PDF page should be rendered into the editor canvas");
+  assert.ok(await page.locator(".placed img").count() > 1, "PDF page should be rendered alongside the original image on the editor canvas");
   downloads.push(await downloadAndAssert("Current page — PNG", ".png"));
   downloads.push(await downloadAndAssert("Current page — JPG", ".jpg"));
   downloads.push(await downloadAndAssert("Separate PDFs — ZIP", ".zip"));

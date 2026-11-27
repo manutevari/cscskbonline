@@ -26,6 +26,8 @@ async function supabase(path: string) {
   return response.json();
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const date = request.nextUrl.searchParams.get("date") || "";
@@ -45,9 +47,9 @@ export async function GET(request: NextRequest) {
       .filter((row: { status: string }) => row.status === "BOOKED" || row.status === "CONFIRMED")
       .map((row: { time: string }) => row.time);
 
-    return NextResponse.json({ date, bookedSlots });
+    return NextResponse.json({ date, bookedSlots }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Appointment availability failed:", error);
-    return NextResponse.json({ error: "Unable to load slot availability" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load slot availability" }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
